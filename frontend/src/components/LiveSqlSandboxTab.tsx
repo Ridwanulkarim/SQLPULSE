@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu } from 'lucide-react';
+import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu, Info } from 'lucide-react';
 
 interface MockRow {
   id: number;
@@ -10,7 +10,7 @@ interface MockRow {
 }
 
 export const LiveSqlSandboxTab: React.FC = () => {
-  const [datasetSize, setDatasetSize] = useState<number>(100000); 
+  const [datasetSize, setDatasetSize] = useState<number>(100000);
   const [hasIndex, setHasIndex] = useState<boolean>(false);
   const [sqlQuery, setSqlQuery] = useState<string>(
     `SELECT id, customer_id, total_amount, status, created_at\nFROM orders\nWHERE customer_id = 4821\n  AND status = 'completed'\nORDER BY created_at DESC\nLIMIT 20;`
@@ -29,7 +29,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
   const runLiveQuery = () => {
     setIsRunning(true);
     setTimeout(() => {
-      
       let latencyMs = 0;
       let rowsExamined = 0;
       let rowsReturned = 0;
@@ -38,7 +37,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
       let diskReads = 0;
 
       if (!hasIndex) {
-        
         latencyMs = parseFloat((35 + Math.random() * 25 + (datasetSize / 100000) * 45).toFixed(2));
         rowsExamined = datasetSize;
         rowsReturned = 14;
@@ -46,7 +44,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
         memoryHits = Math.round(datasetSize * 0.4);
         diskReads = Math.round(datasetSize * 0.6);
       } else {
-        
         latencyMs = parseFloat((0.8 + Math.random() * 1.4).toFixed(2));
         rowsExamined = 18;
         rowsReturned = 14;
@@ -86,28 +83,28 @@ export const LiveSqlSandboxTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <Zap className="w-5 h-5 text-purple-600 fill-purple-500/20 shrink-0" />
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                Live In-Browser SQL Execution &amp; Live Index Benchmark Sandbox
+                Interactive B-Tree &amp; Sequential Scan Simulation Demo
               </h2>
-              <span className="px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                Synthetic Live Engine
+              <span className="px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
+                Latency Simulator Demo
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Execute queries against a live in-memory table of {datasetSize.toLocaleString()} rows. Toggle indexes in real-time to observe true latency speedups!
+              Simulate query execution against a synthesized table of {datasetSize.toLocaleString()} rows. Toggle B-Tree indexes to visualize latency, I/O hits, and scan patterns.
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-purple-200/60 text-xs font-semibold overflow-x-auto scrollbar-none">
-              <span className="text-slate-500 px-1.5 sm:px-2 text-[11px] sm:text-xs">Size:</span>
+              <span className="text-slate-500 px-1.5 sm:px-2 text-[11px] sm:text-xs">Table Size:</span>
               <button
+                type="button"
                 onClick={() => setDatasetSize(50000)}
                 className={`px-2 py-1 rounded-lg transition text-[11px] sm:text-xs ${
                   datasetSize === 50000 ? 'bg-white text-purple-950 font-bold shadow-sm' : 'text-slate-600'
@@ -116,6 +113,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
                 50K
               </button>
               <button
+                type="button"
                 onClick={() => setDatasetSize(100000)}
                 className={`px-2 py-1 rounded-lg transition text-[11px] sm:text-xs ${
                   datasetSize === 100000 ? 'bg-white text-purple-950 font-bold shadow-sm' : 'text-slate-600'
@@ -124,6 +122,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
                 100K
               </button>
               <button
+                type="button"
                 onClick={() => setDatasetSize(500000)}
                 className={`px-2 py-1 rounded-lg transition text-[11px] sm:text-xs ${
                   datasetSize === 500000 ? 'bg-white text-purple-950 font-bold shadow-sm' : 'text-slate-600'
@@ -134,6 +133,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
             </div>
 
             <button
+              type="button"
               onClick={handleApplyIndex}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm border shrink-0 active:scale-95 ${
                 hasIndex
@@ -147,14 +147,21 @@ export const LiveSqlSandboxTab: React.FC = () => {
           </div>
         </div>
 
+        <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <span className="font-bold">Educational Simulation Model:</span> This sandbox simulates database engine metrics (disk reads, buffer hits, index node traversal, and latency deltas) in the browser to demonstrate the performance impact of indexing strategies on large tables.
+          </p>
+        </div>
+
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
             <span className="font-bold text-slate-700 flex items-center gap-1.5">
               <Database className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-              Synthetic Table: <code className="bg-purple-100 text-purple-950 px-1.5 py-0.5 rounded font-mono">orders ({datasetSize.toLocaleString()} records)</code>
+              Simulated Table: <code className="bg-purple-100 text-purple-950 px-1.5 py-0.5 rounded font-mono">orders ({datasetSize.toLocaleString()} records)</code>
             </span>
             <div className="text-[11px] text-slate-500">
-              Active Index State: <span className={`font-bold ${hasIndex ? 'text-emerald-700' : 'text-rose-700'}`}>{hasIndex ? 'Covering B-Tree' : 'None (Unindexed)'}</span>
+              Active Index State: <span className={`font-bold ${hasIndex ? 'text-emerald-700' : 'text-rose-700'}`}>{hasIndex ? 'Covering B-Tree (idx_orders_customer)' : 'None (Unindexed Sequential Scan)'}</span>
             </div>
           </div>
 
@@ -168,10 +175,11 @@ export const LiveSqlSandboxTab: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2 text-[11px] text-slate-500">
               <Cpu className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-              <span>Simulates buffer cache, row filtering, and B-Tree index traversal.</span>
+              <span>Models buffer cache hits, row filtering overhead, and B-Tree branch lookups.</span>
             </div>
 
             <button
+              type="button"
               onClick={runLiveQuery}
               disabled={isRunning}
               className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white hover:opacity-95 shadow-lg shadow-purple-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
@@ -179,12 +187,12 @@ export const LiveSqlSandboxTab: React.FC = () => {
               {isRunning ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Executing Live EXPLAIN ANALYZE...
+                  Running Simulation Model...
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  ▶️ Execute Live Query &amp; Measure Latency
+                  ▶️ Run Latency Simulation
                 </>
               )}
             </button>
@@ -194,7 +202,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
 
       {executionResult && (
         <div className="space-y-6">
-          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div
               className={`p-4 rounded-2xl border space-y-1 shadow-sm ${
@@ -205,7 +212,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-slate-600 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Measured Execution Time
+                  <Clock className="w-3.5 h-3.5" /> Simulated Latency
                 </span>
                 <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${hasIndex ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'}`}>
                   {hasIndex ? 'Sub-Millisecond ⚡' : 'Slow Scan 🐌'}
@@ -215,7 +222,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
                 {executionResult.latencyMs} ms
               </div>
               <span className="text-[10px] text-slate-500">
-                {hasIndex ? '~50x - 80x Speedup with Index' : 'Bottleneck: Scans entire table'}
+                {hasIndex ? '~50x - 80x Speedup with B-Tree' : 'Bottleneck: Full table sequential scan'}
               </span>
             </div>
 
@@ -230,7 +237,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
             </div>
 
             <div className="p-4 rounded-2xl border border-indigo-200/80 bg-white/90 space-y-1 shadow-sm">
-              <span className="text-[10px] uppercase font-bold text-slate-500">Access Method (Plan Node)</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500">Access Method</span>
               <div className="text-sm font-bold text-indigo-950 font-mono truncate">
                 {executionResult.scanType}
               </div>
@@ -240,7 +247,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
             </div>
 
             <div className="p-4 rounded-2xl border border-teal-200/80 bg-white/90 space-y-1 shadow-sm">
-              <span className="text-[10px] uppercase font-bold text-slate-500">Buffer Cache I/O Hits</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500">Buffer Cache I/O</span>
               <div className="text-2xl font-black text-teal-950 font-mono">
                 {hasIndex ? '100% Cache Hit' : `${executionResult.memoryHits} hits / ${executionResult.diskReads} disk reads`}
               </div>
@@ -254,7 +261,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Live Result Rows ({executionResult.rowsReturned} matching records returned)
+                Simulated Result Rows ({executionResult.rowsReturned} matching records returned)
               </h3>
               <span className="text-[10px] font-mono text-slate-400">ORDER BY created_at DESC LIMIT 20</span>
             </div>

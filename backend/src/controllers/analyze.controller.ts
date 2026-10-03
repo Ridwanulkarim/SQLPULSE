@@ -24,6 +24,33 @@ import { auditProductionReadiness } from '../analyzer/production-readiness';
 import { simulateChaosScenario } from '../analyzer/chaos-simulator';
 import { generateCdcOutboxArchitecture } from '../analyzer/cdc-outbox';
 import { tuneVectorIndex } from '../analyzer/vector-tuner';
+import {
+  analyzePlanSchema,
+  lintMigrationSchema,
+  adviseQuerySchema,
+  transpileSchema,
+  tuneConfigSchema,
+  deadlockSchema,
+  disasterRecoverySchema,
+  synthesizeQuerySchema,
+  connectHubSchema,
+  partitionSchema,
+  inspectLogsSchema,
+  bloatSchema,
+  replicationSchema,
+  securityRbacSchema,
+  mockDataSchema,
+  finOpsSchema,
+  indexDoctorSchema,
+  piiSanitizerSchema,
+  queryRewriterSchema,
+  schemaDiffSchema,
+  ormProfilerSchema,
+  readinessSchema,
+  chaosSchema,
+  cdcOutboxSchema,
+  vectorTuneSchema,
+} from '../validators/schemas';
 
 const dispatcher = new MultiEngineDispatcher();
 const transpiler = new SqlTranspiler();
@@ -45,12 +72,12 @@ const queryRewriterAnalyzer = new QueryRewriterAnalyzer();
 
 export const analyzePlan = (req: Request, res: Response): void => {
   try {
-    const { plan, query, engine = 'postgres' } = req.body;
-    if (!plan) {
-      res.status(400).json({ error: 'Missing required "plan" field in request body.' });
+    const parse = analyzePlanSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid plan request', details: parse.error.errors });
       return;
     }
-
+    const { plan, query, engine } = parse.data;
     const result = dispatcher.analyzePlan(engine as DatabaseEngine, plan);
     res.json({
       success: true,
@@ -68,12 +95,12 @@ export const analyzePlan = (req: Request, res: Response): void => {
 
 export const lintMigration = (req: Request, res: Response): void => {
   try {
-    const { sql, engine = 'postgres' } = req.body;
-    if (!sql || typeof sql !== 'string') {
-      res.status(400).json({ error: 'Missing or invalid "sql" field in request body.' });
+    const parse = lintMigrationSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid migration request', details: parse.error.errors });
       return;
     }
-
+    const { sql, engine } = parse.data;
     const result = dispatcher.lintMigration(engine as DatabaseEngine, sql);
     res.json({
       success: true,
@@ -90,12 +117,12 @@ export const lintMigration = (req: Request, res: Response): void => {
 
 export const adviseQuery = (req: Request, res: Response): void => {
   try {
-    const { query, engine = 'postgres' } = req.body;
-    if (!query || typeof query !== 'string') {
-      res.status(400).json({ error: 'Missing or invalid "query" field in request body.' });
+    const parse = adviseQuerySchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid query advice request', details: parse.error.errors });
       return;
     }
-
+    const { query, engine } = parse.data;
     const result = dispatcher.adviseQuery(engine as DatabaseEngine, query);
     res.json({
       success: true,
@@ -128,13 +155,12 @@ export const getSamples = (req: Request, res: Response): void => {
 
 export const transpileSql = (req: Request, res: Response): void => {
   try {
-    const { sourceEngine = 'oracle', targetEngine = 'postgres', sourceCode = '' } = req.body;
-    if (!sourceCode) {
-      res.status(400).json({ error: 'Missing required "sourceCode" in request body.' });
+    const parse = transpileSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid transpile request', details: parse.error.errors });
       return;
     }
-
-    const result = transpiler.transpile({ sourceEngine, targetEngine, sourceCode });
+    const result = transpiler.transpile(parse.data);
     res.json({
       success: true,
       data: result,
@@ -149,24 +175,12 @@ export const transpileSql = (req: Request, res: Response): void => {
 
 export const tuneConfig = (req: Request, res: Response): void => {
   try {
-    const {
-      engine = 'postgres',
-      ramGb = 16,
-      cpuCores = 4,
-      storageType = 'nvme_ssd',
-      workloadType = 'oltp_web',
-      maxConnections = 200,
-    } = req.body;
-
-    const result = configTuner.tune({
-      engine,
-      ramGb: Number(ramGb),
-      cpuCores: Number(cpuCores),
-      storageType,
-      workloadType,
-      maxConnections: Number(maxConnections),
-    });
-
+    const parse = tuneConfigSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid config tuning request', details: parse.error.errors });
+      return;
+    }
+    const result = configTuner.tune(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -181,8 +195,12 @@ export const tuneConfig = (req: Request, res: Response): void => {
 
 export const simulateDeadlock = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', scenarioId = 'circular_row_locks', txASql, txBSql } = req.body;
-    const result = deadlockSimulator.simulate({ engine, scenarioId, txASql, txBSql });
+    const parse = deadlockSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid deadlock simulation request', details: parse.error.errors });
+      return;
+    }
+    const result = deadlockSimulator.simulate(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -197,26 +215,12 @@ export const simulateDeadlock = (req: Request, res: Response): void => {
 
 export const calculateDisasterRecovery = (req: Request, res: Response): void => {
   try {
-    const {
-      engine = 'postgres',
-      dbSizeGb = 500,
-      dailyChangePercent = 10,
-      networkBandwidthMbps = 1000,
-      diskThroughputMbSec = 500,
-      backupStrategy = 'daily_full_plus_wal_cdc',
-      cloudProvider = 'aws_s3',
-    } = req.body;
-
-    const result = disasterRecoveryCalculator.calculate({
-      engine,
-      dbSizeGb: Number(dbSizeGb),
-      dailyChangePercent: Number(dailyChangePercent),
-      networkBandwidthMbps: Number(networkBandwidthMbps),
-      diskThroughputMbSec: Number(diskThroughputMbSec),
-      backupStrategy,
-      cloudProvider,
-    });
-
+    const parse = disasterRecoverySchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid disaster recovery request', details: parse.error.errors });
+      return;
+    }
+    const result = disasterRecoveryCalculator.calculate(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -231,19 +235,12 @@ export const calculateDisasterRecovery = (req: Request, res: Response): void => 
 
 export const synthesizeQuery = (req: Request, res: Response): void => {
   try {
-    const { prompt, targetEngine = 'postgres', schemaContext, domainPreset } = req.body;
-    if (!prompt) {
-      res.status(400).json({ error: 'Missing required "prompt" field.' });
+    const parse = synthesizeQuerySchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid query synthesis request', details: parse.error.errors });
       return;
     }
-
-    const result = querySynthesizer.synthesize({
-      prompt,
-      targetEngine,
-      schemaContext,
-      domainPreset,
-    });
-
+    const result = querySynthesizer.synthesize(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -258,17 +255,12 @@ export const synthesizeQuery = (req: Request, res: Response): void => {
 
 export const generateConnectHub = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', host, port, database, username, password, sslMode, poolSize } = req.body;
-    const result = connectHub.generate({
-      engine,
-      host,
-      port: port ? Number(port) : undefined,
-      database,
-      username,
-      password,
-      sslMode,
-      poolSize: poolSize ? Number(poolSize) : undefined,
-    });
+    const parse = connectHubSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid connect hub request', details: parse.error.errors });
+      return;
+    }
+    const result = connectHub.generate(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -283,15 +275,12 @@ export const generateConnectHub = (req: Request, res: Response): void => {
 
 export const planPartitionStrategy = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', tableName, partitionColumn, strategy, estimatedMonthlyRows, retentionMonths } = req.body;
-    const result = partitionArchitect.plan({
-      engine,
-      tableName,
-      partitionColumn,
-      strategy,
-      estimatedMonthlyRows: estimatedMonthlyRows ? Number(estimatedMonthlyRows) : 10000000,
-      retentionMonths: retentionMonths ? Number(retentionMonths) : 12,
-    });
+    const parse = partitionSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid partition request', details: parse.error.errors });
+      return;
+    }
+    const result = partitionArchitect.plan(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -306,8 +295,12 @@ export const planPartitionStrategy = (req: Request, res: Response): void => {
 
 export const inspectSlowLogs = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', logContent = '' } = req.body;
-    const result = logInspector.inspect({ engine, logContent });
+    const parse = inspectLogsSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid slow logs request', details: parse.error.errors });
+      return;
+    }
+    const result = logInspector.inspect(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -322,14 +315,12 @@ export const inspectSlowLogs = (req: Request, res: Response): void => {
 
 export const analyzeBloat = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', tableName, totalTableSizeGb, deadTuplePercentage, avgDailyUpdates } = req.body;
-    const result = bloatAnalyzer.analyze({
-      engine,
-      tableName,
-      totalTableSizeGb: totalTableSizeGb ? Number(totalTableSizeGb) : undefined,
-      deadTuplePercentage: deadTuplePercentage ? Number(deadTuplePercentage) : undefined,
-      avgDailyUpdates: avgDailyUpdates ? Number(avgDailyUpdates) : undefined,
-    });
+    const parse = bloatSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid bloat request', details: parse.error.errors });
+      return;
+    }
+    const result = bloatAnalyzer.analyze(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -344,15 +335,12 @@ export const analyzeBloat = (req: Request, res: Response): void => {
 
 export const simulateReplicationTopology = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', primaryRegion, syncReplicasCount, asyncReplicasCount, failoverManager, networkRttMs } = req.body;
-    const result = replicationAnalyzer.analyze({
-      engine,
-      primaryRegion,
-      syncReplicasCount: syncReplicasCount !== undefined ? Number(syncReplicasCount) : undefined,
-      asyncReplicasCount: asyncReplicasCount !== undefined ? Number(asyncReplicasCount) : undefined,
-      failoverManager,
-      networkRttMs: networkRttMs !== undefined ? Number(networkRttMs) : undefined,
-    });
+    const parse = replicationSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid replication request', details: parse.error.errors });
+      return;
+    }
+    const result = replicationAnalyzer.analyze(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -367,14 +355,12 @@ export const simulateReplicationTopology = (req: Request, res: Response): void =
 
 export const generateSecurityRbac = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', tableName, tenantColumn, piiColumns, enforceTls } = req.body;
-    const result = securityRbacAnalyzer.analyze({
-      engine,
-      tableName,
-      tenantColumn,
-      piiColumns,
-      enforceTls,
-    });
+    const parse = securityRbacSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid security RBAC request', details: parse.error.errors });
+      return;
+    }
+    const result = securityRbacAnalyzer.analyze(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -389,13 +375,12 @@ export const generateSecurityRbac = (req: Request, res: Response): void => {
 
 export const generateMockData = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', preset, rowCount, format } = req.body;
-    const result = mockGeneratorAnalyzer.generate({
-      engine,
-      preset,
-      rowCount: rowCount !== undefined ? Number(rowCount) : undefined,
-      format,
-    });
+    const parse = mockDataSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid mock data request', details: parse.error.errors });
+      return;
+    }
+    const result = mockGeneratorAnalyzer.generate(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -410,34 +395,12 @@ export const generateMockData = (req: Request, res: Response): void => {
 
 export const calculateFinOps = (req: Request, res: Response): void => {
   try {
-    const {
-      engine = 'postgres',
-      cloudProvider,
-      dbSizeGb,
-      monthlyReadQueriesMillion,
-      monthlyWriteQueriesMillion,
-      ramGb,
-      vCpuCount,
-      storageTier,
-      provisionedIops,
-      backupRetentionDays,
-      multiRegionHa,
-    } = req.body;
-
-    const result = finOpsCalculator.calculate({
-      engine,
-      cloudProvider,
-      dbSizeGb: dbSizeGb !== undefined ? Number(dbSizeGb) : undefined,
-      monthlyReadQueriesMillion: monthlyReadQueriesMillion !== undefined ? Number(monthlyReadQueriesMillion) : undefined,
-      monthlyWriteQueriesMillion: monthlyWriteQueriesMillion !== undefined ? Number(monthlyWriteQueriesMillion) : undefined,
-      ramGb: ramGb !== undefined ? Number(ramGb) : undefined,
-      vCpuCount: vCpuCount !== undefined ? Number(vCpuCount) : undefined,
-      storageTier,
-      provisionedIops: provisionedIops !== undefined ? Number(provisionedIops) : undefined,
-      backupRetentionDays: backupRetentionDays !== undefined ? Number(backupRetentionDays) : undefined,
-      multiRegionHa: multiRegionHa !== undefined ? Boolean(multiRegionHa) : undefined,
-    });
-
+    const parse = finOpsSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid FinOps request', details: parse.error.errors });
+      return;
+    }
+    const result = finOpsCalculator.calculate(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -452,14 +415,12 @@ export const calculateFinOps = (req: Request, res: Response): void => {
 
 export const auditIndexDoctor = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', tableName, indexes, rawIndexDdl } = req.body;
-    const result = indexDoctorAnalyzer.audit({
-      engine,
-      tableName,
-      indexes,
-      rawIndexDdl,
-    });
-
+    const parse = indexDoctorSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid Index Doctor request', details: parse.error.errors });
+      return;
+    }
+    const result = indexDoctorAnalyzer.audit(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -474,14 +435,12 @@ export const auditIndexDoctor = (req: Request, res: Response): void => {
 
 export const sanitizePii = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', tableName, columns, anonymizationSalt } = req.body;
-    const result = piiSanitizerAnalyzer.sanitize({
-      engine,
-      tableName,
-      columns,
-      anonymizationSalt,
-    });
-
+    const parse = piiSanitizerSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid PII sanitizer request', details: parse.error.errors });
+      return;
+    }
+    const result = piiSanitizerAnalyzer.sanitize(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -496,18 +455,12 @@ export const sanitizePii = (req: Request, res: Response): void => {
 
 export const rewriteQuery = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgres', query, tableHint } = req.body;
-    if (!query) {
-      res.status(400).json({ error: 'Missing required "query" in request body.' });
+    const parse = queryRewriterSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid query rewrite request', details: parse.error.errors });
       return;
     }
-
-    const result = queryRewriterAnalyzer.rewrite({
-      engine,
-      query,
-      tableHint,
-    });
-
+    const result = queryRewriterAnalyzer.rewrite(parse.data as any);
     res.json({
       success: true,
       data: result,
@@ -522,14 +475,12 @@ export const rewriteQuery = (req: Request, res: Response): void => {
 
 export const diffSchema = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgresql', sourceEnv, targetEnv, sourceDdl, targetDdl } = req.body;
-    const result = analyzeSchemaDiff({
-      engine,
-      sourceEnv,
-      targetEnv,
-      sourceDdl,
-      targetDdl,
-    });
+    const parse = schemaDiffSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid schema diff request', details: parse.error.errors });
+      return;
+    }
+    const result = analyzeSchemaDiff(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({
@@ -541,29 +492,29 @@ export const diffSchema = (req: Request, res: Response): void => {
 
 export const profileOrm = (req: Request, res: Response): void => {
   try {
-    const { framework = 'prisma', rawQueryOrCode, batchSize } = req.body;
-    const result = profileOrmQuery({
-      framework,
-      rawQueryOrCode,
-      batchSize: Number(batchSize || 1000),
-    });
+    const parse = ormProfilerSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid ORM profiler request', details: parse.error.errors });
+      return;
+    }
+    const result = profileOrmQuery(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({
       success: false,
-      error: err.message || 'Failed to profile ORM query anti-patterns.',
+      error: err.message || 'Failed to profile ORM queries.',
     });
   }
 };
 
 export const auditReadiness = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgresql', environmentType, estimatedQps } = req.body;
-    const result = auditProductionReadiness({
-      engine,
-      environmentType,
-      estimatedQps: Number(estimatedQps || 5000),
-    });
+    const parse = readinessSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid readiness audit request', details: parse.error.errors });
+      return;
+    }
+    const result = auditProductionReadiness(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({
@@ -575,13 +526,12 @@ export const auditReadiness = (req: Request, res: Response): void => {
 
 export const simulateChaos = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgresql', scenarioId = 'primary_crash', clusterSize, syncMode } = req.body;
-    const result = simulateChaosScenario({
-      engine,
-      scenarioId,
-      clusterSize: Number(clusterSize || 3),
-      syncMode,
-    });
+    const parse = chaosSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid chaos simulation request', details: parse.error.errors });
+      return;
+    }
+    const result = simulateChaosScenario(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({
@@ -593,31 +543,29 @@ export const simulateChaos = (req: Request, res: Response): void => {
 
 export const buildCdcOutbox = (req: Request, res: Response): void => {
   try {
-    const { engine = 'postgresql', sourceTable, destinationBroker } = req.body;
-    const result = generateCdcOutboxArchitecture({
-      engine,
-      sourceTable,
-      destinationBroker,
-    });
+    const parse = cdcOutboxSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid CDC outbox request', details: parse.error.errors });
+      return;
+    }
+    const result = generateCdcOutboxArchitecture(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({
       success: false,
-      error: err.message || 'Failed to generate CDC Outbox architecture.',
+      error: err.message || 'Failed to build CDC outbox architecture.',
     });
   }
 };
 
 export const tuneVector = (req: Request, res: Response): void => {
   try {
-    const { engine = 'pgvector', dimension, vectorCount, indexType, distanceMetric } = req.body;
-    const result = tuneVectorIndex({
-      engine,
-      dimension: Number(dimension || 1536),
-      vectorCount: Number(vectorCount || 500000),
-      indexType,
-      distanceMetric,
-    });
+    const parse = vectorTuneSchema.safeParse(req.body);
+    if (!parse.success) {
+      res.status(400).json({ success: false, error: 'Invalid vector tuning request', details: parse.error.errors });
+      return;
+    }
+    const result = tuneVectorIndex(parse.data as any);
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(422).json({

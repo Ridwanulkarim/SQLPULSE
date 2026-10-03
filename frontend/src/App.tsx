@@ -1,44 +1,55 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Header, AppTabId, AppTheme } from './components/Header';
 import { BrandLogo } from './components/BrandLogo';
 import { MetricsOverview } from './components/MetricsOverview';
 import { PlanInput } from './components/PlanInput';
 import { VisualPlanGraph } from './components/VisualPlanGraph';
 import { BottlenecksList } from './components/BottlenecksList';
-import { MigrationLinterTab } from './components/MigrationLinterTab';
-import { QueryAdvisorTab } from './components/QueryAdvisorTab';
-import { LiveSqlSandboxTab } from './components/LiveSqlSandboxTab';
-import { TranspilerTab } from './components/TranspilerTab';
-import { ConfigTunerTab } from './components/ConfigTunerTab';
-import { DeadlockSimulatorTab } from './components/DeadlockSimulatorTab';
-import { DisasterRecoveryTab } from './components/DisasterRecoveryTab';
-import { QuerySynthesizerTab } from './components/QuerySynthesizerTab';
-import { ConnectHubTab } from './components/ConnectHubTab';
-import { PartitionArchitectTab } from './components/PartitionArchitectTab';
-import { LogInspectorTab } from './components/LogInspectorTab';
-import { BloatAnalyzerTab } from './components/BloatAnalyzerTab';
-import { ReplicationTopologyTab } from './components/ReplicationTopologyTab';
-import { SecurityRbacTab } from './components/SecurityRbacTab';
-import { MockGeneratorTab } from './components/MockGeneratorTab';
-import { FinOpsStudioTab } from './components/FinOpsStudioTab';
-import { IndexDoctorTab } from './components/IndexDoctorTab';
-import { PiiSanitizerTab } from './components/PiiSanitizerTab';
-import { QueryRewriterTab } from './components/QueryRewriterTab';
-import { DatabaseComparisonTab } from './components/DatabaseComparisonTab';
-import { DatabaseSizingTab } from './components/DatabaseSizingTab';
-import { SchemaDiffTab } from './components/SchemaDiffTab';
-import { OrmProfilerTab } from './components/OrmProfilerTab';
-import { ProductionReadinessTab } from './components/ProductionReadinessTab';
-import { ChaosSimulatorTab } from './components/ChaosSimulatorTab';
-import { CdcOutboxTab } from './components/CdcOutboxTab';
-import { VectorRpmTab } from './components/VectorRpmTab';
-import { PlanComparisonModal } from './components/PlanComparisonModal';
-import { ExportReportModal } from './components/ExportReportModal';
-import { ShareModal } from './components/ShareModal';
-import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { analyzeQueryPlan, fetchSamples, saveReportPermalink } from './services/api';
 import { PlanAnalysisResult, DatabaseEngine, DATABASE_CATALOG } from './types';
 import { GitCompare, Database, Search } from 'lucide-react';
+
+const MigrationLinterTab = lazy(() => import('./components/MigrationLinterTab').then((m) => ({ default: m.MigrationLinterTab })));
+const QueryAdvisorTab = lazy(() => import('./components/QueryAdvisorTab').then((m) => ({ default: m.QueryAdvisorTab })));
+const LiveSqlSandboxTab = lazy(() => import('./components/LiveSqlSandboxTab').then((m) => ({ default: m.LiveSqlSandboxTab })));
+const TranspilerTab = lazy(() => import('./components/TranspilerTab').then((m) => ({ default: m.TranspilerTab })));
+const ConfigTunerTab = lazy(() => import('./components/ConfigTunerTab').then((m) => ({ default: m.ConfigTunerTab })));
+const DeadlockSimulatorTab = lazy(() => import('./components/DeadlockSimulatorTab').then((m) => ({ default: m.DeadlockSimulatorTab })));
+const DisasterRecoveryTab = lazy(() => import('./components/DisasterRecoveryTab').then((m) => ({ default: m.DisasterRecoveryTab })));
+const QuerySynthesizerTab = lazy(() => import('./components/QuerySynthesizerTab').then((m) => ({ default: m.QuerySynthesizerTab })));
+const ConnectHubTab = lazy(() => import('./components/ConnectHubTab').then((m) => ({ default: m.ConnectHubTab })));
+const PartitionArchitectTab = lazy(() => import('./components/PartitionArchitectTab').then((m) => ({ default: m.PartitionArchitectTab })));
+const LogInspectorTab = lazy(() => import('./components/LogInspectorTab').then((m) => ({ default: m.LogInspectorTab })));
+const BloatAnalyzerTab = lazy(() => import('./components/BloatAnalyzerTab').then((m) => ({ default: m.BloatAnalyzerTab })));
+const ReplicationTopologyTab = lazy(() => import('./components/ReplicationTopologyTab').then((m) => ({ default: m.ReplicationTopologyTab })));
+const SecurityRbacTab = lazy(() => import('./components/SecurityRbacTab').then((m) => ({ default: m.SecurityRbacTab })));
+const MockGeneratorTab = lazy(() => import('./components/MockGeneratorTab').then((m) => ({ default: m.MockGeneratorTab })));
+const FinOpsStudioTab = lazy(() => import('./components/FinOpsStudioTab').then((m) => ({ default: m.FinOpsStudioTab })));
+const IndexDoctorTab = lazy(() => import('./components/IndexDoctorTab').then((m) => ({ default: m.IndexDoctorTab })));
+const PiiSanitizerTab = lazy(() => import('./components/PiiSanitizerTab').then((m) => ({ default: m.PiiSanitizerTab })));
+const QueryRewriterTab = lazy(() => import('./components/QueryRewriterTab').then((m) => ({ default: m.QueryRewriterTab })));
+const DatabaseComparisonTab = lazy(() => import('./components/DatabaseComparisonTab').then((m) => ({ default: m.DatabaseComparisonTab })));
+const DatabaseSizingTab = lazy(() => import('./components/DatabaseSizingTab').then((m) => ({ default: m.DatabaseSizingTab })));
+const SchemaDiffTab = lazy(() => import('./components/SchemaDiffTab').then((m) => ({ default: m.SchemaDiffTab })));
+const OrmProfilerTab = lazy(() => import('./components/OrmProfilerTab').then((m) => ({ default: m.OrmProfilerTab })));
+const ProductionReadinessTab = lazy(() => import('./components/ProductionReadinessTab').then((m) => ({ default: m.ProductionReadinessTab })));
+const ChaosSimulatorTab = lazy(() => import('./components/ChaosSimulatorTab').then((m) => ({ default: m.ChaosSimulatorTab })));
+const CdcOutboxTab = lazy(() => import('./components/CdcOutboxTab').then((m) => ({ default: m.CdcOutboxTab })));
+const VectorRpmTab = lazy(() => import('./components/VectorRpmTab').then((m) => ({ default: m.VectorRpmTab })));
+
+const PlanComparisonModal = lazy(() => import('./components/PlanComparisonModal').then((m) => ({ default: m.PlanComparisonModal })));
+const ExportReportModal = lazy(() => import('./components/ExportReportModal').then((m) => ({ default: m.ExportReportModal })));
+const ShareModal = lazy(() => import('./components/ShareModal').then((m) => ({ default: m.ShareModal })));
+const CommandPaletteModal = lazy(() => import('./components/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal })));
+
+function StudioLoadingFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center p-12 space-y-3 min-h-[350px] glass-card-light rounded-2xl border border-purple-200/60">
+      <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-semibold text-slate-500 font-mono">Loading studio module...</span>
+    </div>
+  );
+}
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTabId>('plan');
@@ -87,7 +98,7 @@ export function App() {
       try {
         parsedPlan = JSON.parse(planText);
       } catch (e) {
-        // Leave as string if not valid JSON
+        // Keep string if raw format
       }
 
       const res = await analyzeQueryPlan(parsedPlan, query, engine);
@@ -189,7 +200,6 @@ export function App() {
 
   return (
     <div className={`min-h-screen flex flex-col relative ${currentTheme} font-sans`}>
-      
       {currentTheme === 'theme-lavender' && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
           <div className="absolute top-[-10%] left-[-5%] w-[45vw] h-[45vw] rounded-full bg-purple-200/40 blur-[100px]" />
@@ -210,11 +220,10 @@ export function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 relative z-10">
-        
         <div className="text-center max-w-3xl mx-auto space-y-4 pt-2 pb-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 text-xs font-semibold text-zinc-800 dark:text-zinc-200 shadow-xs">
             <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-            SQLPulse Engine • 447 Databases • 25 Professional Studios
+            SQLPulse Engine • 447 Databases Indexed • 25 Specialized Studios
           </div>
 
           <div className="flex items-center justify-center gap-3.5">
@@ -225,7 +234,7 @@ export function App() {
           </div>
 
           <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 max-w-2xl mx-auto leading-relaxed">
-            Enterprise database performance tuning, zero-downtime migrations, Cloud FinOps cost sizer, index doctor, and PII anonymization across 447 relational, NoSQL, and vector engines.
+            Universal database performance tuning, zero-downtime migration linter, Cloud FinOps cost sizer, index doctor, and PII anonymization across 447 database engines.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
@@ -248,184 +257,158 @@ export function App() {
           </div>
         </div>
 
-        {activeTab === 'plan' && (
-          <>
-            
-            <PlanInput
-              onAnalyze={handleAnalyze}
-              isLoading={isLoading}
-              onLoadSample={handleLoadSample}
+        <Suspense fallback={<StudioLoadingFallback />}>
+          {activeTab === 'plan' && (
+            <>
+              <PlanInput
+                onAnalyze={handleAnalyze}
+                isLoading={isLoading}
+                onLoadSample={handleLoadSample}
+                selectedEngine={selectedEngine}
+                onSelectEngine={setSelectedEngine}
+              />
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <GitCompare className="w-4 h-4 text-purple-600 shrink-0" />
+                  <span className="text-xs font-bold text-slate-900">
+                    Side-by-Side Regression Diff Studio:
+                  </span>
+                  <span className="text-xs text-slate-500 hidden md:inline">
+                    Compare unindexed baseline vs optimized plan latency and cost deltas.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenComparison}
+                  disabled={isLoading}
+                  className="w-full sm:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95 shadow-md shadow-purple-500/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-95"
+                >
+                  <GitCompare className="w-3.5 h-3.5" />
+                  <span>Launch Plan Diff &amp; Delta Studio</span>
+                </button>
+              </div>
+
+              {analysisResult && (
+                <div className="space-y-8">
+                  <MetricsOverview data={analysisResult} />
+                  <VisualPlanGraph nodes={analysisResult.graph.nodes} />
+                  <BottlenecksList
+                    bottlenecks={analysisResult.bottlenecks}
+                    recommendations={analysisResult.recommendations}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'migration' && <MigrationLinterTab />}
+          {activeTab === 'advisor' && <QueryAdvisorTab />}
+          {activeTab === 'sandbox' && <LiveSqlSandboxTab />}
+          {activeTab === 'transpiler' && <TranspilerTab />}
+          {activeTab === 'tuner' && <ConfigTunerTab />}
+          {activeTab === 'deadlock' && <DeadlockSimulatorTab />}
+          {activeTab === 'disaster' && <DisasterRecoveryTab />}
+          {activeTab === 'synthesizer' && <QuerySynthesizerTab />}
+          {activeTab === 'connect' && <ConnectHubTab />}
+          {activeTab === 'partition' && <PartitionArchitectTab />}
+          {activeTab === 'logs' && <LogInspectorTab />}
+          {activeTab === 'bloat' && (
+            <BloatAnalyzerTab
               selectedEngine={selectedEngine}
               onSelectEngine={setSelectedEngine}
             />
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm">
-              <div className="flex items-center gap-2">
-                <GitCompare className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="text-xs font-bold text-slate-900">
-                  Side-by-Side Regression Diff Studio:
-                </span>
-                <span className="text-xs text-slate-500 hidden md:inline">
-                  Compare unindexed baseline vs optimized plan latency and cost deltas.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleOpenComparison}
-                disabled={isLoading}
-                className="w-full sm:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95 shadow-md shadow-purple-500/20 transition flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-95"
-              >
-                <GitCompare className="w-3.5 h-3.5" />
-                <span>Launch Plan Diff &amp; Delta Studio</span>
-              </button>
-            </div>
-
-            {analysisResult && (
-              <div className="space-y-8">
-                
-                <MetricsOverview data={analysisResult} />
-
-                <VisualPlanGraph nodes={analysisResult.graph.nodes} />
-
-                <BottlenecksList
-                  bottlenecks={analysisResult.bottlenecks}
-                  recommendations={analysisResult.recommendations}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'migration' && <MigrationLinterTab />}
-
-        {activeTab === 'advisor' && <QueryAdvisorTab />}
-
-        {activeTab === 'sandbox' && <LiveSqlSandboxTab />}
-
-        {activeTab === 'transpiler' && <TranspilerTab />}
-
-        {activeTab === 'tuner' && <ConfigTunerTab />}
-
-        {activeTab === 'deadlock' && <DeadlockSimulatorTab />}
-
-        {activeTab === 'disaster' && <DisasterRecoveryTab />}
-
-        {activeTab === 'synthesizer' && <QuerySynthesizerTab />}
-
-        {activeTab === 'connect' && <ConnectHubTab />}
-
-        {activeTab === 'partition' && <PartitionArchitectTab />}
-
-        {activeTab === 'logs' && <LogInspectorTab />}
-
-        {activeTab === 'bloat' && (
-          <BloatAnalyzerTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'replication' && (
-          <ReplicationTopologyTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'security' && (
-          <SecurityRbacTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'mock' && (
-          <MockGeneratorTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'finops' && (
-          <FinOpsStudioTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'doctor' && (
-          <IndexDoctorTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'sanitizer' && (
-          <PiiSanitizerTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'rewriter' && (
-          <QueryRewriterTab
-            selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
-          />
-        )}
-
-        {activeTab === 'matrix' && <DatabaseComparisonTab />}
-
-        {activeTab === 'sizing' && <DatabaseSizingTab />}
-
-        {activeTab === 'schema_diff' && <SchemaDiffTab />}
-
-        {activeTab === 'orm_profiler' && <OrmProfilerTab />}
-
-        {activeTab === 'production_readiness' && <ProductionReadinessTab />}
-
-        {activeTab === 'chaos_simulator' && <ChaosSimulatorTab />}
-
-        {activeTab === 'cdc_outbox' && <CdcOutboxTab />}
-
-        {activeTab === 'vector_tuner' && <VectorRpmTab />}
+          )}
+          {activeTab === 'replication' && (
+            <ReplicationTopologyTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'security' && (
+            <SecurityRbacTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'mock' && (
+            <MockGeneratorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'finops' && (
+            <FinOpsStudioTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'doctor' && (
+            <IndexDoctorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'sanitizer' && (
+            <PiiSanitizerTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'rewriter' && (
+            <QueryRewriterTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'matrix' && <DatabaseComparisonTab />}
+          {activeTab === 'sizing' && <DatabaseSizingTab />}
+          {activeTab === 'schema_diff' && <SchemaDiffTab />}
+          {activeTab === 'orm_profiler' && <OrmProfilerTab />}
+          {activeTab === 'production_readiness' && <ProductionReadinessTab />}
+          {activeTab === 'chaos_simulator' && <ChaosSimulatorTab />}
+          {activeTab === 'cdc_outbox' && <CdcOutboxTab />}
+          {activeTab === 'vector_tuner' && <VectorRpmTab />}
+        </Suspense>
       </main>
 
-      <CommandPaletteModal
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onSelectTab={setActiveTab}
-        onSelectEngine={(engineId) => {
-          setSelectedEngine(engineId);
-          setActiveTab('plan');
-        }}
-      />
-
-      <PlanComparisonModal
-        isOpen={isCompareOpen}
-        onClose={() => setIsCompareOpen(false)}
-        baselinePlan={baselineResult}
-        optimizedPlan={optimizedResult}
-      />
-
-      <ExportReportModal
-        isOpen={isExportOpen}
-        onClose={() => setIsExportOpen(false)}
-        result={analysisResult}
-        query={rawQuery}
-      />
-
-      {shareUrl && (
-        <ShareModal
-          isOpen={isShareOpen}
-          onClose={() => setIsShareOpen(false)}
-          shareUrl={shareUrl}
+      <Suspense fallback={null}>
+        <CommandPaletteModal
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          onSelectTab={setActiveTab}
+          onSelectEngine={(engineId) => {
+            setSelectedEngine(engineId);
+            setActiveTab('plan');
+          }}
         />
-      )}
+
+        <PlanComparisonModal
+          isOpen={isCompareOpen}
+          onClose={() => setIsCompareOpen(false)}
+          baselinePlan={baselineResult}
+          optimizedPlan={optimizedResult}
+        />
+
+        <ExportReportModal
+          isOpen={isExportOpen}
+          onClose={() => setIsExportOpen(false)}
+          result={analysisResult}
+          query={rawQuery}
+        />
+
+        {shareUrl && (
+          <ShareModal
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+            shareUrl={shareUrl}
+          />
+        )}
+      </Suspense>
 
       <footer className="border-t border-purple-200/50 py-6 text-center text-xs text-slate-500 relative z-10 font-sans">
         <p>
-          SQLPulse — Universal Database Engineering Studio • {DATABASE_CATALOG.length} Engines Supported Across SQL, NoSQL, Vector AI, Graph, Time-Series &amp; In-Memory. Press <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-purple-200 shadow-xs">⌘K</kbd> to search anytime.
+          SQLPulse — Universal Database Engineering Studio • {DATABASE_CATALOG.length} Engines Cataloged Across SQL, NoSQL, Vector AI, Graph, Time-Series &amp; In-Memory. Press <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-purple-200 shadow-xs">⌘K</kbd> to search anytime.
         </p>
       </footer>
     </div>

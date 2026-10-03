@@ -11,18 +11,18 @@
 </p>
 
 <p align="center">
-  <b>SQLPulse</b> is the universal, open-source database engineering workbench designed for high-velocity software teams, Site Reliability Engineers (SREs), Database Administrators (DBAs), and backend architects. It unifies <b>25 specialized engineering studios</b> and provides native performance profiling, zero-downtime migrations, Cloud FinOps cost modeling, and lock-free execution across <b>447 relational, NoSQL, Vector AI, Time-Series, and Graph database engines</b>.
+  <b>SQLPulse</b> is an open-source database engineering workbench designed for software developers, Site Reliability Engineers (SREs), Database Administrators (DBAs), and backend architects. It unifies <b>25 specialized engineering studios</b> offering query plan visualization, zero-downtime migration linting, hardware configuration auto-tuning, Cloud FinOps cost modeling, and schema diagnostics across <b>447 indexed database systems</b>.
 </p>
 
 ---
 
-## 🚀 Live Demo & 1-Click Deployments
+## 🚀 Live Demo & Deployment Targets
 
-| Platform | Deployment Target | Status | Quick Action |
+| Platform | Target | Role | Quick Action |
 | :--- | :--- | :--- | :--- |
-| **Vercel** | Frontend Web Studio (`frontend/`) | ![Vercel](https://img.shields.io/badge/Vercel-Deploy-black?logo=vercel) | [Deploy with Vercel](#-deploying-frontend-to-vercel) |
-| **Render / Railway** | Node.js Backend API Engine (`backend/`) | ![Render](https://img.shields.io/badge/Render-API%20Engine-46E3B7?logo=render) | [Deploy with Render](#-deploying-backend-api-to-render) |
-| **Localhost** | Unified Single-Port (`http://localhost:4000`) | ![Localhost](https://img.shields.io/badge/Unified-Port%204000-blue) | `npm start` |
+| **Vercel** | Frontend Web Studio (`frontend/`) | Client-side React 18 SPA with offline fallback | [Deploy with Vercel](#-deploying-frontend-to-vercel) |
+| **Render / Railway** | Node.js Backend API Engine (`backend/`) | REST API engine with PostgreSQL persistence | [Deploy with Render](#-deploying-backend-api-to-render) |
+| **Localhost** | Unified Single-Port (`http://localhost:4000`) | Node.js static SPA server + REST endpoints | `npm start` |
 
 ---
 
@@ -33,26 +33,48 @@ flowchart TD
     subgraph Client["Frontend Architecture (React 18 + TypeScript + Vite)"]
         UI_Nav["Command Palette (⌘K) & Studio Switcher"]
         UI_Visualizer["Visual Execution Tree & Cost Graph"]
-        UI_Studios["25 Enterprise Engineering Studios"]
-        UI_Theme["Zero-Latency Light / Dark Theme Engine"]
+        UI_Studios["25 Code-Split Studios (React.lazy)"]
+        UI_Theme["Light / Dark / Lavender Theme Engine"]
     end
 
-    subgraph CoreEngine["Heuristic & Analysis Engine (Node.js 20 + Express + TypeScript)"]
-        Dispatcher["Universal Multi-Engine Dispatcher (447 DBMS)"]
-        Parser["Query Plan & AST Normalizer"]
-        RuleEngine["Heuristic Rule Engines (Seq Scan, I/O Spills, N+1, Lock Hazards)"]
+    subgraph CoreEngine["Heuristic & Analysis Engine (Node.js 20 + Express + Zod)"]
+        Dispatcher["Multi-Engine Dispatcher (447 Database Catalog)"]
+        Parser["Query Plan & JSON Normalizer"]
+        RuleEngine["Deterministic Rule Engines (Seq Scan, I/O Spills, N+1, Lock Hazards)"]
         Linter["Zero-Downtime DDL Lock Linter"]
         FinOps["Cloud Multi-Region Pricing Sizer (AWS, GCP, Azure)"]
-        Sanitizer["PII Anonymization & Synthetic Data Generator"]
+        Sanitizer["PII Anonymizer & Synthetic Data Generator"]
     end
 
-    subgraph CloudStorage["Persistence & Collaboration"]
-        Permalinks[("Reports & Permalinks Storage (JSONB / PostgreSQL)")]
+    subgraph CloudStorage["Persistence & Bounded Cache"]
+        Permalinks[("PostgreSQL DB / Bounded LRU Memory Map")]
     end
 
-    Client <-->|REST API / JSON / WebSockets| CoreEngine
+    Client <-->|REST API / JSON / Client Fallback| CoreEngine
     CoreEngine <-->|Store & Retrieve Analysis Snapshots| CloudStorage
 ```
+
+---
+
+## 🔍 Database Catalog & Engine Support
+
+SQLPulse indexes **447 database engines** across 8 paradigms. Engine analysis is structured into three tiers:
+
+1. **Dedicated Core Analyzers**:
+   - **PostgreSQL**: Full JSON/Text `EXPLAIN (ANALYZE, BUFFERS)` execution plan tree parsing, cost percentage calculation, buffer cache hit metrics, and bottleneck diagnosis.
+   - **MySQL / MariaDB**: `EXPLAIN FORMAT=JSON` and tabular explain analysis with index lookup evaluation (`ALL`, `index`, `range`, `ref`, `eq_ref`, `const`).
+   - **SQLite / LibSQL**: `EXPLAIN QUERY PLAN` tree analysis with coverage checks.
+   - **MongoDB**: Execution stats and winning plan inspection (`COLLSCAN`, `IXSCAN`, `FETCH`, `SORT`).
+
+2. **Paradigm Heuristic Adapters**:
+   - **Key-Value / In-Memory (Redis, KeyDB, Dragonfly)**: Big-O time complexity analysis, blocking command detection (`KEYS *`, `FLUSHALL`), and memory fragmentation checks.
+   - **Vector & AI Search (pgvector, Pinecone, Milvus, Qdrant, Weaviate)**: HNSW M/efConstruction parameters, IVFFlat list tuning, and hybrid search RRF advice.
+   - **Graph Databases (Neo4j, Memgraph, Dgraph)**: Relationship traversal depth, Cypher label indexing, and Cartesian expansion warnings.
+   - **Time-Series & Telemetry (TimescaleDB, InfluxDB, ClickHouse)**: Chunk interval sizing, continuous aggregates, and downsampling policies.
+   - **Wide-Column Stores (Cassandra, ScyllaDB)**: Partition key clustering, tombstone threshold warnings, and ALLOW FILTERING detection.
+
+3. **Catalog & Dialect Metadata**:
+   - Engines outside the specialized list utilize category-level heuristics and dialect-specific connection guidance, sizing models, and syntax transpilation.
 
 ---
 
@@ -68,7 +90,7 @@ SQLPulse Platform
 │   ├── SQL Rewriter
 │   ├── ORM Profiler
 │   ├── Slow Log Inspector
-│   └── Live SQL Sandbox
+│   └── Live SQL Sandbox (Simulation Demo)
 ├── 2. DDL, Schema & Safe Migrations (5 Studios)
 │   ├── Schema Drift Diff Studio
 │   ├── Safe Migration Linter
@@ -94,50 +116,38 @@ SQLPulse Platform
     └── 447 Universal DBMS Matrix
 ```
 
-### Studio Feature Matrix
+### Studio Overview
 
-| # | Studio Name | Operational Domain | Key Capabilities |
+| # | Studio Name | Operational Domain | Description |
 | :---: | :--- | :--- | :--- |
-| **01** | **Plan Visualizer** | Query Diagnostics | Visual execution tree graph, node cost breakdown, bottleneck alerts, I/O read vs hit ratio, and side-by-side regression diff studio. |
-| **02** | **Query Advisor** | Query Diagnostics | AI anti-pattern analysis, compound index ESR rule suggestions, and missing index DDL generator with zero-downtime safety. |
-| **03** | **SQL Rewriter** | Query Diagnostics | 10x–100x sargability optimizer, subquery-to-JOIN transformer, implicit type cast fixes, and `EXISTS` vs `IN` performance refactoring. |
-| **04** | **ORM Profiler** | Query Diagnostics | Detects N+1 query loops, Cartesian join explosions, unbounded query scans, and generates optimized eager-loading fixes for Prisma, TypeORM, Hibernate, SQLAlchemy, and Django. |
-| **05** | **Slow Log Inspector** | Query Diagnostics | Forensic log parser for Postgres, MySQL slow queries, and MongoDB profiler logs. Aggregates P95/P99 latency clusters and culprit queries. |
-| **06** | **Live SQL Sandbox** | Query Diagnostics | In-browser query sandbox with live execution latency measurement, synthetic row generation, and real-time execution benchmarking. |
-| **07** | **Schema Diff Studio** | Migrations & DDL | Computes online schema drift between Dev and Live databases. Generates zero-downtime, reversible DDL sync scripts with rollback plans. |
+| **01** | **Plan Visualizer** | Query Diagnostics | Visual execution tree graph, node cost breakdown, bottleneck alerts, I/O read vs hit ratio, and side-by-side plan diff studio. |
+| **02** | **Query Advisor** | Query Diagnostics | Rule-based anti-pattern detection, compound index ESR rule suggestions, and missing index DDL generator. |
+| **03** | **SQL Rewriter** | Query Diagnostics | Sargability optimizer, subquery-to-JOIN transformer, implicit type cast fixes, and `EXISTS` vs `IN` performance refactoring. |
+| **04** | **ORM Profiler** | Query Diagnostics | Detects N+1 query loops, Cartesian join explosions, unbounded scans, and generates eager-loading fixes for Prisma, TypeORM, Hibernate, SQLAlchemy, and Django. |
+| **05** | **Slow Log Inspector** | Query Diagnostics | Forensic log parser for Postgres and MySQL slow query logs. Aggregates P95/P99 latency clusters and culprit queries. |
+| **06** | **Live SQL Sandbox** | Query Diagnostics | *Interactive simulation demo* modeling B-Tree index traversal, full table scans, buffer cache hits, and latency deltas in-browser. |
+| **07** | **Schema Diff Studio** | Migrations & DDL | Computes schema drift between Dev and Live databases. Generates reversible DDL sync scripts with rollback steps. |
 | **08** | **Safe Migration Linter** | Migrations & DDL | Static DDL analysis engine. Flags `EXCLUSIVE LOCK` hazards, non-concurrent index additions, blocking foreign keys, and unsafe column mutations. |
-| **09** | **Partition Architect** | Migrations & DDL | Auto-generates range, list, and hash partitioning DDL with rolling monthly partition maintenance procedures and partition pruning validation. |
-| **10** | **Polyglot Transpiler** | Migrations & DDL | Instant dialect conversion across Postgres, MySQL, Oracle, Snowflake, BigQuery, SQLite, and MongoDB aggregation pipelines. |
-| **11** | **Bloat & Vacuum Repack** | Migrations & DDL | Dead tuple bloat estimator, table & index bloat percentage calculator, autovacuum aggressive tuning presets, and `pg_repack` zero-lock DDL commands. |
-| **12** | **Production Readiness** | Architecture & HA | 7-vector pre-launch SLA/SLO audit (Grade A+ to F). Assesses connection pooling, statement timeouts, autovacuum, WAL archiving, backup retention, and generates 1-click hardening configs. |
-| **13** | **Chaos Simulator** | Architecture & HA | State machine simulation for node crashes, network partition split-brain scenarios, connection starvation spikes, and step-by-step failover runbooks. |
-| **14** | **Replication HA Studio** | Architecture & HA | Multi-region cluster topologies, synchronous vs asynchronous replication lag estimators, split-brain quorum calculation, and automated failover config generators. |
-| **15** | **Hardware Config Tuner** | Architecture & HA | Mathematical hardware parameter auto-sizing for `shared_buffers`, `effective_cache_size`, `work_mem`, `max_connections`, `maintenance_work_mem`, and `max_wal_size`. |
-| **16** | **Deadlock Simulator** | Architecture & HA | Interactive Wait-For graph visualizer. Analyzes concurrent transaction lock acquisition order and generates lock escalation mitigation strategies. |
-| **17** | **Disaster Recovery (DR)** | Architecture & HA | RPO/RTO calculator, automated `pg_dump` / `pg_basebackup` / WAL archiving bash scripts, Point-in-Time Recovery (PITR) instructions, and AWS S3 offsite rotation schedules. |
+| **09** | **Partition Architect** | Migrations & DDL | Generates range, list, and hash partitioning DDL with rolling monthly partition maintenance procedures. |
+| **10** | **Polyglot Transpiler** | Migrations & DDL | Dialect conversion across Postgres, MySQL, Oracle, Snowflake, BigQuery, SQLite, and MongoDB aggregation pipelines. |
+| **11** | **Bloat & Vacuum Repack** | Migrations & DDL | Dead tuple bloat estimator, table & index bloat percentage calculator, autovacuum tuning presets, and `pg_repack` commands. |
+| **12** | **Production Readiness** | Architecture & HA | 7-vector pre-launch SLA/SLO audit. Assesses connection pooling, statement timeouts, autovacuum, WAL archiving, and backup retention. |
+| **13** | **Chaos Simulator** | Architecture & HA | State machine simulation for node crashes, network partition split-brain scenarios, connection spikes, and failover runbooks. |
+| **14** | **Replication HA Studio** | Architecture & HA | Multi-region cluster topologies, synchronous vs asynchronous replication lag estimators, split-brain quorum calculation, and failover configs. |
+| **15** | **Hardware Config Tuner** | Architecture & HA | Hardware parameter auto-sizing for `shared_buffers`, `effective_cache_size`, `work_mem`, `max_connections`, `maintenance_work_mem`, and `max_wal_size`. |
+| **16** | **Deadlock Simulator** | Architecture & HA | Interactive Wait-For graph visualizer. Analyzes concurrent transaction lock acquisition order and mitigation strategies. |
+| **17** | **Disaster Recovery (DR)** | Architecture & HA | RPO/RTO calculator, automated `pg_dump` / `pg_basebackup` scripts, Point-in-Time Recovery (PITR) guides, and S3 rotation schedules. |
 | **18** | **Sizing & Pooler Studio** | Architecture & HA | Hardware capacity sizing estimator, IOPS requirement modeler, and PgBouncer / ProxySQL connection pool configuration generator. |
-| **19** | **Cloud FinOps Studio** | FinOps & Security | Multi-cloud cost calculator comparing AWS RDS / Aurora vs GCP Cloud SQL / AlloyDB vs Azure Database. Identifies over-provisioned vCPU, idle storage, and provisioned IOPS savings. |
+| **19** | **Cloud FinOps Studio** | FinOps & Security | Multi-cloud cost calculator comparing AWS RDS / Aurora vs GCP Cloud SQL / AlloyDB vs Azure Database. Identifies over-provisioned vCPU and idle IOPS. |
 | **20** | **Index Doctor** | FinOps & Security | Audits database schemas for duplicate, redundant, left-prefix overlapping, and unused indexes. Emits drop statements with estimated storage reclaimed. |
-| **21** | **PII Sanitizer Studio** | FinOps & Security | GDPR/HIPAA compliance masking studio. Replaces sensitive customer data (SSNs, emails, credit cards, phones) with cryptographically realistic synthetic mock data for staging. |
-| **22** | **Security & RBAC Studio** | FinOps & Security | Least-privilege role-based access control (RBAC) generator, Row-Level Security (RLS) policies for multi-tenant SaaS, and SQL injection sanitization audits. |
-| **23** | **CDC & Outbox Studio** | AI & Data Workloads | Zero-loss Transactional Outbox pattern generator, Debezium Kafka Connect configuration builder, and TypeScript idempotent consumer worker with retry and dead-letter queues. |
-| **24** | **Vector RPM & RAG Tuner**| AI & Data Workloads | HNSW and IVFFlat vector index RAM sizer for `pgvector`, Pinecone, Milvus, and Qdrant. Generates Reciprocal Rank Fusion (RRF) hybrid dense+sparse BM25 queries. |
-| **25** | **447 DBMS Matrix** | AI & Data Workloads | Complete comparative reference index for all 447 database engines categorized by paradigm, ACID compliance, storage model, and query language. |
+| **21** | **PII Sanitizer Studio** | FinOps & Security | GDPR/HIPAA compliance masking studio. Replaces sensitive customer data (SSNs, emails, credit cards, phones) with synthetic mock data. |
+| **22** | **Security & RBAC Studio** | FinOps & Security | Role-based access control (RBAC) generator, Row-Level Security (RLS) policies for multi-tenant SaaS, and SQL injection sanitization audits. |
+| **23** | **CDC & Outbox Studio** | AI & Data Workloads | Transactional Outbox pattern generator, Debezium Kafka Connect configuration builder, and TypeScript idempotent consumer worker. |
+| **24** | **Vector RPM & RAG Tuner**| AI & Data Workloads | HNSW and IVFFlat vector index RAM sizer for `pgvector`, Pinecone, Milvus, and Qdrant. Generates Reciprocal Rank Fusion (RRF) hybrid queries. |
+| **25** | **447 DBMS Matrix** | AI & Data Workloads | Comparative reference index for all 447 database engines categorized by paradigm, ACID compliance, storage model, and query language. |
 
----
-
-## 🌐 447 Supported Database Engines
-
-SQLPulse features an exhaustive dictionary and specialized dispatchers for **447 database engines** spanning 8 paradigms:
-
-* **Relational SQL (140+ engines):** PostgreSQL, MySQL, MariaDB, SQLite, Oracle, Microsoft SQL Server, CockroachDB, TiDB, YugabyteDB, DuckDB, Amazon Aurora, Google AlloyDB, Azure Cosmos SQL, Percona Server, SingleStore, etc.
-* **Vector & AI Databases (35+ engines):** pgvector, Pinecone, Milvus, Qdrant, Weaviate, ChromaDB, Vespa, Marqo, Deep Lake, LanceDB, Vald, etc.
-* **NoSQL Document & Key-Value (80+ engines):** MongoDB, DynamoDB, Couchbase, Redis, KeyDB, Dragonfly, Cassandra, ScyllaDB, Apache HBase, CouchDB, RavenDB, etc.
-* **Time-Series & Telemetry (40+ engines):** TimescaleDB, InfluxDB, Prometheus, QuestDB, VictoriaMetrics, ClickHouse, Kdb+, TDengine, etc.
-* **Graph & Knowledge Graphs (30+ engines):** Neo4j, Memgraph, Amazon Neptune, Dgraph, ArangoDB, NebulaGraph, JanusGraph, TigerGraph, etc.
-* **Cloud Data Warehouses & Columnar OLAP (50+ engines):** Snowflake, Google BigQuery, Amazon Redshift, ClickHouse, Databricks Lakehouse, Apache Pinot, Apache Druid, StarRocks, etc.
-* **Embedded & Edge Databases (40+ engines):** SQLite, LibSQL/Turso, DuckDB, LMDB, RocksDB, LevelDB, PouchDB, etc.
-* **Spatial, Multi-Model & Search Engines (32+ engines):** PostGIS, Elasticsearch, OpenSearch, Meilisearch, Apache Solr, Typesense, etc.
+> [!NOTE]
+> **Pre-Execution Notice:** Generated DDL scripts (e.g., `CREATE INDEX CONCURRENTLY`, partition schemas, and RLS security policies) should always be verified and tested in a staging environment prior to execution on production databases.
 
 ---
 
@@ -171,7 +181,7 @@ Open your browser at **`http://localhost:4000`** — the full React UI and REST 
 ### 2. Development Mode (Independent Fast-Refresh)
 
 ```bash
-# Terminal 1: Start Backend API Engine (Port 4000 with nodemon)
+# Terminal 1: Start Backend API Engine (Port 4000 with hot reload)
 npm --prefix backend run dev
 
 # Terminal 2: Start Frontend Studio (Port 5173 with Vite HMR)
@@ -187,7 +197,7 @@ npm --prefix frontend run dev
 The repository includes a root `vercel.json` configured for zero-config Vite deployments:
 
 1. Import the repository into **[Vercel Dashboard](https://vercel.com)**.
-2. If deploying the root repository, Vercel will automatically detect `vercel.json`:
+2. Vercel automatically detects `vercel.json`:
    - **Framework Preset**: `Vite`
    - **Build Command**: `npm --prefix frontend install && npm --prefix frontend run build`
    - **Output Directory**: `frontend/dist`
@@ -218,20 +228,19 @@ The repository includes a root `vercel.json` configured for zero-config Vite dep
 
 ---
 
-## 🧪 Postman Collection & Automated API Tests
+## 🧪 Automated Test Suite
 
-A production-ready **Postman Collection v2.1** with pre-configured request payloads and automated test assertions is included in [`backend/sqlpulse_postman_collection.json`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/backend/sqlpulse_postman_collection.json).
-
-### Running Automated Test Suite
+Run the full automated test suite using Jest and Supertest:
 
 ```bash
 npm --prefix backend test
 ```
 
 Test coverage includes:
+* `api-integration.test.ts` — Supertest HTTP endpoint tests, Zod validation, UUID format checks, pagination capping (max 50), and bounded LRU memory store eviction (max 500).
 * `plan-analyzer.test.ts` — PostgreSQL sequential scan, disk sort spill, and I/O buffer calculation tests.
-* `migration-linter.test.ts` — DDL lock hazard rules, table locks, and unsafe column mutations.
-* `enterprise-features.test.ts` — MySQL, MongoDB, SQLite, FinOps, PII masking, and multi-engine routing tests.
+* `migration-linter.test.ts` — DDL lock hazard rules, non-concurrent index detection, and safe alternative generation.
+* `enterprise-features.test.ts` — Multi-engine routing, FinOps pricing calculators, PII masking, and transpile engines.
 
 ---
 
