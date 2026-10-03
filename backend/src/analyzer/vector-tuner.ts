@@ -26,17 +26,16 @@ export function tuneVectorIndex(options: {
   distanceMetric?: 'cosine' | 'l2' | 'inner_product';
 }): VectorTuningResult {
   const engine = (options.engine || 'pgvector').toLowerCase();
-  const dimension = options.dimension || 1536; // OpenAI text-embedding-3-small default
+  const dimension = options.dimension || 1536; 
   const vectorCount = options.vectorCount || 500000;
   const indexType = options.indexType || 'HNSW';
   const metric = options.distanceMetric || 'cosine';
 
-  // Sizing formula: (dimension * 4 bytes + HNSW graph overhead ~ M * 8 bytes) * count
   const bytesPerVector = dimension * 4;
-  const graphOverheadPerVector = 32 * 8 * 2; // For M=32
+  const graphOverheadPerVector = 32 * 8 * 2; 
   const rawVectorBytes = vectorCount * bytesPerVector;
   const totalIndexBytes = vectorCount * (bytesPerVector + graphOverheadPerVector);
-  const estimatedRamMb = Math.round((totalIndexBytes / (1024 * 1024)) * 1.25); // + 25% buffer overhead
+  const estimatedRamMb = Math.round((totalIndexBytes / (1024 * 1024)) * 1.25); 
 
   const m = 32;
   const efConstruction = 128;

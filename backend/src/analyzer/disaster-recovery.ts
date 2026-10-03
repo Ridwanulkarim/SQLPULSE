@@ -68,7 +68,6 @@ export class DisasterRecoveryCalculator {
     const strategy = req.backupStrategy || 'daily_full_plus_wal_cdc';
     const cloud = req.cloudProvider || 'aws_s3';
 
-    // 1. RPO Calculation
     let theoreticalRpo = '< 15 seconds';
     let rpoClass: 'Zero Data Loss' | 'Near Real-Time (<1m)' | 'Standard (<15m)' | 'High Risk (24h)' = 'Near Real-Time (<1m)';
     let rpoExplanation = 'Continuous WAL/Binlog streaming archives write transactions to durable storage immediately after commit.';
@@ -91,11 +90,9 @@ export class DisasterRecoveryCalculator {
       rpoExplanation = 'Nightly batch dumps only. If a catastrophic disk failure occurs at 5 PM, all work since midnight is lost.';
     }
 
-    // 2. RTO Calculation (Download time + Disk extraction + WAL/Redo replay + Health Check)
-    // Transfer speed (MB/s) = min(diskThroughput, networkSpeedMB/s)
     const netMbSec = netMbps / 8;
     const effectiveTransferMbSec = Math.min(diskMbSec, netMbSec);
-    const compressedSizeGb = +(sizeGb * 0.45).toFixed(2); // Avg zstd compression
+    const compressedSizeGb = +(sizeGb * 0.45).toFixed(2); 
     const downloadMinutes = +( (compressedSizeGb * 1024) / (effectiveTransferMbSec * 60) ).toFixed(1);
     const diskDecompressMinutes = +( (sizeGb * 1024) / (diskMbSec * 60) ).toFixed(1);
     const dailyChangeGb = (sizeGb * (dailyChange / 100));
@@ -130,13 +127,11 @@ export class DisasterRecoveryCalculator {
       ? `${Math.floor(totalEstimatedRtoMinutes / 60)}h ${Math.round(totalEstimatedRtoMinutes % 60)}m` 
       : `${totalEstimatedRtoMinutes} mins`;
 
-    // 3. Storage Economics (30 days retention: 4 full backups + 30 daily incrementals)
     const raw30DayRetentionGb = Math.round((sizeGb * 4) + (dailyChangeGb * 30));
     const compressed30DayRetentionGb = Math.round(raw30DayRetentionGb * 0.40);
     const costPerGbMonth = cloud === 'aws_s3' ? 0.023 : cloud === 'gcp_gcs' ? 0.020 : cloud === 'azure_blob' ? 0.018 : 0.010;
     const estimatedMonthlyStorageCostUsd = +(compressed30DayRetentionGb * costPerGbMonth).toFixed(2);
 
-    // 4. Engine Native Script Generator
     const backupScriptBash = this.generateBackupScript(meta, cloud, sizeGb);
     const cronDefinition = this.generateCron(meta);
     const restoreRunbookMarkdown = this.generateRestoreRunbook(meta, sizeGb);

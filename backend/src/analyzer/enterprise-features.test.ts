@@ -146,7 +146,7 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
       syncReplicasCount: 1,
       asyncReplicasCount: 2,
     });
-    expect(res.nodes.length).toBe(5); // 1 Primary + 1 Sync + 2 Async + 1 DR
+    expect(res.nodes.length).toBe(5); 
     expect(res.haConfigSnippet).toContain('patroni.yml');
     expect(res.failoverSimulationPlan.length).toBeGreaterThan(0);
   });
@@ -253,4 +253,3 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(res.zeroDowntimeIndexDdl).toContain('CONCURRENTLY');
   });
 });
-

@@ -56,7 +56,7 @@ export const CdcOutboxTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-violet-950 via-slate-900 to-indigo-950 text-white shadow-xl shadow-violet-950/20 border border-violet-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -77,7 +77,6 @@ export const CdcOutboxTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Control Strip */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white/80 border border-violet-200/70 shadow-sm backdrop-blur-md space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
@@ -121,7 +120,7 @@ export const CdcOutboxTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Architecture Benefits Strip */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-violet-200 shadow-sm space-y-1">
               <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">Consistency Model</span>
@@ -142,7 +141,6 @@ export const CdcOutboxTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Unified Code Viewer */}
           <div className="rounded-2xl bg-white border border-violet-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -184,7 +182,6 @@ export const CdcOutboxTab: React.FC = () => {
             </pre>
           </div>
 
-          {/* Architecture Guidelines */}
           <div className="p-4 sm:p-5 rounded-2xl bg-violet-50/80 border border-violet-200 shadow-sm space-y-2">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-violet-950 flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-violet-600" />

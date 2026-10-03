@@ -174,7 +174,7 @@ storage:
   fragmentationPct: ((s.freeStorageSize / s.storageSize) * 100).toFixed(2)
 }));`;
     } else {
-      // Default: PostgreSQL MVCC Dead Tuple Bloat
+      
       findings = [
         {
           objectName: `public.${table} (Heap Table Space)`,

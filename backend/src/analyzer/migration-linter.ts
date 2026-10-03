@@ -1,10 +1,7 @@
 import { MigrationAnalysisResult, MigrationSafetyCheck, DatabaseEngine, DATABASE_CATALOG } from '../types/plan.types';
 
 export class MigrationLinter {
-  /**
-   * Universal Zero-Downtime Migration Linter across ALL 447+ Database Engines
-   * Categorized by engine architecture and specific dialect rules.
-   */
+  
   public lint(sqlScript: string, engine: DatabaseEngine = 'postgres'): MigrationAnalysisResult {
     const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
     const category = metadata.category || 'relational';
@@ -15,7 +12,6 @@ export class MigrationLinter {
       const cleanStmt = this.stripComments(stmt).trim();
       if (!cleanStmt) continue;
 
-      // 1. Relational SQL Engines
       if (category === 'relational') {
         if (engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona') {
           this.checkMySQLDDL(cleanStmt, findings);
@@ -99,7 +95,6 @@ export class MigrationLinter {
       .filter((s) => s.length > 0 && this.stripComments(s).length > 0);
   }
 
-  // ===================== POSTGRESQL & RELATIONAL =====================
   private checkPostgresDDL(stmt: string, findings: MigrationSafetyCheck[]) {
     if (/^CREATE\s+(UNIQUE\s+)?INDEX\s+/i.test(stmt) && !/CONCURRENTLY/i.test(stmt)) {
       const safeSql = stmt.replace(/CREATE\s+(UNIQUE\s+)?INDEX/i, (m) =>
@@ -165,7 +160,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== MYSQL / MARIADB =====================
   private checkMySQLDDL(stmt: string, findings: MigrationSafetyCheck[]) {
     if ((/^CREATE\s+(UNIQUE\s+)?INDEX/i.test(stmt) || /ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+ADD\s+INDEX/i.test(stmt)) && !/ALGORITHM/i.test(stmt)) {
       findings.push({
@@ -192,7 +186,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== SQLITE / TURSO =====================
   private checkSQLiteDDL(stmt: string, findings: MigrationSafetyCheck[]) {
     if (/ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+(DROP\s+COLUMN|ALTER\s+COLUMN|ADD\s+CONSTRAINT)/i.test(stmt)) {
       findings.push({
@@ -207,7 +200,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== SQL SERVER =====================
   private checkMSSQLDDL(stmt: string, findings: MigrationSafetyCheck[]) {
     if (/CREATE\s+(UNIQUE\s+)?(CLUSTERED|NONCLUSTERED\s+)?INDEX/i.test(stmt) && !/ONLINE\s*=\s*ON/i.test(stmt)) {
       findings.push({
@@ -222,7 +214,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== ORACLE =====================
   private checkOracleDDL(stmt: string, findings: MigrationSafetyCheck[]) {
     if (/CREATE\s+INDEX/i.test(stmt) && !/ONLINE/i.test(stmt)) {
       findings.push({
@@ -237,7 +228,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== ANALYTICS & OLAP (ClickHouse, Snowflake, BigQuery, DuckDB) =====================
   private checkOLAPDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+(UPDATE|DELETE)/i.test(stmt)) {
       findings.push({
@@ -264,7 +254,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== DOCUMENT / NOSQL (MongoDB, Couchbase, Firestore) =====================
   private checkDocumentDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/createIndex/i.test(stmt) && !/background/i.test(stmt)) {
       findings.push({
@@ -291,7 +280,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== KEY-VALUE & IN-MEMORY (Redis, Valkey, Dragonfly, Aerospike) =====================
   private checkKeyValueDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/KEYS\s+\*|FLUSHALL|FLUSHDB/i.test(stmt)) {
       findings.push({
@@ -306,7 +294,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== VECTOR AI & SEARCH (Pinecone, Milvus, Qdrant, Elasticsearch) =====================
   private checkVectorSearchDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/reindex|_mapping|create_index/i.test(stmt)) {
       findings.push({
@@ -321,7 +308,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== GRAPH DATABASES (Neo4j, Memgraph, Dgraph) =====================
   private checkGraphDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/CREATE\s+CONSTRAINT/i.test(stmt)) {
       findings.push({
@@ -336,7 +322,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== TIME-SERIES (InfluxDB, TimescaleDB, QuestDB) =====================
   private checkTimeSeriesDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/DROP\s+RETENTION|compress_chunk/i.test(stmt)) {
       findings.push({
@@ -351,7 +336,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== WIDE-COLUMN (Cassandra, ScyllaDB, HBase) =====================
   private checkWideColumnDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+DROP/i.test(stmt)) {
       findings.push({
@@ -366,7 +350,6 @@ export class MigrationLinter {
     }
   }
 
-  // ===================== BAAS & EMBEDDED =====================
   private checkBaaSEmbeddedDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
     if (/DROP|ALTER/i.test(stmt)) {
       findings.push({

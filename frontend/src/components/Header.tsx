@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [studiosDropdownOpen, setStudiosDropdownOpen] = useState(false);
 
   const tabs: { id: AppTabId; label: string; icon: React.ReactNode; category: string; desc: string }[] = [
-    // 1. Performance & Query Diagnostics
+    
     { id: 'plan', label: 'Plan Visualizer', icon: <GitGraph className="w-3.5 h-3.5 text-indigo-600" />, category: 'Performance', desc: 'Tree cost graph & bottlenecks' },
     { id: 'advisor', label: 'Query Advisor', icon: <SearchCheck className="w-3.5 h-3.5 text-blue-600" />, category: 'Performance', desc: 'AI anti-pattern & compound ESR' },
     { id: 'rewriter', label: 'SQL Rewriter', icon: <Zap className="w-3.5 h-3.5 text-amber-600" />, category: 'Performance', desc: '10x-100x sargability AST optimizer' },
@@ -98,14 +98,12 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'logs', label: 'Slow Logs', icon: <FileSearch className="w-3.5 h-3.5 text-rose-600" />, category: 'Performance', desc: 'Slow log forensic analyzer' },
     { id: 'sandbox', label: 'SQL Sandbox', icon: <Terminal className="w-3.5 h-3.5 text-emerald-600" />, category: 'Performance', desc: 'Live in-browser latency benchmark' },
 
-    // 2. DDL & Migrations
     { id: 'schema_diff', label: 'Schema Diff', icon: <GitCompare className="w-3.5 h-3.5 text-indigo-600" />, category: 'Migrations', desc: 'Online schema drift & DDL sync' },
     { id: 'migration', label: 'Safe Migration', icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />, category: 'Migrations', desc: 'Zero-downtime DDL linter & CI/CD' },
     { id: 'partition', label: 'Partitioning', icon: <Layers className="w-3.5 h-3.5 text-purple-600" />, category: 'Migrations', desc: 'Big data range & hash sharding' },
     { id: 'transpiler', label: 'Transpiler', icon: <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />, category: 'Migrations', desc: 'Cross-dialect polyglot converter' },
     { id: 'bloat', label: 'Bloat & Vacuum', icon: <HardDrive className="w-3.5 h-3.5 text-amber-600" />, category: 'Migrations', desc: 'Index bloat & zero-downtime repack' },
 
-    // 3. Architecture & HA
     { id: 'production_readiness', label: 'Readiness Score', icon: <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />, category: 'Architecture', desc: 'Pre-launch SLA/SLO health scorecard' },
     { id: 'chaos_simulator', label: 'Chaos Sim', icon: <Flame className="w-3.5 h-3.5 text-rose-600" />, category: 'Architecture', desc: 'Node crash & split-brain simulator' },
     { id: 'replication', label: 'Replication HA', icon: <Layers className="w-3.5 h-3.5 text-blue-600" />, category: 'Architecture', desc: 'Multi-region cluster & failover' },
@@ -114,13 +112,11 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'disaster', label: 'Disaster DR', icon: <ShieldAlert className="w-3.5 h-3.5 text-teal-600" />, category: 'Architecture', desc: 'RPO/RTO & bash backup scripts' },
     { id: 'sizing', label: 'Sizing & Pooler', icon: <Calculator className="w-3.5 h-3.5 text-teal-600" />, category: 'Architecture', desc: 'Hardware & PgBouncer calculator' },
 
-    // 4. FinOps & Security
     { id: 'finops', label: 'Cloud FinOps', icon: <DollarSign className="w-3.5 h-3.5 text-emerald-600" />, category: 'FinOps & Security', desc: 'AWS/GCP/Azure database bill calculator' },
     { id: 'doctor', label: 'Index Doctor', icon: <SearchCheck className="w-3.5 h-3.5 text-indigo-600" />, category: 'FinOps & Security', desc: 'Redundant & prefix index auditor' },
     { id: 'sanitizer', label: 'PII Sanitizer', icon: <EyeOff className="w-3.5 h-3.5 text-rose-600" />, category: 'FinOps & Security', desc: 'GDPR/HIPAA data masking & staging' },
     { id: 'security', label: 'Security & RLS', icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />, category: 'FinOps & Security', desc: 'RBAC least-privilege & PII masking' },
 
-    // 5. AI, Event Streaming & Specialized Workloads
     { id: 'cdc_outbox', label: 'CDC & Outbox', icon: <Radio className="w-3.5 h-3.5 text-violet-600" />, category: 'AI & Data', desc: 'Transactional outbox & Debezium' },
     { id: 'vector_tuner', label: 'Vector & RAG', icon: <Cpu className="w-3.5 h-3.5 text-cyan-600" />, category: 'AI & Data', desc: 'HNSW memory & hybrid search' },
     { id: 'synthesizer', label: 'Query Synthesizer', icon: <Terminal className="w-3.5 h-3.5 text-purple-600" />, category: 'AI & Data', desc: 'Multilingual text-to-query studio' },
@@ -135,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="border-b border-zinc-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-40 transition-all font-sans">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="h-16 flex items-center justify-between gap-3">
-          {/* Brand Logo - Next-Elite Minimalist Monogram */}
+          
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
@@ -156,7 +152,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Center Modern Segmented Pill Nav (Top Workflows + All Studios Dropdown) */}
           <div className="hidden md:flex items-center gap-1 bg-zinc-100/90 p-1 rounded-full border border-zinc-200/80 text-xs font-medium">
             <button
               type="button"
@@ -206,7 +201,6 @@ export const Header: React.FC<HeaderProps> = ({
               Index Doctor
             </button>
 
-            {/* All 22 Studios Dropdown Pill */}
             <div className="relative">
               <button
                 type="button"
@@ -252,9 +246,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Tools - Theme Toggle, Search & Action Button */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Spotlight Search Trigger (Cmd + K) */}
+            
             <button
               type="button"
               onClick={onOpenCommandPalette}
@@ -267,7 +260,6 @@ export const Header: React.FC<HeaderProps> = ({
               </kbd>
             </button>
 
-            {/* Professional Segmented Theme Toggle */}
             <div className="flex items-center bg-zinc-100 dark:bg-slate-800 p-0.5 rounded-full border border-zinc-200 dark:border-slate-700 shadow-xs">
               <button
                 type="button"
@@ -295,7 +287,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
-            {/* Export Report button */}
             {hasAnalysis && (
               <button
                 type="button"
@@ -307,7 +298,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Share Link button */}
             {hasAnalysis && (
               <button
                 type="button"
@@ -319,7 +309,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Primary Action Button (Next-Elite Style Solid Pill) */}
             <button
               type="button"
               onClick={onOpenCommandPalette}
@@ -329,7 +318,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">Workbench (⌘K)</span>
             </button>
 
-            {/* Mobile Menu Toggle */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -340,7 +328,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
           <div className="md:hidden py-3 border-t border-zinc-200 space-y-1 max-h-[70vh] overflow-y-auto">
             <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-2 py-1">

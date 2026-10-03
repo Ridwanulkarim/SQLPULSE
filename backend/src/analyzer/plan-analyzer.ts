@@ -9,9 +9,7 @@ import {
 } from '../types/plan.types';
 
 export class PlanAnalyzer {
-  /**
-   * Main entry point to analyze a Postgres Explain JSON plan
-   */
+  
   public analyze(rawInput: any): PlanAnalysisResult {
     const planOutput = this.normalizeInput(rawInput);
     const rootNode = planOutput.Plan;
@@ -29,11 +27,9 @@ export class PlanAnalyzer {
 
     let nodeIdCounter = 0;
 
-    // Helper for recursive traversal
     const traverse = (node: PostgresPlanNode, parentId?: string): string => {
       const currentNodeId = `node_${++nodeIdCounter}`;
 
-      // Aggregate buffer stats
       const hitBlocks = (node['Shared Hit Blocks'] || 0) + (node['Local Hit Blocks'] || 0);
       const readBlocks = (node['Shared Read Blocks'] || 0) + (node['Local Read Blocks'] || 0);
       const tempWritten = (node['Temp Written Blocks'] || 0) + (node['Sort Space Used'] || 0);
@@ -42,7 +38,6 @@ export class PlanAnalyzer {
       totalDiskReads += readBlocks;
       totalTempDiskUsage += tempWritten;
 
-      // Evaluate heuristic rules on the current node
       const nodeBottlenecks = this.evaluateNodeRules(node, rootCost, executionTimeMs);
       bottlenecks.push(...nodeBottlenecks);
 
@@ -63,7 +58,6 @@ export class PlanAnalyzer {
         ? Math.min(100, Number(((nodeActualTime / executionTimeMs) * 100).toFixed(1)))
         : costPercentage;
 
-      // Add to React Flow Graph nodes
       graphNodes.push({
         id: currentNodeId,
         nodeType: node['Node Type'],
@@ -85,7 +79,6 @@ export class PlanAnalyzer {
         },
       });
 
-      // Add edge from parent
       if (parentId) {
         graphEdges.push({
           id: `edge_${parentId}_to_${currentNodeId}`,
@@ -94,7 +87,6 @@ export class PlanAnalyzer {
         });
       }
 
-      // Recurse child plans
       if (node.Plans && Array.isArray(node.Plans)) {
         for (const childNode of node.Plans) {
           traverse(childNode, currentNodeId);
@@ -106,16 +98,13 @@ export class PlanAnalyzer {
 
     traverse(rootNode);
 
-    // Calculate Cache Hit Ratio
     const totalBlocks = totalMemoryHits + totalDiskReads;
     const cacheHitRatioPercentage = totalBlocks > 0
       ? Number(((totalMemoryHits / totalBlocks) * 100).toFixed(2))
       : 100;
 
-    // Calculate Performance Score (0 - 100)
     const performanceScore = this.calculateScore(bottlenecks, cacheHitRatioPercentage, executionTimeMs);
 
-    // Generate Actionable Recommendations
     const recommendations = this.generateSummaryRecommendations(bottlenecks, cacheHitRatioPercentage);
 
     return {
@@ -136,9 +125,6 @@ export class PlanAnalyzer {
     };
   }
 
-  /**
-   * Normalizes various JSON formats of EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-   */
   private normalizeInput(rawInput: any): PostgresExplainOutput {
     if (typeof rawInput === 'string') {
       try {
@@ -162,9 +148,6 @@ export class PlanAnalyzer {
     throw new Error('Provided JSON lacks root "Plan" object. Ensure EXPLAIN (FORMAT JSON) was executed.');
   }
 
-  /**
-   * Evaluates individual node heuristics
-   */
   private evaluateNodeRules(
     node: PostgresPlanNode,
     rootCost: number,
@@ -178,7 +161,6 @@ export class PlanAnalyzer {
     const actualRows = node['Actual Rows'] ?? node['Plan Rows'] ?? 0;
     const nodeTime = node['Actual Total Time'] || 0;
 
-    // Rule 1: High-Impact Sequential Scan
     if (nodeType === 'Seq Scan') {
       if (rowsRemoved > 500 || actualRows > 1000) {
         const filterColumns = this.extractColumnsFromFilter(filter);
@@ -200,7 +182,6 @@ export class PlanAnalyzer {
       }
     }
 
-    // Rule 2: Planner Estimation Skew (Stale Statistics)
     const planRows = node['Plan Rows'] || 1;
     if (actualRows > 0) {
       const rowRatio = actualRows / planRows;
@@ -220,7 +201,6 @@ export class PlanAnalyzer {
       }
     }
 
-    // Rule 3: Disk Spill on Sort (work_mem exhaustion)
     if (nodeType === 'Sort') {
       const sortMethod = node['Sort Method'] || '';
       const sortSpaceType = node['Sort Space Type'] || '';
@@ -241,7 +221,6 @@ export class PlanAnalyzer {
       }
     }
 
-    // Rule 4: Expensive Nested Loop Join
     if (nodeType === 'Nested Loop') {
       const loops = node['Actual Loops'] || 1;
       if (loops > 1000 && (nodeTime > 50 || (nodeTime / totalExecutionTime) > 0.4)) {
@@ -258,7 +237,6 @@ export class PlanAnalyzer {
       }
     }
 
-    // Rule 5: High Disk Read I/O on Node
     const readBlocks = (node['Shared Read Blocks'] || 0);
     const hitBlocks = (node['Shared Hit Blocks'] || 0);
     if (readBlocks > 1000 && readBlocks > hitBlocks * 2) {
@@ -278,9 +256,6 @@ export class PlanAnalyzer {
     return findings;
   }
 
-  /**
-   * Helper to extract column names from filter expressions like: "(user_id = 42) AND (status = 'active')"
-   */
   private extractColumnsFromFilter(filter?: string): string[] {
     if (!filter) return [];
     const cleaned = filter.replace(/[()'=]/g, ' ');
@@ -294,9 +269,6 @@ export class PlanAnalyzer {
     return Array.from(new Set(columns)).slice(0, 3);
   }
 
-  /**
-   * Calculates overall performance score from 0 to 100
-   */
   private calculateScore(
     bottlenecks: BottleneckFinding[],
     cacheHitRatio: number,
@@ -310,12 +282,10 @@ export class PlanAnalyzer {
       else if (b.severity === 'INFO') score -= 5;
     }
 
-    // Penalty for poor cache hit ratio (< 90%)
     if (cacheHitRatio < 90) {
       score -= Math.round((90 - cacheHitRatio) * 0.5);
     }
 
-    // Penalty for excessive latency
     if (executionTimeMs > 1000) score -= 20;
     else if (executionTimeMs > 200) score -= 10;
     else if (executionTimeMs > 50) score -= 5;
@@ -323,16 +293,12 @@ export class PlanAnalyzer {
     return Math.max(5, Math.min(100, score));
   }
 
-  /**
-   * Synthesizes actionable summary recommendations
-   */
   private generateSummaryRecommendations(
     bottlenecks: BottleneckFinding[],
     cacheHitRatio: number
   ): PlanAnalysisResult['recommendations'] {
     const list: PlanAnalysisResult['recommendations'] = [];
 
-    // Add index recommendations
     const seqScans = bottlenecks.filter((b) => b.nodeType === 'Seq Scan' && b.suggestedSql);
     for (const scan of seqScans) {
       list.push({
@@ -344,7 +310,6 @@ export class PlanAnalyzer {
       });
     }
 
-    // Add stale stats recommendations
     const staleStats = bottlenecks.filter((b) => b.id.startsWith('stale_stats'));
     for (const stat of staleStats) {
       list.push({
@@ -356,7 +321,6 @@ export class PlanAnalyzer {
       });
     }
 
-    // Cache hit ratio warning
     if (cacheHitRatio < 95) {
       list.push({
         category: 'Memory / Cache',

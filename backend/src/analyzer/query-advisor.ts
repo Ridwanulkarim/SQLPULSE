@@ -35,9 +35,8 @@ export class QueryAdvisor {
     const category = metadata.category || 'relational';
     const findings: QueryAntiPatternFinding[] = [];
 
-    // ================= 1. SQL & OLAP ENGINES =================
     if (category === 'relational' || category === 'olap' || category === 'baas_embedded') {
-      // 1. Check SELECT *
+      
       if (/SELECT\s+(\*\s+|[a-zA-Z0-9_]+\.\*\s+)FROM/i.test(cleanQuery)) {
         findings.push({
           id: `anti_select_star_${Math.random().toString(36).substring(2, 7)}`,
@@ -51,7 +50,6 @@ export class QueryAdvisor {
         });
       }
 
-      // 2. Check Non-sargable functions in WHERE clause
       const nonSargableMatch = cleanQuery.match(/WHERE\s+.*?([a-zA-Z0-9_]+)\s*\(\s*([a-zA-Z0-9_.]+)\s*\)\s*(=|>|<|LIKE|IN)/i);
       if (nonSargableMatch) {
         const funcName = nonSargableMatch[1];
@@ -67,7 +65,6 @@ export class QueryAdvisor {
         });
       }
 
-      // 3. Leading Wildcard in LIKE
       const leadingWildcardMatch = cleanQuery.match(/LIKE\s+['"]%([^'"]+)['"]/i);
       if (leadingWildcardMatch) {
         findings.push({
@@ -81,7 +78,6 @@ export class QueryAdvisor {
         });
       }
 
-      // 4. Deep Offset Pagination
       const offsetMatch = cleanQuery.match(/OFFSET\s+(\d+)/i);
       if (offsetMatch && parseInt(offsetMatch[1], 10) >= 1000) {
         findings.push({
@@ -95,7 +91,6 @@ export class QueryAdvisor {
         });
       }
 
-      // 5. Unbounded ORDER BY
       if (/ORDER\s+BY/i.test(cleanQuery) && !/LIMIT/i.test(cleanQuery) && !/FETCH\s+FIRST/i.test(cleanQuery)) {
         findings.push({
           id: `anti_unbounded_sort_${Math.random().toString(36).substring(2, 7)}`,
@@ -190,7 +185,6 @@ export class QueryAdvisor {
       }
     }
 
-    // Extract table and build compound index recommendation
     const tableMatch = cleanQuery.match(/FROM\s+([a-zA-Z0-9_]+)/i);
     const tableName = tableMatch ? tableMatch[1] : 'orders';
 
@@ -239,7 +233,6 @@ export class QueryAdvisor {
       indexSql = `CREATE INDEX ON ${tableName} USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 128);`;
     }
 
-    // Build rewritten query
     let rewrittenQuery = cleanQuery;
     if (rewrittenQuery.includes('SELECT *')) {
       rewrittenQuery = rewrittenQuery.replace(/SELECT\s+\*\s+FROM/i, `SELECT id, ${allIndexCols.join(', ') || 'user_id, status, amount'} FROM`);

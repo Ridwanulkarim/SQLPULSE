@@ -31,13 +31,11 @@ import { saveReport, getReportById, listRecentReports } from '../controllers/rep
 
 const router = Router();
 
-// Core Analyzer Routes
 router.post('/analyze/plan', analyzePlan);
 router.post('/analyze/migration', lintMigration);
 router.post('/analyze/query', adviseQuery);
 router.get('/samples', getSamples);
 
-// Polyglot Enterprise Engine Routes
 router.post('/analyze/transpile', transpileSql);
 router.post('/analyze/tune-config', tuneConfig);
 router.post('/analyze/deadlock-simulate', simulateDeadlock);
@@ -61,7 +59,6 @@ router.post('/analyze/chaos-simulate', simulateChaos);
 router.post('/analyze/cdc-outbox', buildCdcOutbox);
 router.post('/analyze/vector-tune', tuneVector);
 
-// Report & Sharing Routes
 router.post('/reports', saveReport);
 router.get('/reports', listRecentReports);
 router.get('/reports/:id', getReportById);

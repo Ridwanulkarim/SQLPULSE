@@ -39,7 +39,6 @@ export interface TranspileResult {
   optimizationsApplied: string[];
 }
 
-// Catalog helper
 function getEngineMeta(engineId: string) {
   const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
   if (found) return found;
@@ -57,9 +56,7 @@ function getEngineMeta(engineId: string) {
 }
 
 export class SqlTranspiler {
-  /**
-   * Main transpile entry point
-   */
+  
   public transpile(req: TranspileRequest): TranspileResult {
     const src = req.sourceEngine.toLowerCase();
     const tgt = req.targetEngine.toLowerCase();
@@ -74,7 +71,6 @@ export class SqlTranspiler {
     const caveats: MigrationCaveat[] = [];
     const optimizations: string[] = [];
 
-    // 1. Detect if this is NoSQL / Vector / Graph transformation
     if (srcMeta.category === 'document' && tgtMeta.category === 'relational') {
       return this.transpileMongoToSql(code, srcMeta, tgtMeta);
     }
@@ -88,7 +84,6 @@ export class SqlTranspiler {
       return this.transpileToGraph(code, srcMeta, tgtMeta);
     }
 
-    // 2. Relational / SQL Transpilation (Universal SQL Polyglot Engine)
     output = this.applyDataTypeTransformations(output, src, tgt, dataTypes);
     output = this.applyFunctionTransformations(output, src, tgt, funcs);
     output = this.applySyntaxTransformations(output, src, tgt, caveats, optimizations);
@@ -115,7 +110,6 @@ export class SqlTranspiler {
   ): string {
     let result = code;
 
-    // Oracle Datatypes
     if (src === 'oracle') {
       if (tgt === 'postgres' || tgt === 'postgresql') {
         if (/VARCHAR2\s*\(\s*(\d+)\s*\)/i.test(result)) {
@@ -159,7 +153,6 @@ export class SqlTranspiler {
       }
     }
 
-    // SQL Server / T-SQL
     if (src === 'microsoft_sql_server' || src === 'mssql') {
       if (tgt === 'postgres' || tgt === 'postgresql') {
         result = result.replace(/\bDATETIME2\b/gi, 'TIMESTAMPTZ');
@@ -176,7 +169,6 @@ export class SqlTranspiler {
       }
     }
 
-    // MySQL / MariaDB
     if (src === 'mysql' || src === 'mariadb') {
       if (tgt === 'postgres' || tgt === 'postgresql') {
         result = result.replace(/\bINT\s+AUTO_INCREMENT\b/gi, 'SERIAL');
@@ -198,7 +190,6 @@ export class SqlTranspiler {
       }
     }
 
-    // Postgres to ClickHouse / Snowflake / MySQL
     if (src === 'postgres' || src === 'postgresql') {
       if (tgt === 'clickhouse') {
         result = result.replace(/\bSERIAL\b/gi, 'UInt32');
@@ -229,7 +220,6 @@ export class SqlTranspiler {
   ): string {
     let result = code;
 
-    // NVL / ISNULL / IFNULL -> COALESCE
     if (/NVL\s*\(/i.test(result)) {
       result = result.replace(/\bNVL\s*\(/gi, 'COALESCE(');
       mappings.push({ sourceFunc: 'NVL(val, default)', targetFunc: 'COALESCE(val, default)', explanation: 'Standard ANSI SQL NULL fallback.' });
@@ -243,7 +233,6 @@ export class SqlTranspiler {
       mappings.push({ sourceFunc: 'IFNULL(expr, val)', targetFunc: 'COALESCE(expr, val)', explanation: 'Converted MySQL IFNULL to ANSI COALESCE.' });
     }
 
-    // SYSDATE / GETDATE / NOW
     if (/\bSYSDATE\b/i.test(result) && tgt === 'postgres') {
       result = result.replace(/\bSYSDATE\b/gi, 'CURRENT_TIMESTAMP');
       mappings.push({ sourceFunc: 'SYSDATE', targetFunc: 'CURRENT_TIMESTAMP / clock_timestamp()', explanation: 'Current transactional timestamp in PostgreSQL.' });
@@ -257,24 +246,20 @@ export class SqlTranspiler {
       mappings.push({ sourceFunc: 'NOW()', targetFunc: 'SYSTIMESTAMP', explanation: 'PostgreSQL NOW() converted to Oracle SYSTIMESTAMP.' });
     }
 
-    // String Concatenation: CONCAT() vs ||
     if (tgt === 'postgres' || tgt === 'sqlite' || tgt === 'oracle') {
       // CONCAT(a, b) -> a || b
     }
 
-    // String Length: LEN() vs LENGTH()
     if (/\bLEN\s*\(/i.test(result) && (tgt === 'postgres' || tgt === 'mysql' || tgt === 'oracle')) {
       result = result.replace(/\bLEN\s*\(/gi, 'LENGTH(');
       mappings.push({ sourceFunc: 'LEN(str)', targetFunc: 'LENGTH(str)', explanation: 'T-SQL LEN() converted to standard LENGTH().' });
     }
 
-    // Substring: SUBSTRING vs SUBSTR
     if (/\bSUBSTRING\s*\(/i.test(result) && tgt === 'oracle') {
       result = result.replace(/\bSUBSTRING\s*\(/gi, 'SUBSTR(');
       mappings.push({ sourceFunc: 'SUBSTRING(str, pos, len)', targetFunc: 'SUBSTR(str, pos, len)', explanation: 'ANSI SUBSTRING converted to Oracle SUBSTR.' });
     }
 
-    // Date Add / Intervals
     if (/DATEADD\s*\(\s*(day|month|year|hour|minute)\s*,\s*(\d+)\s*,\s*([^)]+)\)/i.test(result)) {
       if (tgt === 'postgres') {
         result = result.replace(/DATEADD\s*\(\s*(day|month|year|hour|minute)\s*,\s*(\d+)\s*,\s*([^)]+)\)/gi, '($3 + INTERVAL \'$2 $1\')');
@@ -294,13 +279,11 @@ export class SqlTranspiler {
   ): string {
     let result = code;
 
-    // Dual table removal for Postgres / MySQL
     if ((tgt === 'postgres' || tgt === 'postgresql' || tgt === 'mysql' || tgt === 'sqlite') && /\bFROM\s+DUAL\b/i.test(result)) {
       result = result.replace(/\bFROM\s+DUAL\b/gi, '');
       optimizations.push('Stripped obsolete Oracle "FROM DUAL" pseudo-table reference.');
     }
 
-    // ClickHouse Engine addition
     if (tgt === 'clickhouse' && /CREATE\s+TABLE/i.test(result) && !/ENGINE\s*=/i.test(result)) {
       result = result.trim();
       if (result.endsWith(';')) {
@@ -310,7 +293,6 @@ export class SqlTranspiler {
       optimizations.push('Appended ClickHouse "ENGINE = ReplacingMergeTree() ORDER BY (id)" table engine clause.');
     }
 
-    // Postgres LIMIT / OFFSET vs Oracle ROWNUM / FETCH FIRST
     if (src === 'oracle' && /ROWNUM\s*<=\s*(\d+)/i.test(result) && (tgt === 'postgres' || tgt === 'postgresql')) {
       const match = result.match(/ROWNUM\s*<=\s*(\d+)/i);
       const limitVal = match ? match[1] : '10';
@@ -324,7 +306,6 @@ export class SqlTranspiler {
       optimizations.push(`Replaced Oracle ROWNUM predicate with native PostgreSQL LIMIT ${limitVal} clause.`);
     }
 
-    // T-SQL TOP N -> PostgreSQL LIMIT N
     if ((src === 'microsoft_sql_server' || src === 'mssql') && /SELECT\s+TOP\s+(\d+)\s+/i.test(result) && (tgt === 'postgres' || tgt === 'postgresql')) {
       let topCount = '10';
       result = result.replace(/SELECT\s+TOP\s+(\d+)\s+/gi, (m, p1) => {
@@ -337,7 +318,6 @@ export class SqlTranspiler {
       optimizations.push(`Converted "SELECT TOP ${topCount}" to ANSI "LIMIT ${topCount}".`);
     }
 
-    // Backticks vs Double Quotes
     if ((src === 'mysql' || src === 'mariadb') && (tgt === 'postgres' || tgt === 'postgresql' || tgt === 'oracle' || tgt === 'sqlite')) {
       if (result.includes('`')) {
         result = result.replace(/`([^`]+)`/g, '"$1"');
@@ -345,7 +325,6 @@ export class SqlTranspiler {
       }
     }
 
-    // Square Brackets [col] to Double Quotes "col"
     if ((src === 'microsoft_sql_server' || src === 'mssql') && (tgt === 'postgres' || tgt === 'postgresql' || tgt === 'mysql')) {
       if (/\[([a-zA-Z0-9_]+)\]/.test(result)) {
         result = result.replace(/\[([a-zA-Z0-9_]+)\]/g, tgt === 'mysql' ? '`$1`' : '"$1"');
@@ -363,7 +342,7 @@ export class SqlTranspiler {
     tgtMeta: any,
     caveats: MigrationCaveat[]
   ): void {
-    // Relational to ClickHouse Caveat
+    
     if (tgt === 'clickhouse') {
       caveats.push({
         category: 'transaction',
@@ -379,7 +358,6 @@ export class SqlTranspiler {
       });
     }
 
-    // Oracle to PostgreSQL Caveat
     if (src === 'oracle' && (tgt === 'postgres' || tgt === 'postgresql')) {
       caveats.push({
         category: 'datatype',
@@ -395,7 +373,6 @@ export class SqlTranspiler {
       });
     }
 
-    // MySQL to PostgreSQL Caveat
     if ((src === 'mysql' || src === 'mariadb') && (tgt === 'postgres' || tgt === 'postgresql')) {
       caveats.push({
         category: 'concurrency',
@@ -411,7 +388,6 @@ export class SqlTranspiler {
       });
     }
 
-    // SQL Server to PostgreSQL
     if ((src === 'microsoft_sql_server' || src === 'mssql') && (tgt === 'postgres' || tgt === 'postgresql')) {
       caveats.push({
         category: 'concurrency',
@@ -421,7 +397,6 @@ export class SqlTranspiler {
       });
     }
 
-    // Universal caveat for all engines
     if (caveats.length === 0) {
       caveats.push({
         category: 'syntax',
@@ -445,7 +420,6 @@ export class SqlTranspiler {
       { category: 'datatype', title: 'Schema Normalization Required', description: 'MongoDB nested arrays & embedded subdocuments should either be normalized into relational join tables or stored as JSONB with GIN index.', severity: 'warning' },
     ];
 
-    // Simple parser for find query
     const collectionMatch = code.match(/db\.([a-zA-Z0-9_]+)\.find\s*\(([\s\S]*)\)/i);
     if (collectionMatch) {
       const tableName = collectionMatch[1];

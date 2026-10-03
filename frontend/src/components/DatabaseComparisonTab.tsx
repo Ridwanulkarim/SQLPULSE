@@ -4,7 +4,6 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { ArrowRightLeft, Layers } from 'lucide-react';
 import { DbBrandLogo } from './DbBrandLogo';
 
-
 interface DbArchitectureProfile {
   capTheorem: string;
   concurrencyModel: string;
@@ -120,7 +119,6 @@ export const DatabaseComparisonTab: React.FC = () => {
       };
     }
 
-    // Default Relational fallback
     return {
       capTheorem: 'CP / ACID Compliant',
       concurrencyModel: 'Transactional Lock Manager / MVCC',
@@ -160,7 +158,7 @@ export const DatabaseComparisonTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
+      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
@@ -178,7 +176,6 @@ export const DatabaseComparisonTab: React.FC = () => {
             </p>
           </div>
 
-          {/* Mobile View Toggle */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-purple-200/60 text-xs font-semibold self-start sm:self-auto">
             <button
               onClick={() => setMobileViewMode('table')}
@@ -199,7 +196,6 @@ export const DatabaseComparisonTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Presets */}
         <div className="space-y-1.5">
           <span className="text-[10px] uppercase font-bold text-purple-900/70 flex items-center gap-1">
             <Layers className="w-3 h-3 text-purple-600" />
@@ -222,7 +218,6 @@ export const DatabaseComparisonTab: React.FC = () => {
           </div>
         </div>
 
-        {/* 3 Selectors */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-1">
           <div className="p-3 rounded-xl border border-purple-200 bg-white/80 space-y-1.5 shadow-sm">
             <span className="text-[10px] uppercase font-bold text-purple-800">System #1 (Left Column)</span>
@@ -241,7 +236,6 @@ export const DatabaseComparisonTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Card View Mode (Visible on mobile when selected or cards mode) */}
       {mobileViewMode === 'cards' ? (
         <div className="space-y-4">
           {dimensions.map((dim, idx) => (
@@ -290,7 +284,7 @@ export const DatabaseComparisonTab: React.FC = () => {
           ))}
         </div>
       ) : (
-        /* Side-by-Side Comparison Table (Horizontal Scroll on Mobile) */
+        
         <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg overflow-x-auto scrollbar-thin">
           <table className="w-full text-left text-xs border-collapse min-w-[640px]">
             <thead>

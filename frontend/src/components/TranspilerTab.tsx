@@ -166,7 +166,7 @@ LIMIT 10;`,
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-purple-950/90 text-white shadow-xl shadow-purple-950/20 border border-purple-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -186,7 +186,6 @@ LIMIT 10;`,
         </div>
       </div>
 
-      {/* Preset Buttons Bar */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
           <Code2 className="w-3.5 h-3.5 text-purple-600" /> Presets:
@@ -203,7 +202,6 @@ LIMIT 10;`,
         ))}
       </div>
 
-      {/* Source & Target Engine Selectors */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white/80 border border-purple-200/70 shadow-sm backdrop-blur-md">
         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] items-center gap-4">
           <div>
@@ -239,9 +237,8 @@ LIMIT 10;`,
         </div>
       </div>
 
-      {/* Editor & Transpiled Code Panes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Source Code Input */}
+        
         <div className="flex flex-col rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-purple-50/70 border-b border-purple-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -268,7 +265,6 @@ LIMIT 10;`,
           />
         </div>
 
-        {/* Right: Transpiled Code Output */}
         <div className="flex flex-col rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-emerald-50/70 border-b border-emerald-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -292,12 +288,11 @@ LIMIT 10;`,
         </div>
       </div>
 
-      {/* Optimizations & Conversions Summary */}
       {result && (
         <div className="space-y-6">
-          {/* DataType & Function Mappings */}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* DataType Conversions */}
+            
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <Table2 className="w-4 h-4 text-purple-600" />
@@ -329,7 +324,6 @@ LIMIT 10;`,
               )}
             </div>
 
-            {/* Function & Syntax Conversions */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <Code2 className="w-4 h-4 text-indigo-600" />
@@ -362,7 +356,6 @@ LIMIT 10;`,
             </div>
           </div>
 
-          {/* Migration Caveats & Gotchas */}
           {result.caveats.length > 0 && (
             <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 border border-amber-300/80 shadow-sm">
               <div className="flex items-center gap-2 mb-3">

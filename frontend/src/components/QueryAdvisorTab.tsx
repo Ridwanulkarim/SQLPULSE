@@ -83,7 +83,7 @@ export const QueryAdvisorTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Input Box */}
+      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
@@ -110,7 +110,6 @@ export const QueryAdvisorTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Anti-Pattern Presets */}
         <div className="space-y-1.5">
           <span className="text-[10px] uppercase font-bold tracking-wider text-purple-900/70 flex items-center gap-1">
             <Zap className="w-3.5 h-3.5 text-amber-500" />
@@ -177,10 +176,9 @@ export const QueryAdvisorTab: React.FC = () => {
         </form>
       </div>
 
-      {/* Results Section */}
       {result ? (
         <div className="space-y-6">
-          {/* Performance Overview Banner */}
+          
           <div className="p-4 sm:p-5 rounded-2xl border bg-white/90 border-purple-200/80 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3 sm:gap-4">
               <div
@@ -223,7 +221,6 @@ export const QueryAdvisorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* 1. Index Recommendation */}
           {result.suggestedCompoundIndex && (
             <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-4 border border-indigo-200/80">
               <div className="flex items-center justify-between">
@@ -283,7 +280,6 @@ export const QueryAdvisorTab: React.FC = () => {
             </div>
           )}
 
-          {/* 2. Side-by-Side Query Comparison */}
           <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <GitCompare className="w-4 h-4 text-indigo-600" />
@@ -320,7 +316,6 @@ export const QueryAdvisorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. Anti-Pattern Violations List */}
           <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600" />

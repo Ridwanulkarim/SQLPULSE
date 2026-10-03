@@ -116,7 +116,7 @@ export const QuerySynthesizerTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white shadow-xl shadow-purple-950/20 border border-purple-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -137,7 +137,6 @@ export const QuerySynthesizerTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Prompt Inspiration Bar */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
           <Zap className="w-3.5 h-3.5 text-purple-600" /> Quick Prompts:
@@ -154,7 +153,6 @@ export const QuerySynthesizerTab: React.FC = () => {
         ))}
       </div>
 
-      {/* Prompt Input & Target Engine Controls */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -277,7 +275,7 @@ export const QuerySynthesizerTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Complexity & Algorithm Blueprint */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -313,7 +311,6 @@ export const QuerySynthesizerTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Synthesized Query Output */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-purple-50/80 border-b border-purple-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -336,7 +333,6 @@ export const QuerySynthesizerTab: React.FC = () => {
             </pre>
           </div>
 
-          {/* Zero-Downtime Indexing DDL */}
           {result.zeroDowntimeIndexDdl && (
             <div className="rounded-2xl bg-white border border-emerald-200 shadow-sm overflow-hidden">
               <div className="px-4 py-3 bg-emerald-50/80 border-b border-emerald-200 flex items-center justify-between">
@@ -361,7 +357,6 @@ export const QuerySynthesizerTab: React.FC = () => {
             </div>
           )}
 
-          {/* Query Explanation & Anti-pattern Warnings */}
           <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/60 border border-purple-200 shadow-sm space-y-3">
             <div>
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-purple-950 mb-1">

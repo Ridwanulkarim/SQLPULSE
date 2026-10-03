@@ -34,18 +34,14 @@
   }
 }
 
-/* -------------------------------------------------------------
-   1. Next-Elite Crisp Clean Light Theme (Instant Render)
-   ------------------------------------------------------------- */
+
 .theme-light, .theme-lavender {
   background-color: #fcfcfd;
   background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.07), rgba(255, 255, 255, 0));
   color: #09090b;
 }
 
-/* -------------------------------------------------------------
-   2. High-Performance Dark Theme (Snappy, No Blur Latency)
-   ------------------------------------------------------------- */
+
 .theme-dark, html.dark {
   background-color: #060810;
   background-image: 
@@ -55,7 +51,7 @@
   color: #f8fafc;
 }
 
-/* Fast Glass Dark Cards */
+
 .theme-dark .bg-white,
 .theme-dark [class*="bg-white/"],
 .theme-dark .elite-card,
@@ -67,14 +63,14 @@ html.dark [class*="bg-white/"] {
   color: #f8fafc !important;
 }
 
-/* Clean Dark Header */
+
 .theme-dark header,
 html.dark header {
   background-color: rgba(6, 8, 16, 0.95) !important;
   border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Sub-containers & Inner Callout Boxes in Dark Mode */
+
 .theme-dark [class*="bg-slate-50"],
 .theme-dark [class*="bg-slate-100"],
 .theme-dark [class*="bg-zinc-50"],
@@ -139,7 +135,7 @@ html.dark [class*="bg-zinc-50"] {
   border-color: rgba(56, 189, 248, 0.35) !important;
 }
 
-/* Border Overrides in Dark Mode */
+
 .theme-dark [class*="border-purple-"],
 .theme-dark [class*="border-indigo-"],
 .theme-dark [class*="border-violet-"],
@@ -149,7 +145,7 @@ html.dark [class*="bg-zinc-50"] {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-/* High-Contrast Luminous Typography in Dark Mode */
+
 .theme-dark [class*="text-slate-900"],
 .theme-dark [class*="text-zinc-950"],
 .theme-dark [class*="text-zinc-900"],
@@ -175,7 +171,7 @@ html.dark [class*="text-zinc-900"] {
 .theme-dark [class*="text-indigo-800"],
 .theme-dark [class*="text-purple-700"],
 .theme-dark [class*="text-indigo-700"] {
-  color: #ddd6fe !important; /* Radiant light purple */
+  color: #ddd6fe !important; 
 }
 
 .theme-dark [class*="text-slate-800"],
@@ -214,7 +210,7 @@ html.dark [class*="text-zinc-900"] {
 .theme-dark [class*="text-teal-700"],
 .theme-dark [class*="text-green-700"],
 .theme-dark [class*="text-green-800"] {
-  color: #34d399 !important; /* Vibrant emerald */
+  color: #34d399 !important; 
 }
 
 .theme-dark [class*="text-rose-900"],
@@ -222,7 +218,7 @@ html.dark [class*="text-zinc-900"] {
 .theme-dark [class*="text-rose-700"],
 .theme-dark [class*="text-red-700"],
 .theme-dark [class*="text-red-800"] {
-  color: #fb7185 !important; /* Vibrant rose */
+  color: #fb7185 !important; 
 }
 
 .theme-dark [class*="text-blue-900"],
@@ -231,7 +227,7 @@ html.dark [class*="text-zinc-900"] {
 .theme-dark [class*="text-cyan-700"],
 .theme-dark [class*="text-cyan-800"],
 .theme-dark [class*="text-sky-700"] {
-  color: #38bdf8 !important; /* Radiant sky blue */
+  color: #38bdf8 !important; 
 }
 
 .theme-dark [class*="text-amber-900"],
@@ -240,15 +236,15 @@ html.dark [class*="text-zinc-900"] {
 .theme-dark [class*="text-yellow-700"],
 .theme-dark [class*="text-yellow-800"],
 .theme-dark [class*="text-orange-700"] {
-  color: #fbbf24 !important; /* Radiant amber */
+  color: #fbbf24 !important; 
 }
 
-/* Lists in Dark Mode */
+
 .theme-dark ul, .theme-dark ol, .theme-dark li {
   color: #e2e8f0 !important;
 }
 
-/* Tables in Dark Mode */
+
 .theme-dark thead,
 .theme-dark thead tr,
 .theme-dark thead th {
@@ -263,7 +259,7 @@ html.dark [class*="text-zinc-900"] {
   color: #e2e8f0;
 }
 
-/* Form Inputs, Selects & Textareas in Dark Mode */
+
 .theme-dark input:not([type="checkbox"]):not([type="radio"]),
 .theme-dark select,
 .theme-dark textarea {
@@ -291,7 +287,7 @@ html.dark [class*="text-zinc-900"] {
   color: #64748b !important;
 }
 
-/* Primary Button in Dark Mode */
+
 .theme-dark .btn-primary {
   background-color: #ffffff;
   color: #060810;
@@ -302,19 +298,19 @@ html.dark [class*="text-zinc-900"] {
   background-color: #e2e8f0;
 }
 
-/* Modals and Overlays */
+
 .theme-dark .bg-black\/50,
 .theme-dark .bg-black\/60 {
   background-color: rgba(4, 6, 12, 0.85) !important;
 }
 
-/* Code blocks */
+
 .theme-dark .bg-slate-950 {
   background-color: #05070e !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Custom Scrollbars */
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;

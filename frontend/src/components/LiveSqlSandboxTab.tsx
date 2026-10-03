@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu } from 'lucide-react';
 
-
 interface MockRow {
   id: number;
   customer_id: number;
@@ -11,7 +10,7 @@ interface MockRow {
 }
 
 export const LiveSqlSandboxTab: React.FC = () => {
-  const [datasetSize, setDatasetSize] = useState<number>(100000); // 100k rows
+  const [datasetSize, setDatasetSize] = useState<number>(100000); 
   const [hasIndex, setHasIndex] = useState<boolean>(false);
   const [sqlQuery, setSqlQuery] = useState<string>(
     `SELECT id, customer_id, total_amount, status, created_at\nFROM orders\nWHERE customer_id = 4821\n  AND status = 'completed'\nORDER BY created_at DESC\nLIMIT 20;`
@@ -30,7 +29,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
   const runLiveQuery = () => {
     setIsRunning(true);
     setTimeout(() => {
-      // Synthetic benchmark logic simulating real database B-Tree index vs Seq Scan mechanics
+      
       let latencyMs = 0;
       let rowsExamined = 0;
       let rowsReturned = 0;
@@ -39,7 +38,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
       let diskReads = 0;
 
       if (!hasIndex) {
-        // Full Table Scan
+        
         latencyMs = parseFloat((35 + Math.random() * 25 + (datasetSize / 100000) * 45).toFixed(2));
         rowsExamined = datasetSize;
         rowsReturned = 14;
@@ -47,7 +46,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
         memoryHits = Math.round(datasetSize * 0.4);
         diskReads = Math.round(datasetSize * 0.6);
       } else {
-        // B-Tree Index Scan
+        
         latencyMs = parseFloat((0.8 + Math.random() * 1.4).toFixed(2));
         rowsExamined = 18;
         rowsReturned = 14;
@@ -56,7 +55,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
         diskReads = 0;
       }
 
-      // Generate synthetic sample rows
       const sampleRows: MockRow[] = [];
       for (let i = 0; i < 6; i++) {
         sampleRows.push({
@@ -88,7 +86,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Controls Box */}
+      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
@@ -106,7 +104,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
             </p>
           </div>
 
-          {/* Dataset & Index Controls */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-purple-200/60 text-xs font-semibold overflow-x-auto scrollbar-none">
               <span className="text-slate-500 px-1.5 sm:px-2 text-[11px] sm:text-xs">Size:</span>
@@ -150,7 +147,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Live SQL Editor */}
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1">
             <span className="font-bold text-slate-700 flex items-center gap-1.5">
@@ -196,10 +192,9 @@ export const LiveSqlSandboxTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Execution Results View */}
       {executionResult && (
         <div className="space-y-6">
-          {/* Live Metric Banner */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div
               className={`p-4 rounded-2xl border space-y-1 shadow-sm ${
@@ -255,7 +250,6 @@ export const LiveSqlSandboxTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Live Data Sample Grid */}
           <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">

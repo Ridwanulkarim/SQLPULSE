@@ -56,7 +56,7 @@ export const PartitionArchitectTab: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white shadow-xl shadow-purple-950/20 border border-purple-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -77,7 +77,6 @@ export const PartitionArchitectTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Inputs Configuration Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-6">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -155,7 +154,7 @@ export const PartitionArchitectTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Query Pruning Simulation Scorecard */}
+          
           <div className="p-4 sm:p-6 rounded-2xl bg-purple-50/60 border border-purple-200 shadow-sm space-y-3">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-purple-600" />
@@ -187,7 +186,6 @@ export const PartitionArchitectTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Shard / Child Partition Distribution Table */}
           {result.shardDistribution.length > 0 && (
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -219,7 +217,6 @@ export const PartitionArchitectTab: React.FC = () => {
             </div>
           )}
 
-          {/* DDL & Maintenance Code Tabs */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-purple-50/80 border-b border-purple-200 flex items-center justify-between">
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-purple-200">
@@ -262,7 +259,6 @@ export const PartitionArchitectTab: React.FC = () => {
             </pre>
           </div>
 
-          {/* Expert Guidelines */}
           {result.expertGuidelines.length > 0 && (
             <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 shadow-sm space-y-2">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">

@@ -25,7 +25,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
 
   const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
 
-  // Auto-align active category tab if selectedEngine changes externally
   useEffect(() => {
     if (activeCategory !== 'all' && activeCategory !== 'top_ranked' && currentDb.category !== activeCategory) {
       setActiveCategory(currentDb.category);
@@ -107,7 +106,7 @@ export const PlanInput: React.FC<PlanInputProps> = ({
 
   return (
     <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-      {/* 1. Category Bar & Search */}
+      
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-xl bg-purple-100/80 text-purple-700 border border-purple-200 shrink-0">
@@ -125,7 +124,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
           </div>
         </div>
 
-        {/* Search Input for fast filter */}
         <div className="relative w-full sm:w-auto sm:min-w-[260px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -138,7 +136,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
         </div>
       </div>
 
-      {/* Categories Tabs */}
       <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-purple-200/50 overflow-x-auto max-w-full scrollbar-none">
         {categories.map((cat) => (
           <button
@@ -163,7 +160,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
         ))}
       </div>
 
-      {/* 2. Specific Engine Chips in Active Category / Search Result */}
       <div className="space-y-1.5">
         <div className="text-xs text-slate-500 font-semibold flex items-center justify-between">
           <span>Available Engines ({filteredDatabases.length}):</span>
@@ -203,7 +199,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
         </div>
       </div>
 
-      {/* 3. Terminal Execution Command Hint & Presets */}
       <div className="bg-purple-50/70 border border-purple-200/70 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
           <div className="flex items-center gap-1.5">
@@ -223,7 +218,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
           </code>
         </div>
 
-        {/* Quick Presets for Current DB */}
         <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
           <button
             type="button"
@@ -245,7 +239,7 @@ export const PlanInput: React.FC<PlanInputProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Optional Query Input */}
+        
         {showQueryInput ? (
           <div>
             <div className="flex justify-between items-center mb-1">
@@ -281,7 +275,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
           </div>
         )}
 
-        {/* Explain Output Textarea */}
         <div className="relative">
           <textarea
             rows={7}
@@ -293,7 +286,6 @@ export const PlanInput: React.FC<PlanInputProps> = ({
           />
         </div>
 
-        {/* Submit Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
           <button
             type="button"

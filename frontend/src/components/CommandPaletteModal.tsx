@@ -145,7 +145,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-purple-200/80 overflow-hidden flex flex-col max-h-[75vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Search Input Bar */}
+        
         <div className="p-4 border-b border-purple-100 flex items-center gap-3 bg-purple-50/40">
           <Search className="w-5 h-5 text-purple-600 shrink-0" />
           <input
@@ -174,7 +174,6 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           </div>
         </div>
 
-        {/* Results List */}
         <div className="overflow-y-auto p-2 space-y-1">
           {allItems.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500">
@@ -225,7 +224,6 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           )}
         </div>
 
-        {/* Footer Navigation Hints */}
         <div className="p-3 bg-slate-50 border-t border-purple-100 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-3">
             <span>↑↓ Navigate</span>

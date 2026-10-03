@@ -171,7 +171,7 @@ echo "✅ All staged DDL scripts are safe for zero-downtime production deploymen
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white/95 rounded-2xl sm:rounded-3xl border border-purple-200/80 shadow-2xl max-w-4xl w-full p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[92vh] overflow-y-auto scrollbar-thin">
-        {/* Header */}
+        
         <div className="flex items-center justify-between border-b border-purple-200/70 pb-3 sm:pb-4 gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-700 shadow-sm shrink-0">
@@ -195,7 +195,6 @@ echo "✅ All staged DDL scripts are safe for zero-downtime production deploymen
           </button>
         </div>
 
-        {/* Tab Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-purple-100 scrollbar-none">
           <button
             onClick={() => setActiveCi('github')}
@@ -239,7 +238,6 @@ echo "✅ All staged DDL scripts are safe for zero-downtime production deploymen
           </button>
         </div>
 
-        {/* Code Content */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">

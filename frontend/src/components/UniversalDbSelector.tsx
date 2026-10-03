@@ -3,7 +3,6 @@ import { DatabaseEngine, DATABASE_CATALOG, DatabaseCategory } from '../types';
 import { Search, ChevronDown, Check } from 'lucide-react';
 import { DbBrandLogo } from './DbBrandLogo';
 
-
 interface UniversalDbSelectorProps {
   selectedEngine: DatabaseEngine;
   onSelectEngine: (engine: DatabaseEngine) => void;
@@ -56,7 +55,7 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
 
   return (
     <div className="relative">
-      {/* Trigger Button */}
+      
       <div className="flex items-center gap-2">
         {label && <span className="text-xs font-bold text-slate-700 hidden sm:inline">{label}:</span>}
         <button
@@ -78,17 +77,16 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
         </button>
       </div>
 
-      {/* Popover / Modal Dropdown */}
       {isOpen && (
         <>
-          {/* Mobile backdrop */}
+          
           <div
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40"
             onClick={() => setIsOpen(false)}
           />
 
           <div className="fixed inset-x-3 top-20 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 w-[calc(100vw-24px)] sm:w-[540px] md:w-[620px] max-h-[75vh] sm:max-h-[500px] bg-white rounded-2xl shadow-2xl border border-purple-200/90 z-50 p-3.5 sm:p-4 space-y-3 flex flex-col animate-in fade-in zoom-in-95 duration-150">
-            {/* Header & Search */}
+            
             <div className="flex items-center justify-between gap-2.5 border-b border-purple-100 pb-2.5 shrink-0">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -109,7 +107,6 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
               </button>
             </div>
 
-            {/* Category Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin shrink-0">
               {categories.map((cat) => (
                 <button
@@ -128,7 +125,6 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
               ))}
             </div>
 
-            {/* Results Grid */}
             <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1 flex-1 max-h-64 sm:max-h-72 scrollbar-thin">
               {filteredDatabases.slice(0, 100).map((db) => {
                 const isSelected = db.id === selectedEngine;
@@ -181,4 +177,3 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
     </div>
   );
 };
-

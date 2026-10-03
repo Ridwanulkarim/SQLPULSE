@@ -24,7 +24,6 @@ export class MultiEngineDispatcher {
     const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
     let result: PlanAnalysisResult;
 
-    // Direct ID checks or Category fallback
     if (engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona') {
       result = this.mysqlAnalyzer.analyze(plan);
     } else if (engine === 'sqlite' || engine === 'turso' || engine === 'spatialite') {
@@ -50,7 +49,7 @@ export class MultiEngineDispatcher {
     } else if (metadata.category === 'wide_column') {
       result = SpecializedAnalyzers.analyzeWideColumn(plan, engine);
     } else {
-      // Default to relational / PostgreSQL engine
+      
       result = this.postgresAnalyzer.analyze(plan);
     }
 
@@ -69,4 +68,3 @@ export class MultiEngineDispatcher {
     return this.queryAdvisor.analyze(query, engine);
   }
 }
-

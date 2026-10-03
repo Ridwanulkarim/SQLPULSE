@@ -138,9 +138,6 @@ export interface QueryAdvisorResult {
   };
 }
 
-// -------------------------------------------------------------
-// 1. Cross-Engine SQL & Schema Transpiler Types
-// -------------------------------------------------------------
 export interface DataTypeMapping {
   sourceType: string;
   targetType: string;
@@ -172,9 +169,6 @@ export interface TranspileResult {
   optimizationsApplied: string[];
 }
 
-// -------------------------------------------------------------
-// 2. Universal Config Auto-Tuner Types
-// -------------------------------------------------------------
 export interface RamAllocationSlice {
   label: string;
   sizeGb: number;
@@ -203,9 +197,6 @@ export interface ConfigTuningResult {
   expertTips: string[];
 }
 
-// -------------------------------------------------------------
-// 3. Deadlock & Concurrency Race Simulator Types
-// -------------------------------------------------------------
 export interface TimelineStep {
   stepIndex: number;
   timeSec: number;
@@ -251,9 +242,6 @@ export interface DeadlockSimulationResult {
   remedies: DeadlockRemedy[];
 }
 
-// -------------------------------------------------------------
-// 4. Disaster Recovery & RPO/RTO Calculator Types
-// -------------------------------------------------------------
 export interface RtoStage {
   stage: string;
   durationMinutes: number;
@@ -286,9 +274,6 @@ export interface DisasterRecoveryResult {
   verificationCommand: string;
 }
 
-// -------------------------------------------------------------
-// 5. AI Natural Language Query Synthesizer Types
-// -------------------------------------------------------------
 export interface QuerySynthesizeResult {
   engine: string;
   engineName: string;
@@ -305,9 +290,6 @@ export interface QuerySynthesizeResult {
   antipatternWarnings: string[];
 }
 
-// -------------------------------------------------------------
-// 6. Connect Hub & DSN Studio Types
-// -------------------------------------------------------------
 export interface CodeSnippet {
   language: 'typescript' | 'python' | 'go' | 'java' | 'rust' | 'php';
   label: string;
@@ -335,9 +317,6 @@ export interface ConnectHubResult {
   securityRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 7. Partitioning & Sharding Architect Types
-// -------------------------------------------------------------
 export interface ShardSlice {
   shardName: string;
   rangeOrHash: string;
@@ -365,9 +344,6 @@ export interface PartitionResult {
   expertGuidelines: string[];
 }
 
-// -------------------------------------------------------------
-// 8. Slow Query Log Diagnostic Inspector Types
-// -------------------------------------------------------------
 export interface SlowQueryGroup {
   fingerprint: string;
   sampleQuery: string;
@@ -392,9 +368,6 @@ export interface LogInspectResult {
   recommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 9. Bloat & Storage Defragmentation Studio Types
-// -------------------------------------------------------------
 export interface BloatFinding {
   objectName: string;
   objectType: 'table' | 'index';
@@ -420,9 +393,6 @@ export interface BloatAnalyzeResult {
   expertRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 10. Multi-Region Cluster & Replication Topology Types
-// -------------------------------------------------------------
 export interface TopologyNode {
   id: string;
   name: string;
@@ -456,9 +426,6 @@ export interface ReplicationTopologyResult {
   expertRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 11. Security RBAC, Dynamic Masking & RLS Types
-// -------------------------------------------------------------
 export interface RbacRole {
   name: string;
   scope: string;
@@ -489,11 +456,8 @@ export interface SecurityRbacResult {
   expertRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 12. Synthetic Mock Data & Load Benchmark Types
-// -------------------------------------------------------------
 export type DomainPresetType =
-  // 🛍️ Commerce, Retail & Financial Services
+  
   | 'ecommerce'
   | 'fintech'
   | 'stock_trading'
@@ -570,9 +534,6 @@ export interface MockDataResult {
   expertRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 13. FinOps & Cloud Cost Calculator Types
-// -------------------------------------------------------------
 export type CloudProviderType = 'aws_rds' | 'aws_aurora' | 'gcp_cloudsql' | 'gcp_alloydb' | 'azure_sql' | 'azure_cosmos' | 'neon_serverless' | 'supabase_cloud' | 'mongodb_atlas';
 
 export interface CostBreakdownItem {
@@ -608,9 +569,6 @@ export interface FinOpsResult {
   terraformIaC: string;
 }
 
-// -------------------------------------------------------------
-// 14. Index Doctor & Redundancy Auditor Types
-// -------------------------------------------------------------
 export interface IndexDefinition {
   name: string;
   tableName: string;
@@ -657,9 +615,6 @@ export interface IndexDoctorResult {
   expertAuditSummary: string[];
 }
 
-// -------------------------------------------------------------
-// 15. PII Data Masking & Sanitizer Types
-// -------------------------------------------------------------
 export interface PiiFieldRule {
   columnName: string;
   piiCategory: 'EMAIL' | 'CREDIT_CARD' | 'PASSWORD' | 'SSN_NATIONAL_ID' | 'PHONE' | 'NAME' | 'IP_ADDRESS' | 'DATE_OF_BIRTH' | 'SALARY_FINANCIAL' | 'HEALTH_BIOMETRIC';
@@ -684,9 +639,6 @@ export interface PiiSanitizerResult {
   auditRecommendations: string[];
 }
 
-// -------------------------------------------------------------
-// 16. SQL AST Query Rewriter & Sargability Types
-// -------------------------------------------------------------
 export interface OptimizationRewriteDetail {
   ruleName: string;
   category: 'SARGABILITY' | 'INDEX_SEEK' | 'JOIN_TRANSFORMATION' | 'AGGREGATION' | 'PROJECTION';
@@ -713,9 +665,6 @@ export interface QueryRewriterResult {
   expertAnalysis: string[];
 }
 
-// -------------------------------------------------------------
-// 17. Schema Diff & Drift Detection Types
-// -------------------------------------------------------------
 export interface SchemaDiffChange {
   id: string;
   type: 'TABLE_ADDED' | 'TABLE_DROPPED' | 'COLUMN_ADDED' | 'COLUMN_DROPPED' | 'TYPE_MISMATCH' | 'INDEX_MISSING' | 'CONSTRAINT_CHANGED';
@@ -743,9 +692,6 @@ export interface SchemaDiffResult {
   preflightChecks: string[];
 }
 
-// -------------------------------------------------------------
-// 18. ORM Query & N+1 Latency Profiler Types
-// -------------------------------------------------------------
 export interface OrmIssue {
   id: string;
   category: 'N_PLUS_ONE' | 'CARTESIAN_EXPLOSION' | 'OVER_FETCHING' | 'UNINDEXED_RELATION' | 'UNBATCHED_MUTATION';
@@ -775,9 +721,6 @@ export interface OrmProfilerResult {
   guidelines: string[];
 }
 
-// -------------------------------------------------------------
-// 19. Production Readiness & Health Scorecard Types
-// -------------------------------------------------------------
 export interface ReadinessCheckItem {
   id: string;
   category: 'CONNECTION' | 'MEMORY' | 'MAINTENANCE' | 'BACKUP_WAL' | 'TIMEOUT_SAFETY' | 'SECURITY' | 'OBSERVABILITY';
@@ -802,9 +745,6 @@ export interface ProductionReadinessResult {
   executiveSummary: string;
 }
 
-// -------------------------------------------------------------
-// 20. Chaos & Fault Injection Simulator Types
-// -------------------------------------------------------------
 export interface ChaosStep {
   timeOffsetSec: number;
   phase: string;
@@ -829,9 +769,6 @@ export interface ChaosSimulationResult {
   recommendedConfigPatch: string;
 }
 
-// -------------------------------------------------------------
-// 21. CDC & Transactional Outbox Types
-// -------------------------------------------------------------
 export interface CdcOutboxResult {
   engine: string;
   sourceTable: string;
@@ -843,9 +780,6 @@ export interface CdcOutboxResult {
   architectureGuidelines: string[];
 }
 
-// -------------------------------------------------------------
-// 22. Vector Search & HNSW Index Tuner Types
-// -------------------------------------------------------------
 export interface VectorTuningResult {
   engine: string;
   vectorDimension: number;
@@ -865,7 +799,3 @@ export interface VectorTuningResult {
   hybridSearchQuery: string;
   bestPractices: string[];
 }
-
-
-
-

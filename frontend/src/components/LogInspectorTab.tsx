@@ -47,7 +47,7 @@ export const LogInspectorTab: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-rose-950 to-purple-950 text-white shadow-xl shadow-rose-950/20 border border-rose-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -68,7 +68,6 @@ export const LogInspectorTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Inputs Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -105,7 +104,7 @@ export const LogInspectorTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Key Diagnostic Metric Cards */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-1">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Queries</span>
@@ -132,7 +131,6 @@ export const LogInspectorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Diagnostic Summary Callout */}
           <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/60 border border-purple-200 text-slate-800 text-xs leading-relaxed space-y-1">
             <span className="font-extrabold text-purple-950 uppercase tracking-wider block">
               Automated Forensic Summary:
@@ -140,7 +138,6 @@ export const LogInspectorTab: React.FC = () => {
             <p>{result.diagnosticSummary}</p>
           </div>
 
-          {/* Slow Query Fingerprint Group List */}
           <div className="space-y-4">
             <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <Activity className="w-4 h-4 text-purple-600" />

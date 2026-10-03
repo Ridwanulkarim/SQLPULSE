@@ -57,7 +57,6 @@ export class QueryRewriterAnalyzer {
     let optimized = query;
     const optimizationsApplied: OptimizationRewriteDetail[] = [];
 
-    // Rule 1: Non-Sargable YEAR(col) = YYYY or EXTRACT(YEAR FROM col)
     if (/YEAR\s*\(\s*(\w+)\s*\)\s*=\s*(\d{4})/i.test(optimized)) {
       const match = optimized.match(/YEAR\s*\(\s*(\w+)\s*\)\s*=\s*(\d{4})/i);
       if (match) {
@@ -92,14 +91,13 @@ export class QueryRewriterAnalyzer {
       }
     }
 
-    // Rule 2: LOWER(col) = 'val'
     if (/LOWER\s*\(\s*(\w+)\s*\)\s*=\s*'([^']+)'/i.test(optimized)) {
       const match = optimized.match(/LOWER\s*\(\s*(\w+)\s*\)\s*=\s*'([^']+)'/i);
       if (match) {
         const col = match[1];
         const val = match[2];
         const replacement = `${col} = '${val.toUpperCase()}'`;
-        // Keep functional or suggest functional index
+        
         optimizationsApplied.push({
           ruleName: 'Eliminate Redundant Column Function Call',
           category: 'INDEX_SEEK',
@@ -111,7 +109,6 @@ export class QueryRewriterAnalyzer {
       }
     }
 
-    // Rule 3: Anti-pattern IN (SELECT ...) -> EXISTS (SELECT 1 ...)
     if (/(\w+)\s+IN\s*\(\s*SELECT\s+(\w+)\s+FROM\s+(\w+)(?:\s+WHERE\s+([^)]+))?\s*\)/i.test(optimized)) {
       const match = optimized.match(/(\w+)\s+IN\s*\(\s*SELECT\s+(\w+)\s+FROM\s+(\w+)(?:\s+WHERE\s+([^)]+))?\s*\)/i);
       if (match) {
@@ -132,7 +129,6 @@ export class QueryRewriterAnalyzer {
       }
     }
 
-    // Rule 4: SELECT * to Explicit Columns
     if (/^SELECT\s+\*\s+FROM/i.test(optimized.trim())) {
       optimized = optimized.replace(/^SELECT\s+\*\s+FROM/i, 'SELECT id, customer_id, total_amount, status, created_at FROM');
       optimizationsApplied.push({
@@ -145,7 +141,6 @@ export class QueryRewriterAnalyzer {
       });
     }
 
-    // If no specific pattern was matched, apply a canonical rewrite
     if (optimizationsApplied.length === 0) {
       optimizationsApplied.push({
         ruleName: 'Sargable Predicate Optimization',

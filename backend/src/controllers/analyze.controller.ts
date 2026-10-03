@@ -126,7 +126,6 @@ export const getSamples = (req: Request, res: Response): void => {
   });
 };
 
-// 1. Cross-Engine SQL & Schema Transpiler
 export const transpileSql = (req: Request, res: Response): void => {
   try {
     const { sourceEngine = 'oracle', targetEngine = 'postgres', sourceCode = '' } = req.body;
@@ -148,7 +147,6 @@ export const transpileSql = (req: Request, res: Response): void => {
   }
 };
 
-// 2. Universal Config Auto-Tuner
 export const tuneConfig = (req: Request, res: Response): void => {
   try {
     const {
@@ -181,7 +179,6 @@ export const tuneConfig = (req: Request, res: Response): void => {
   }
 };
 
-// 3. Deadlock Simulator
 export const simulateDeadlock = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', scenarioId = 'circular_row_locks', txASql, txBSql } = req.body;
@@ -198,7 +195,6 @@ export const simulateDeadlock = (req: Request, res: Response): void => {
   }
 };
 
-// 4. Disaster Recovery Calculator
 export const calculateDisasterRecovery = (req: Request, res: Response): void => {
   try {
     const {
@@ -233,7 +229,6 @@ export const calculateDisasterRecovery = (req: Request, res: Response): void => 
   }
 };
 
-// 5. AI Query Synthesizer
 export const synthesizeQuery = (req: Request, res: Response): void => {
   try {
     const { prompt, targetEngine = 'postgres', schemaContext, domainPreset } = req.body;
@@ -261,7 +256,6 @@ export const synthesizeQuery = (req: Request, res: Response): void => {
   }
 };
 
-// 6. Connect Hub & DSN Studio
 export const generateConnectHub = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', host, port, database, username, password, sslMode, poolSize } = req.body;
@@ -287,7 +281,6 @@ export const generateConnectHub = (req: Request, res: Response): void => {
   }
 };
 
-// 7. Big Data Partitioning Architect
 export const planPartitionStrategy = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', tableName, partitionColumn, strategy, estimatedMonthlyRows, retentionMonths } = req.body;
@@ -311,7 +304,6 @@ export const planPartitionStrategy = (req: Request, res: Response): void => {
   }
 };
 
-// 8. Slow Query Log Inspector
 export const inspectSlowLogs = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', logContent = '' } = req.body;
@@ -328,7 +320,6 @@ export const inspectSlowLogs = (req: Request, res: Response): void => {
   }
 };
 
-// 9. Index Bloat, Vacuum & Defragmentation Studio
 export const analyzeBloat = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', tableName, totalTableSizeGb, deadTuplePercentage, avgDailyUpdates } = req.body;
@@ -351,7 +342,6 @@ export const analyzeBloat = (req: Request, res: Response): void => {
   }
 };
 
-// 10. Multi-Region Cluster & Replication Topology
 export const simulateReplicationTopology = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', primaryRegion, syncReplicasCount, asyncReplicasCount, failoverManager, networkRttMs } = req.body;
@@ -375,7 +365,6 @@ export const simulateReplicationTopology = (req: Request, res: Response): void =
   }
 };
 
-// 11. Security RBAC, Dynamic Masking & RLS Generator
 export const generateSecurityRbac = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', tableName, tenantColumn, piiColumns, enforceTls } = req.body;
@@ -398,7 +387,6 @@ export const generateSecurityRbac = (req: Request, res: Response): void => {
   }
 };
 
-// 12. Synthetic Mock Data & Load Benchmark Generator
 export const generateMockData = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', preset, rowCount, format } = req.body;
@@ -420,7 +408,6 @@ export const generateMockData = (req: Request, res: Response): void => {
   }
 };
 
-// 13. Cloud FinOps & Database Cost Architect
 export const calculateFinOps = (req: Request, res: Response): void => {
   try {
     const {
@@ -463,7 +450,6 @@ export const calculateFinOps = (req: Request, res: Response): void => {
   }
 };
 
-// 14. Index Doctor & Redundant Index Auditor
 export const auditIndexDoctor = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', tableName, indexes, rawIndexDdl } = req.body;
@@ -486,7 +472,6 @@ export const auditIndexDoctor = (req: Request, res: Response): void => {
   }
 };
 
-// 15. Production-to-Staging PII Data Masking & Sanitizer
 export const sanitizePii = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', tableName, columns, anonymizationSalt } = req.body;
@@ -509,7 +494,6 @@ export const sanitizePii = (req: Request, res: Response): void => {
   }
 };
 
-// 16. SQL AST Query Rewriter & Sargability Optimizer
 export const rewriteQuery = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgres', query, tableHint } = req.body;
@@ -536,7 +520,6 @@ export const rewriteQuery = (req: Request, res: Response): void => {
   }
 };
 
-// 17. Schema Diff & Zero-Downtime Migration Sync
 export const diffSchema = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgresql', sourceEnv, targetEnv, sourceDdl, targetDdl } = req.body;
@@ -556,7 +539,6 @@ export const diffSchema = (req: Request, res: Response): void => {
   }
 };
 
-// 18. ORM Query & N+1 Latency Profiler
 export const profileOrm = (req: Request, res: Response): void => {
   try {
     const { framework = 'prisma', rawQueryOrCode, batchSize } = req.body;
@@ -574,7 +556,6 @@ export const profileOrm = (req: Request, res: Response): void => {
   }
 };
 
-// 19. Production Readiness & Health Scorecard
 export const auditReadiness = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgresql', environmentType, estimatedQps } = req.body;
@@ -592,7 +573,6 @@ export const auditReadiness = (req: Request, res: Response): void => {
   }
 };
 
-// 20. Chaos & Fault Injection Simulator
 export const simulateChaos = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgresql', scenarioId = 'primary_crash', clusterSize, syncMode } = req.body;
@@ -611,7 +591,6 @@ export const simulateChaos = (req: Request, res: Response): void => {
   }
 };
 
-// 21. CDC & Transactional Outbox Architect
 export const buildCdcOutbox = (req: Request, res: Response): void => {
   try {
     const { engine = 'postgresql', sourceTable, destinationBroker } = req.body;
@@ -629,7 +608,6 @@ export const buildCdcOutbox = (req: Request, res: Response): void => {
   }
 };
 
-// 22. Vector Search & HNSW Index Tuner
 export const tuneVector = (req: Request, res: Response): void => {
   try {
     const { engine = 'pgvector', dimension, vectorCount, indexType, distanceMetric } = req.body;
@@ -648,5 +626,3 @@ export const tuneVector = (req: Request, res: Response): void => {
     });
   }
 };
-
-

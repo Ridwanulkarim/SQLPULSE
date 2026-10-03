@@ -57,7 +57,7 @@ export const ChaosSimulatorTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-950 via-slate-900 to-red-950 text-white shadow-xl shadow-rose-950/20 border border-rose-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -78,7 +78,6 @@ export const ChaosSimulatorTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Engine Selector */}
       <div className="p-4 rounded-2xl bg-white/80 border border-rose-200 shadow-sm flex items-center justify-between gap-4">
         <div className="w-72">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -94,7 +93,6 @@ export const ChaosSimulatorTab: React.FC = () => {
         </p>
       </div>
 
-      {/* Scenario Selector Tabs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {scenarios.map((sc) => (
           <button
@@ -115,7 +113,7 @@ export const ChaosSimulatorTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Key Metric Indicators */}
+          
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-4 rounded-2xl bg-white border border-rose-200 shadow-sm space-y-1">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Est. Failover Time</span>
@@ -142,7 +140,6 @@ export const ChaosSimulatorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Timeline Player & State Machine */}
           <div className="rounded-2xl bg-white border border-rose-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-rose-50/70 border-b border-rose-200 flex items-center justify-between">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-rose-950 flex items-center gap-1.5">
@@ -155,7 +152,7 @@ export const ChaosSimulatorTab: React.FC = () => {
               <div className="relative border-l-2 border-rose-200 ml-4 space-y-6">
                 {result.timeline.map((step: ChaosStep, idx: number) => (
                   <div key={idx} className="relative pl-6 space-y-1.5">
-                    {/* Circle Node */}
+                    
                     <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 bg-white ${
                       step.clusterState === 'HEALTHY'
                         ? 'border-emerald-500 bg-emerald-50'
@@ -206,7 +203,6 @@ export const ChaosSimulatorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Mitigation Runbook & Configuration Patch */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="rounded-2xl bg-white border border-rose-200/80 shadow-sm overflow-hidden flex flex-col justify-between">
               <div>

@@ -109,7 +109,6 @@ export class ReplicationTopologyAnalyzer {
       });
     }
 
-    // Add DR Replica
     nodes.push({
       id: 'node-dr-cross-region',
       name: `${meta.name} Cold-DR-Standby`,
@@ -198,7 +197,7 @@ rs.initiate({
     </keeper_server>
 </clickhouse>`;
     } else {
-      // Default: PostgreSQL + Patroni
+      
       failoverMechanism = 'Patroni + etcd DCS + pg_auto_failover / HAProxy VIP';
       haConfigSnippet = `# Patroni HA Cluster Definition (patroni.yml)
 scope: pg-prod-cluster

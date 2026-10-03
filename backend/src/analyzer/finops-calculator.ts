@@ -87,8 +87,8 @@ export class FinOpsCalculatorAnalyzer {
       case 'aws_aurora':
         providerName = 'AWS Aurora PostgreSQL / MySQL (Multi-AZ)';
         computeCostPerHour = 0.28 * (vCpu / 2);
-        storageRatePerGb = 0.10; // $0.10 per GB-month
-        iopsCost = (readsM + writesM) * 0.20; // $0.20 per million I/O requests
+        storageRatePerGb = 0.10; 
+        iopsCost = (readsM + writesM) * 0.20; 
         instanceType = `db.r6g.${vCpu >= 16 ? '4xlarge' : vCpu >= 8 ? '2xlarge' : 'xlarge'}`;
         break;
       case 'aws_rds':
@@ -102,7 +102,7 @@ export class FinOpsCalculatorAnalyzer {
         providerName = 'Google Cloud AlloyDB for PostgreSQL';
         computeCostPerHour = 0.32 * (vCpu / 2);
         storageRatePerGb = 0.12;
-        iopsCost = 0; // included
+        iopsCost = 0; 
         instanceType = `alloydb-custom-${vCpu}-${ramGb * 1024}`;
         break;
       case 'gcp_cloudsql':
@@ -149,7 +149,7 @@ export class FinOpsCalculatorAnalyzer {
     const monthlyStorageCost = dbSizeGb * storageRatePerGb;
     const monthlyIopsCost = iopsCost;
     const monthlyBackupCost = (dbSizeGb * (backupDays / 30) * 0.095);
-    const monthlyEgressCost = (readsM * 0.0004 * 0.09 * 1000); // estimated network egress
+    const monthlyEgressCost = (readsM * 0.0004 * 0.09 * 1000); 
 
     const monthlyTotal = Math.round(monthlyComputeCost + monthlyStorageCost + monthlyIopsCost + monthlyBackupCost + monthlyEgressCost);
     const annualTotal = monthlyTotal * 12;

@@ -84,7 +84,7 @@ export const ConfigTunerTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-purple-950 to-indigo-950 text-white shadow-xl shadow-purple-950/20 border border-purple-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -104,9 +104,8 @@ export const ConfigTunerTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Control Dashboard & Sliders */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-6">
-        {/* Engine Selector */}
+        
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
             Target Database Engine ({DATABASE_CATALOG.length} Supported)
@@ -118,7 +117,7 @@ export const ConfigTunerTab: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 border-t border-purple-100">
-          {/* RAM Selector */}
+          
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span className="flex items-center gap-1.5">
@@ -155,7 +154,6 @@ export const ConfigTunerTab: React.FC = () => {
             </div>
           </div>
 
-          {/* CPU Cores */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span className="flex items-center gap-1.5">
@@ -191,7 +189,6 @@ export const ConfigTunerTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Storage Hardware */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               <HardDrive className="w-4 h-4 text-teal-600 inline mr-1" /> Storage Drive Tier
@@ -208,7 +205,6 @@ export const ConfigTunerTab: React.FC = () => {
             </select>
           </div>
 
-          {/* Workload Profile */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-800">
               <Layers className="w-4 h-4 text-purple-600 inline mr-1" /> Workload Profile
@@ -227,7 +223,6 @@ export const ConfigTunerTab: React.FC = () => {
             </select>
           </div>
 
-          {/* Concurrent Connections */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span>Max Concurrent Connections</span>
@@ -248,7 +243,7 @@ export const ConfigTunerTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Memory Allocation Breakdown Bar */}
+          
           <div className="p-4 sm:p-6 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
@@ -258,7 +253,6 @@ export const ConfigTunerTab: React.FC = () => {
               <span className="text-xs text-slate-500">Mathematical sizing model</span>
             </div>
 
-            {/* Segmented Progress Bar */}
             <div className="h-6 w-full rounded-xl overflow-hidden flex shadow-inner bg-slate-100 p-0.5 gap-0.5">
               {result.ramAllocation.map((slice, idx) => (
                 <div
@@ -272,7 +266,6 @@ export const ConfigTunerTab: React.FC = () => {
               ))}
             </div>
 
-            {/* Allocation Legend Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
               {result.ramAllocation.map((slice, idx) => (
                 <div key={idx} className="p-3 rounded-xl border border-purple-100 bg-purple-50/40 space-y-1">
@@ -289,7 +282,6 @@ export const ConfigTunerTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Key Parameters Table */}
           {result.keyParameters.length > 0 && (
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -327,9 +319,8 @@ export const ConfigTunerTab: React.FC = () => {
             </div>
           )}
 
-          {/* Code Tabs & Output Viewer */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
-            {/* Header Tabs */}
+            
             <div className="px-4 py-3 bg-purple-50/80 border-b border-purple-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-purple-200">
                 <button
@@ -387,13 +378,11 @@ export const ConfigTunerTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Code Output */}
             <pre className="p-4 font-mono text-xs sm:text-sm bg-slate-950 text-purple-100 overflow-x-auto selection:bg-purple-600 selection:text-white max-h-[500px] overflow-y-auto">
               {getCurrentCode()}
             </pre>
           </div>
 
-          {/* Expert Production Tips */}
           {result.expertTips.length > 0 && (
             <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 shadow-sm space-y-2">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">

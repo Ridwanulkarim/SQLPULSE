@@ -1,5 +1,5 @@
 export const SAMPLES_BY_ENGINE: Record<string, { slow: any; optimized: any; migration?: string }> = {
-  // 1. Relational SQL
+  
   postgres: {
     slow: [
       {
@@ -251,7 +251,6 @@ ALTER TABLE users MODIFY COLUMN bio LONGTEXT;`,
     ],
   },
 
-  // 2. Document NoSQL
   mongodb: {
     slow: {
       executionStats: {
@@ -318,7 +317,6 @@ ALTER TABLE users MODIFY COLUMN bio LONGTEXT;`,
     },
   },
 
-  // 3. Vector Databases (AI & ML)
   weaviate: {
     slow: {
       took: 320,
@@ -396,7 +394,6 @@ ALTER TABLE users MODIFY COLUMN bio LONGTEXT;`,
     },
   },
 
-  // 4. Graph Databases
   neo4j: {
     slow: `Cypher Execution Plan:
 Planner: COST
@@ -476,7 +473,6 @@ Execution Profile:
 Optimal vertex and edge cache hit. Total Time: 2.1ms`,
   },
 
-  // 5. Search Engines
   elasticsearch: {
     slow: {
       took: 450,
@@ -538,7 +534,6 @@ Optimal vertex and edge cache hit. Total Time: 2.1ms`,
     },
   },
 
-  // 6. Time-Series
   influxdb: {
     slow: `Flux Execution Plan:
 from(bucket: "iot_telemetry")
@@ -602,7 +597,6 @@ Expression: sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) by (instance)
 Optimal subquery evaluation with recording rules. Total execution time: 4.2ms`,
   },
 
-  // 7. Key-Value & In-Memory
   redis: {
     slow: `SLOWLOG GET 10
 1) 1) (integer) 104
@@ -619,7 +613,6 @@ Optimal subquery evaluation with recording rules. Total execution time: 4.2ms`,
 Execution Time: 0.12ms (Non-blocking bucket iteration)`,
   },
 
-  // 8. Wide Column
   cassandra: {
     slow: `Tracing session 9e24fa10:
 Activity: Executing single-partition query
@@ -648,7 +641,6 @@ Direct HNSW Vector index seek with Astra Serverless Vector routing. Latency: 2.1
   },
 };
 
-// Legacy exports for backwards compatibility
 export const SAMPLE_SLOW_PLAN = SAMPLES_BY_ENGINE.postgres.slow;
 export const SAMPLE_OPTIMIZED_PLAN = SAMPLES_BY_ENGINE.postgres.optimized;
 export const SAMPLE_UNSAFE_MIGRATION = SAMPLES_BY_ENGINE.postgres.migration;

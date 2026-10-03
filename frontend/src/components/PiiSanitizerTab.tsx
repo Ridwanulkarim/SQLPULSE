@@ -72,7 +72,7 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner - Next-Elite Clean Style */}
+      
       <div className="p-4 sm:p-6 rounded-2xl bg-white border border-zinc-200 shadow-xs relative overflow-hidden">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -93,7 +93,6 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
         </div>
       </div>
 
-      {/* Inputs Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -138,10 +137,9 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
         </div>
       </div>
 
-      {/* Results Section */}
       {result && (
         <div className="space-y-6">
-          {/* Top Metrics Cards */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-white/90 border border-emerald-200/80 shadow-sm backdrop-blur-md">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Compliance Readiness Score</div>
@@ -174,7 +172,6 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
             </div>
           </div>
 
-          {/* Detected Fields Table */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
             <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-600" />
@@ -213,9 +210,8 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
             </div>
           </div>
 
-          {/* Scripts Tabs */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* pg_dump_anon Rules */}
+            
             <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -236,7 +232,6 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
               </div>
             </div>
 
-            {/* In-Place Scrub DDL */}
             <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -258,7 +253,6 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
             </div>
           </div>
 
-          {/* Automated Bash Staging Sync Script */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">

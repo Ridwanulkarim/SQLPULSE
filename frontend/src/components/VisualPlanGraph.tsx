@@ -47,7 +47,7 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      {/* Visual Execution Tree */}
+      
       <div className={`lg:col-span-7 ${cardClass} rounded-2xl p-5 shadow-lg`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className={`text-sm font-bold flex items-center gap-2 ${isLavender ? 'text-slate-900' : 'text-white'}`}>
@@ -78,7 +78,7 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
                     : 'border-slate-800 bg-[#080C14]/70 hover:border-slate-700'
                 }`}
               >
-                {/* Cost / Time Progress Bar */}
+                
                 <div
                   className={`absolute top-0 left-0 h-1 transition-all ${
                     node.severity === 'CRITICAL'
@@ -138,7 +138,6 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
         </div>
       </div>
 
-      {/* Selected Node Deep Inspector */}
       <div className={`lg:col-span-5 ${cardClass} rounded-2xl p-5 shadow-lg flex flex-col justify-between`}>
         {selectedNode ? (
           <div>
@@ -156,7 +155,7 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
             </div>
 
             <div className="space-y-4 text-xs font-mono">
-              {/* Timing & Costing Grid */}
+              
               <div className={`grid grid-cols-2 gap-2 p-3 rounded-xl border ${isLavender ? 'bg-white/90 border-purple-200 shadow-sm' : 'bg-[#080C14] border-slate-800/80'}`}>
                 <div>
                   <span className={`text-[11px] font-semibold ${isLavender ? 'text-slate-500' : 'text-slate-500'}`}>Total Cost</span>
@@ -183,7 +182,6 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
                 </div>
               </div>
 
-              {/* Buffer I/O Stats */}
               <div>
                 <span className={`font-bold block mb-1 ${isLavender ? 'text-slate-700' : 'text-slate-400'}`}>Buffer I/O Activity</span>
                 <div className={`p-3 rounded-xl border space-y-1.5 ${isLavender ? 'bg-white/90 border-purple-200 shadow-sm' : 'bg-[#080C14] border-slate-800/80'}`}>
@@ -200,7 +198,6 @@ export const VisualPlanGraph: React.FC<VisualPlanGraphProps> = ({ nodes, theme =
                 </div>
               </div>
 
-              {/* Raw JSON Node Dump */}
               <div>
                 <span className={`font-bold block mb-1 ${isLavender ? 'text-slate-700' : 'text-slate-400'}`}>Node Attributes</span>
                 <pre className={`p-3 rounded-xl border text-[11px] max-h-48 overflow-y-auto ${

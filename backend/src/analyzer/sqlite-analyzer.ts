@@ -16,7 +16,6 @@ export class SQLiteAnalyzer {
       const detail = typeof item === 'string' ? item : item.detail || JSON.stringify(item);
       const nodeId = `sqlite_node_${index + 1}`;
 
-      // Check SCAN TABLE (Full Table Scan in SQLite)
       if (/SCAN\s+TABLE\s+([a-zA-Z0-9_]+)/i.test(detail)) {
         const match = detail.match(/SCAN\s+TABLE\s+([a-zA-Z0-9_]+)/i);
         const tableName = match ? match[1] : 'table';

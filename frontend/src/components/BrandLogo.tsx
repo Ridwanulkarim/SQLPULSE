@@ -58,14 +58,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             xmlns="http://www.w3.org/2000/svg"
             className="drop-shadow-[0_2px_8px_rgba(0,240,255,0.4)]"
           >
-            {/* S-Shape Relational Wave */}
+            
             <path
               d="M24 8.5C24 6.01472 20.4183 4 16 4C11.5817 4 8 6.01472 8 8.5C8 10.9853 11.5817 13 16 13C20.4183 13 24 15.0147 24 17.5C24 19.9853 20.4183 22 16 22C11.5817 22 8 19.9853 8 17.5"
               stroke="url(#spulse-grad-1)"
               strokeWidth="2.8"
               strokeLinecap="round"
             />
-            {/* High-frequency Electric Pulse Line */}
+            
             <path
               d="M3 16H9L12.5 8L16.5 24L20 13L22.5 16H29"
               stroke="url(#spulse-neon-cyan)"
@@ -97,16 +97,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             xmlns="http://www.w3.org/2000/svg"
             className="drop-shadow-[0_2px_8px_rgba(99,102,241,0.4)]"
           >
-            {/* Top Cylinder Disc */}
+            
             <ellipse cx="16" cy="7" rx="10" ry="3.5" stroke="url(#rc-grad-top)" strokeWidth="2.2" />
             
-            {/* Middle Disc */}
             <path d="M6 7v6c0 1.933 4.477 3.5 10 3.5s10-1.567 10-3.5V7" stroke="url(#rc-grad-mid)" strokeWidth="2.2" strokeLinecap="round" />
             
-            {/* Bottom Disc */}
             <path d="M6 13v6c0 1.933 4.477 3.5 10 3.5s10-1.567 10-3.5v-6" stroke="url(#rc-grad-bot)" strokeWidth="2.2" strokeLinecap="round" />
 
-            {/* Glowing Pulse Center Node */}
             <circle cx="16" cy="16.5" r="2.5" fill="#00f0ff" />
             <path d="M10 16.5h12" stroke="#00f0ff" strokeWidth="2" strokeLinecap="round" />
 
@@ -129,7 +126,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
       case 'pulse-hex':
       default:
-        // World-Class Isometric Hexagonal Database Prism with Embedded Pulse Wave
+        
         return (
           <svg
             width={config.svg}
@@ -139,7 +136,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             xmlns="http://www.w3.org/2000/svg"
             className="drop-shadow-[0_2px_10px_rgba(6,182,212,0.45)]"
           >
-            {/* Top Isometric Facet (Database Disc) */}
+            
             <path
               d="M16 3.5L27 9.8L16 16.2L5 9.8L16 3.5Z"
               fill="url(#hex-top-fill)"
@@ -147,10 +144,9 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
               strokeWidth="1.8"
               strokeLinejoin="round"
             />
-            {/* Internal disc contour */}
+            
             <ellipse cx="16" cy="9.8" rx="6" ry="2.6" stroke="#00f0ff" strokeWidth="1.2" strokeOpacity="0.8" />
 
-            {/* Left Facet */}
             <path
               d="M5 9.8V22.2L16 28.5V16.2L5 9.8Z"
               fill="url(#hex-left-fill)"
@@ -159,7 +155,6 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
               strokeLinejoin="round"
             />
 
-            {/* Right Facet */}
             <path
               d="M16 16.2V28.5L27 22.2V9.8L16 16.2Z"
               fill="url(#hex-right-fill)"
@@ -168,7 +163,6 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
               strokeLinejoin="round"
             />
 
-            {/* Dynamic Oscilloscope Pulse Wave crossing the facets */}
             <path
               d="M7 19.5L12 17L14.5 24.5L17.5 11L20.5 19L25 16.5"
               stroke="#00f0ff"
@@ -215,7 +209,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   return (
     <div className={`flex items-center ${config.gap} ${className}`}>
-      {/* Precision Engineered Squircle Badge */}
+      
       <div
         className={`relative inline-flex items-center justify-center shrink-0 ${config.box} bg-[#070b14] border border-cyan-500/30 shadow-md ${
           withGlow
@@ -223,16 +217,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             : ''
         } transition-all duration-300 group`}
       >
-        {/* Subtle Ambient Radial Backlight */}
+        
         <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/15 via-indigo-600/10 to-transparent rounded-[inherit] opacity-80" />
 
-        {/* The Vector Geometry */}
         <div className="relative z-10 flex items-center justify-center">
           {renderSvgContent()}
         </div>
       </div>
 
-      {/* Optional Integrated Wordmark */}
       {withText && (
         <div className="flex items-center font-brand">
           <span className={`font-brand font-extrabold ${config.fontSize} text-slate-950 dark:text-white tracking-[-0.035em]`}>

@@ -2,7 +2,6 @@ import React from 'react';
 import { X, GitCompare, TrendingDown, Clock, Database, Zap } from 'lucide-react';
 import { PlanAnalysisResult } from '../types';
 
-
 interface PlanComparisonModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -32,7 +31,7 @@ export const PlanComparisonModal: React.FC<PlanComparisonModalProps> = ({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white/95 rounded-2xl sm:rounded-3xl border border-purple-200/80 shadow-2xl max-w-5xl w-full p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[92vh] overflow-y-auto scrollbar-thin">
-        {/* Header */}
+        
         <div className="flex items-center justify-between border-b border-purple-200/70 pb-3 sm:pb-4 gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-purple-500/20 shrink-0">
@@ -56,7 +55,6 @@ export const PlanComparisonModal: React.FC<PlanComparisonModalProps> = ({
           </button>
         </div>
 
-        {/* Delta Key Metrics Banner */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
           <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
             <span className="text-[9px] sm:text-[10px] uppercase font-bold text-emerald-800 flex items-center gap-1">
@@ -107,9 +105,8 @@ export const PlanComparisonModal: React.FC<PlanComparisonModalProps> = ({
           </div>
         </div>
 
-        {/* Side-by-Side Comparison Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Baseline Plan */}
+          
           <div className="p-5 rounded-2xl border border-rose-200 bg-rose-50/30 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-rose-200/80 pb-2.5">
               <div className="flex items-center gap-2">
@@ -147,7 +144,6 @@ export const PlanComparisonModal: React.FC<PlanComparisonModalProps> = ({
             </div>
           </div>
 
-          {/* Optimized Plan */}
           <div className="p-5 rounded-2xl border border-emerald-200 bg-emerald-50/30 space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2.5">
               <div className="flex items-center gap-2">
@@ -186,7 +182,6 @@ export const PlanComparisonModal: React.FC<PlanComparisonModalProps> = ({
           </div>
         </div>
 
-        {/* Footer actions */}
         <div className="flex justify-end pt-2">
           <button
             onClick={onClose}

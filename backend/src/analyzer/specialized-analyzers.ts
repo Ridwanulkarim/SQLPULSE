@@ -1,7 +1,7 @@
 import { PlanAnalysisResult, BottleneckFinding, GraphNodeData, DatabaseEngine } from '../types/plan.types';
 
 export class SpecializedAnalyzers {
-  // 1. Redis & Key-Value Analyzer (BigKey, O(N) blocking commands, Eviction)
+  
   public static analyzeRedis(rawInput: any): PlanAnalysisResult {
     const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
     const bottlenecks: BottleneckFinding[] = [];
@@ -72,7 +72,6 @@ export class SpecializedAnalyzers {
     };
   }
 
-  // 2. Search & Vector AI Analyzer (Weaviate / Milvus / Pinecone / Qdrant / Elasticsearch)
   public static analyzeSearchVector(rawInput: any, engine: DatabaseEngine = 'weaviate'): PlanAnalysisResult {
     const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
     const bottlenecks: BottleneckFinding[] = [];
@@ -156,7 +155,6 @@ export class SpecializedAnalyzers {
     };
   }
 
-  // 3. Graph Database Analyzer (Neo4j / Memgraph / Dgraph / ArangoDB)
   public static analyzeGraph(rawInput: any, engine: DatabaseEngine = 'neo4j'): PlanAnalysisResult {
     const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
     const bottlenecks: BottleneckFinding[] = [];
@@ -227,7 +225,6 @@ export class SpecializedAnalyzers {
     };
   }
 
-  // 4. Time-Series Analyzer (InfluxDB / TimescaleDB / Prometheus)
   public static analyzeTimeSeries(rawInput: any, engine: DatabaseEngine = 'influxdb'): PlanAnalysisResult {
     const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
     const bottlenecks: BottleneckFinding[] = [];
@@ -285,7 +282,6 @@ export class SpecializedAnalyzers {
     };
   }
 
-  // 5. Wide-Column Analyzer (Cassandra / ScyllaDB / HBase)
   public static analyzeWideColumn(rawInput: any, engine: DatabaseEngine = 'cassandra'): PlanAnalysisResult {
     const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
     const bottlenecks: BottleneckFinding[] = [];

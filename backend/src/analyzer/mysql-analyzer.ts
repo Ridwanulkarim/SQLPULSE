@@ -32,7 +32,6 @@ export class MySQLAnalyzer {
         const usingTemp = obj.using_temporary_table || tbl.using_temporary_table || false;
         const filterCond = tbl.attached_condition || '';
 
-        // Rule 1: Full Table Scan (access_type === 'ALL')
         if (accessType === 'ALL' && rowsExamined > 500) {
           const cols = this.extractColumns(filterCond);
           const colList = cols.length > 0 ? cols.join(', ') : 'column_name';
@@ -52,7 +51,6 @@ export class MySQLAnalyzer {
           });
         }
 
-        // Rule 2: Using Filesort (Disk / Sort Buffer Spill)
         if (usingFilesort) {
           bottlenecks.push({
             id: `mysql_filesort_${Math.random().toString(36).substring(2, 7)}`,
@@ -68,7 +66,6 @@ export class MySQLAnalyzer {
           });
         }
 
-        // Rule 3: Using Temporary Table
         if (usingTemp) {
           bottlenecks.push({
             id: `mysql_temp_${Math.random().toString(36).substring(2, 7)}`,
@@ -126,7 +123,6 @@ export class MySQLAnalyzer {
 
     traverse(queryBlock);
 
-    // If graphNodes empty, add fallback root
     if (graphNodes.length === 0) {
       graphNodes.push({
         id: 'mysql_root',

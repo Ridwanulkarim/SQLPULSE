@@ -39,7 +39,7 @@ export const DeadlockSimulatorTab: React.FC = () => {
         scenarioId: selectedScenario,
       });
       setResult(res);
-      setCurrentStepIndex(res.steps.length - 1); // Default to final state
+      setCurrentStepIndex(res.steps.length - 1); 
     } catch (err: any) {
       alert(err.message || 'Simulation failed');
     }
@@ -49,7 +49,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
     handleSimulate();
   }, [selectedEngine, selectedScenario]);
 
-  // Auto-play interval
   useEffect(() => {
     let timer: any;
     if (isPlaying && result) {
@@ -76,7 +75,7 @@ export const DeadlockSimulatorTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-950 via-purple-950 to-slate-900 text-white shadow-xl shadow-rose-950/20 border border-rose-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -97,7 +96,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Scenario & Engine Selector Bar */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -139,7 +137,7 @@ export const DeadlockSimulatorTab: React.FC = () => {
 
       {result && currentStep && (
         <div className="space-y-6">
-          {/* Step Timeline Player Control Bar */}
+          
           <div className="p-4 rounded-2xl bg-slate-900 text-white border border-purple-500/30 shadow-lg flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <button
@@ -169,7 +167,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
               </button>
             </div>
 
-            {/* Timeline Stepper Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-1">
               {result.steps.map((s, idx) => (
                 <button
@@ -197,9 +194,8 @@ export const DeadlockSimulatorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Transaction A vs Transaction B Execution Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Tx A Card */}
+            
             <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
               currentStep.txAState.status === 'DEADLOCK_VICTIM'
                 ? 'bg-rose-50/90 border-rose-300 shadow-md ring-1 ring-rose-300'
@@ -243,7 +239,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Tx B Card */}
             <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
               currentStep.txBState.status === 'DEADLOCK_VICTIM'
                 ? 'bg-rose-50/90 border-rose-300 shadow-md ring-1 ring-rose-300'
@@ -288,9 +283,8 @@ export const DeadlockSimulatorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Wait-For Graph Cycle Visualizer & Step Explanation */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Visual Cycle Graph */}
+            
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm flex flex-col justify-between">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2 mb-2">
@@ -302,7 +296,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
                 </p>
               </div>
 
-              {/* Interactive SVG Diagram */}
               <div className="w-full h-48 rounded-xl bg-slate-950 border border-purple-500/30 flex items-center justify-center relative overflow-hidden">
                 <svg className="w-full h-full" viewBox="0 0 400 180">
                   <defs>
@@ -314,24 +307,21 @@ export const DeadlockSimulatorTab: React.FC = () => {
                     </marker>
                   </defs>
 
-                  {/* Tx A Node */}
                   <g transform="translate(70, 90)">
                     <circle r="36" fill="#4F46E5" fillOpacity="0.2" stroke="#818CF8" strokeWidth="2" />
                     <text textAnchor="middle" dy="-4" fill="#FFFFFF" fontSize="11" fontWeight="bold">Tx A</text>
                     <text textAnchor="middle" dy="12" fill="#C7D2FE" fontSize="9">PID 80142</text>
                   </g>
 
-                  {/* Tx B Node */}
                   <g transform="translate(330, 90)">
                     <circle r="36" fill="#7C3AED" fillOpacity="0.2" stroke="#C084FC" strokeWidth="2" />
                     <text textAnchor="middle" dy="-4" fill="#FFFFFF" fontSize="11" fontWeight="bold">Tx B</text>
                     <text textAnchor="middle" dy="12" fill="#E9D5FF" fontSize="9">PID 80145</text>
                   </g>
 
-                  {/* Dependency Edges */}
                   {currentStep.hasCycleDetected ? (
                     <>
-                      {/* Edge A -> B */}
+                      
                       <path
                         d="M 106 65 Q 200 20 294 65"
                         fill="none"
@@ -345,7 +335,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
                         Waits for Tx B (accounts #942)
                       </text>
 
-                      {/* Edge B -> A */}
                       <path
                         d="M 294 115 Q 200 160 106 115"
                         fill="none"
@@ -388,7 +377,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
               )}
             </div>
 
-            {/* Step Event Description & Active Locks Table */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-4">
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 mb-1">
@@ -435,7 +423,6 @@ export const DeadlockSimulatorTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Root Cause & 1-Click Remediation Recipes */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-1">

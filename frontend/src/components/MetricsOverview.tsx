@@ -33,7 +33,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ data, theme = 
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-      {/* Score Card */}
+      
       <div className={`${cardClass} rounded-2xl p-4 sm:p-5 flex items-center justify-between col-span-1 sm:col-span-2 lg:col-span-1 shadow-sm`}>
         <div>
           <span className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${isLavender ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -86,7 +86,6 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ data, theme = 
         </div>
       </div>
 
-      {/* Execution Time */}
       <div className={`${cardClass} rounded-2xl p-5 flex flex-col justify-between`}>
         <span className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${isLavender ? 'text-slate-600' : 'text-slate-400'}`}>
           <Clock className={`w-3.5 h-3.5 ${isLavender ? 'text-indigo-600' : 'text-cyan-400'}`} />
@@ -103,7 +102,6 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ data, theme = 
         </div>
       </div>
 
-      {/* Total Cost */}
       <div className={`${cardClass} rounded-2xl p-5 flex flex-col justify-between`}>
         <span className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${isLavender ? 'text-slate-600' : 'text-slate-400'}`}>
           <Cpu className={`w-3.5 h-3.5 ${isLavender ? 'text-purple-600' : 'text-purple-400'}`} />
@@ -119,7 +117,6 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ data, theme = 
         </div>
       </div>
 
-      {/* Cache Hit Ratio */}
       <div className={`${cardClass} rounded-2xl p-5 flex flex-col justify-between`}>
         <span className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${isLavender ? 'text-slate-600' : 'text-slate-400'}`}>
           <HardDrive className={`w-3.5 h-3.5 ${isLavender ? 'text-emerald-600' : 'text-emerald-400'}`} />
@@ -135,7 +132,6 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ data, theme = 
         </div>
       </div>
 
-      {/* Bottlenecks Found */}
       <div className={`${cardClass} rounded-2xl p-5 flex flex-col justify-between`}>
         <span className={`text-xs uppercase tracking-wider font-bold flex items-center gap-1.5 ${isLavender ? 'text-slate-600' : 'text-slate-400'}`}>
           <Activity className={`w-3.5 h-3.5 ${isLavender ? 'text-amber-600' : 'text-amber-400'}`} />

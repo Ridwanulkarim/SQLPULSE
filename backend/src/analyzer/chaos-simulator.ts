@@ -17,7 +17,7 @@ export interface ChaosSimulationResult {
   totalDowntimeEstimatedSec: number;
   dataLossRisk: 'ZERO_DATA_LOSS_SYNC' | 'SUB_SECOND_ASYNC' | 'DATA_LOSS_WARNING';
   timeline: ChaosStep[];
-  resilienceScore: number; // 0-100
+  resilienceScore: number; 
   mitigationRunbook: string;
   recommendedConfigPatch: string;
 }
@@ -129,7 +129,7 @@ export function simulateChaosScenario(options: {
       }
     ];
   } else {
-    // Default primary crash
+    
     timeline = [
       {
         timeOffsetSec: 0,

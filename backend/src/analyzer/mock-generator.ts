@@ -1,7 +1,7 @@
 import { DATABASE_CATALOG } from '../types/db-catalog.data';
 
 export type DomainPresetType =
-  // 🛍️ Commerce, Retail & Financial Services
+  
   | 'ecommerce'
   | 'fintech'
   | 'stock_trading'
@@ -116,7 +116,7 @@ export class MockGeneratorAnalyzer {
     let benchmarkScript = '';
 
     switch (preset) {
-      // 1. E-Commerce
+      
       case 'ecommerce':
         tableName = 'orders';
         presetLabel = '🛒 E-Commerce & Retail (Orders, Items & Checkout)';
@@ -127,7 +127,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 2. FinTech
       case 'fintech':
         tableName = 'transactions';
         presetLabel = '💳 FinTech & Banking (Ledger & Wire Transfers)';
@@ -138,7 +137,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 3. Travel & Hospitality
       case 'travel_hospitality':
         tableName = 'hotel_bookings';
         presetLabel = '🏨 Travel & Hospitality (Hotels, Flights & Bookings)';
@@ -148,7 +146,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 4. Supply Chain
       case 'supply_chain':
         tableName = 'inventory_shipments';
         presetLabel = '🏭 Supply Chain & ERP (Warehouse, SKUs & Shipments)';
@@ -158,7 +155,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 5. Insurance Claims
       case 'insurance_claims':
         tableName = 'insurance_claims';
         presetLabel = '📑 Insurance & Actuarial (Policies, Claims & Adjusters)';
@@ -168,7 +164,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 6. Real Estate
       case 'real_estate':
         tableName = 'property_listings';
         presetLabel = '🏡 Real Estate & MLS (Properties, Leases & Valuations)';
@@ -178,7 +173,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 7. Stock Trading & HFT
       case 'stock_trading':
         tableName = 'market_trades';
         presetLabel = '📈 Stock Exchange & HFT (Order Book, Bids/Asks & Trades)';
@@ -188,7 +182,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 8. POS Retail
       case 'pos_retail':
         tableName = 'pos_receipts';
         presetLabel = '🏪 POS & Retail Checkout (Cashiers, Barcodes & Receipts)';
@@ -198,7 +191,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 9. SaaS
       case 'saas':
         tableName = 'audit_events';
         presetLabel = '📊 SaaS Multi-Tenant (Tenant Scopes, Events & Audit Logs)';
@@ -208,7 +200,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 10. Cyber Security
       case 'cybersecurity':
         tableName = 'security_threat_logs';
         presetLabel = '🛡️ Cyber Security & SIEM (Firewalls, CVEs & Scans)';
@@ -218,7 +209,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 11. Crypto & Web3
       case 'crypto_web3':
         tableName = 'blockchain_blocks';
         presetLabel = '⚡ Crypto & Web3 (Smart Contracts, Gas & Wallets)';
@@ -228,7 +218,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 12. Healthcare
       case 'healthcare':
         tableName = 'patient_encounters';
         presetLabel = '🏥 Healthcare & EHR (Patients, Diagnoses & HIPAA Records)';
@@ -238,7 +227,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 13. Pharma & Clinical Trials
       case 'pharma_clinical':
         tableName = 'clinical_trials';
         presetLabel = '💊 Pharma & Clinical Trials (Formulations, Dosages & FDA)';
@@ -248,7 +236,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 14. HR & Payroll
       case 'hr_payroll':
         tableName = 'payroll_runs';
         presetLabel = '👥 HRMS & Global Payroll (Roster, Salaries & Taxes)';
@@ -258,7 +245,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 15. Legal & Contracts
       case 'legal_contracts':
         tableName = 'legal_agreements';
         presetLabel = '⚖️ LegalTech & Compliance (NDAs, Redlines & Jurisdictions)';
@@ -268,7 +254,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 16. Customer Support CRM
       case 'customer_support':
         tableName = 'crm_tickets';
         presetLabel = '🎧 CRM & Helpdesk (Tickets, SLA Timers & CSAT Scores)';
@@ -278,7 +263,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 17. Vector AI
       case 'vector_embeddings':
         tableName = 'document_embeddings';
         presetLabel = '🧠 GenAI & Vector Search (1536-dim RAG Embeddings)';
@@ -288,7 +272,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 18. IoT
       case 'iot':
         tableName = 'sensor_telemetry';
         presetLabel = '📡 IoT & Smart Telemetry (Sensors, Temp & Vibration)';
@@ -298,7 +281,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 19. Ride Sharing
       case 'ride_sharing':
         tableName = 'rides';
         presetLabel = '🚗 Ride-Sharing & Logistics (Trips, GPS Coordinates & Drivers)';
@@ -308,7 +290,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 20. Streaming Media
       case 'streaming_media':
         tableName = 'playback_streams';
         presetLabel = '🎬 Streaming Media & OTT (Video/Audio Playbacks & Bitrates)';
@@ -318,7 +299,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 21. Gaming
       case 'gaming':
         tableName = 'player_sessions';
         presetLabel = '🎮 Gaming & Esports (Matches, Leaderboards & Player Stats)';
@@ -328,7 +308,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 22. Social Media
       case 'social_media':
         tableName = 'feed_posts';
         presetLabel = '📱 Social Media & Feeds (Posts, Graph & Reactions)';
@@ -338,7 +317,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 23. Music & Audio
       case 'music_audio':
         tableName = 'audio_streams';
         presetLabel = '🎵 Music & Audio Streaming (Tracks, Royalty Splits & Playlists)';
@@ -348,7 +326,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 24. Telecom & 5G Carrier
       case 'telecom_5g':
         tableName = 'cdr_call_records';
         presetLabel = '📶 Telecom & 5G Carrier (CDRs, Cell Towers & Roaming)';
@@ -358,7 +335,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 25. Food Delivery
       case 'food_delivery':
         tableName = 'food_orders';
         presetLabel = '🍕 Food Delivery & Kitchens (Live Courier GPS & Menus)';
@@ -368,7 +344,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 26. Energy Grid & Utilities
       case 'energy_grid':
         tableName = 'smart_meter_readings';
         presetLabel = '⚡ Energy Grid & Utilities (Smart Meters, Solar & Outages)';
@@ -378,7 +353,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 27. EV Charging Network
       case 'ev_charging':
         tableName = 'ev_charging_sessions';
         presetLabel = '🔌 EV Charging Network (Terminals, kWh Dispensed & Batts)';
@@ -388,7 +362,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 28. Aviation & Flight Tracking
       case 'aerospace_flight':
         tableName = 'adsb_flight_telemetry';
         presetLabel = '✈️ Aviation & Space Flight (ADS-B, Aircraft Tracking & Radar)';
@@ -398,7 +371,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 29. Meteorology & Weather
       case 'meteorology':
         tableName = 'weather_stations';
         presetLabel = '🌦️ Meteorology & Climate (Doppler Radar, Pressures & Wind)';
@@ -408,7 +380,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 30. Smart City & Traffic
       case 'smart_city':
         tableName = 'traffic_intersections';
         presetLabel = '🏙️ Smart City & Traffic (Sensors, ANPR & Congestion Tolls)';
@@ -418,7 +389,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 31. EdTech & Learning LMS
       case 'edtech':
         tableName = 'course_submissions';
         presetLabel = '🎓 EdTech & Learning LMS (Courses, Quizzes & GPA Scores)';
@@ -428,7 +398,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 32. AgriTech & Smart Farming
       case 'agriculture_agtech':
         tableName = 'crop_field_sensors';
         presetLabel = '🚜 AgriTech & Smart Farming (Soil, Crop Yield & Irrigation)';
@@ -438,7 +407,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 33. Fraud Detection & AML Risk
       case 'fraud_detection':
         tableName = 'fraud_risk_evaluations';
         presetLabel = '🛡️ AML & Fraud Detection (Velocity Rules, ML Risk & Signals)';
@@ -448,7 +416,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 34. Luxury Goods Provenance
       case 'luxury_provenance':
         tableName = 'luxury_asset_provenance';
         presetLabel = '💎 Luxury Goods & Authenticity (RFID, NFC & Physical Provenance)';
@@ -457,7 +424,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 35. Live Events & Ticketing
       case 'live_events_ticketing':
         tableName = 'concert_ticket_inventory';
         presetLabel = '🎟️ Live Events & Ticketing (Dynamic Pricing, Barcodes & Gates)';
@@ -467,7 +433,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 36. Civic Governance & Registry
       case 'gov_civic_registry':
         tableName = 'citizen_registry';
         presetLabel = '🏛️ Civic Governance & Citizen ID (Passports, Taxes & Registry)';
@@ -476,7 +441,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 37. GDPR & Data Privacy Audit
       case 'gdpr_privacy_audit':
         tableName = 'privacy_dsar_requests';
         presetLabel = '⚖️ GDPR & Data Privacy Governance (DSAR, Consent & Purge Logs)';
@@ -485,7 +449,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 38. SOX Compliance & Audit Logs
       case 'compliance_sox':
         tableName = 'financial_sox_audit_log';
         presetLabel = '📑 SOX Compliance & Audit Logs (Privileged Access & Changes)';
@@ -494,7 +457,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 39. Enterprise Procurement & RFP
       case 'procurement_rfp':
         tableName = 'procurement_bids';
         presetLabel = '📋 Enterprise Procurement & RFP (Vendor Quotations & Purchase Orders)';
@@ -503,7 +465,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 40. Facility & Asset Management
       case 'facility_management':
         tableName = 'building_hvac_workorders';
         presetLabel = '🏨 Facility & Asset Management (HVAC, Sensors & Maintenance)';
@@ -512,7 +473,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 41. Genomics & DNA Sequencing
       case 'genomics_sequencing':
         tableName = 'genomic_variants';
         presetLabel = '🧬 Genomics & DNA Sequencing (Variant Calling, Mutations & Reads)';
@@ -521,7 +481,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 42. Radiology PACS & Medical Imaging
       case 'radiology_dicom':
         tableName = 'pacs_radiology_studies';
         presetLabel = '🏥 Radiology PACS & Medical Imaging (DICOM Metadata & Scans)';
@@ -530,7 +489,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 43. Fitness & Wearables Health
       case 'fitness_wearables':
         tableName = 'biometric_wearable_metrics';
         presetLabel = '🏋️ Fitness & Wearables Health (HRV, Sleep Stages & SpO2)';
@@ -539,7 +497,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 44. Podcast AdTech & Dynamic Audio
       case 'podcast_ad_tech':
         tableName = 'podcast_audio_impressions';
         presetLabel = '🎙️ Podcast AdTech & Dynamic Audio (DAI, Mid-Rolls & Geo-Targeting)';
@@ -548,7 +505,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 45. Digital Publishing & CMS
       case 'digital_publishing':
         tableName = 'editorial_articles_cms';
         presetLabel = '📰 Digital Publishing & CMS (Articles, Paywalls & SEO)';
@@ -557,7 +513,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 46. Autonomous Vehicles & V2X
       case 'autonomous_vehicles':
         tableName = 'autonomous_vehicle_canbus';
         presetLabel = '🚗 Autonomous Vehicles & V2X (CAN Bus, LiDAR & Pathfinding)';
@@ -566,7 +521,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 47. Warehouse Robotics & AMR
       case 'warehouse_robotics':
         tableName = 'warehouse_amr_fleet';
         presetLabel = '📦 Warehouse Automation & AMR Robotics (Fleet, Pallets & Paths)';
@@ -575,7 +529,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 48. Maritime Shipping & AIS
       case 'maritime_shipping':
         tableName = 'vessel_ais_telemetry';
         presetLabel = '⚓ Maritime Shipping & AIS Logistics (Vessels, Containers & Ports)';
@@ -584,7 +537,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 49. Industrial Automation & SCADA
       case 'industrial_scada':
         tableName = 'factory_scada_telemetry';
         presetLabel = '🏭 Industrial Automation & SCADA (PLCs, Vibration & Motors)';
@@ -593,7 +545,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 50. Satellite Constellation & Orbit
       case 'satellite_constellation':
         tableName = 'orbital_satellite_telemetry';
         presetLabel = '📡 Satellite Constellation & Orbit (TLE, Solar Arrays & Downlink)';
@@ -602,7 +553,6 @@ export class MockGeneratorAnalyzer {
         ];
         break;
 
-      // 51. Carbon Accounting & ESG Audits
       case 'carbon_esg_tracking':
         tableName = 'carbon_esg_emissions';
         presetLabel = '🌿 Carbon Accounting & ESG Audits (Scope 1/2/3 & Offset Credits)';
@@ -706,7 +656,7 @@ ${JSON.stringify(sampleRecordsJson[1] || sampleRecordsJson[0])}
       benchmarkScript = `# Redis Benchmark Pipeline Test (${tableName})
 redis-benchmark -h 127.0.0.1 -p 6379 -a ProductionStrongKey!2026 -t set,get -n ${rowCount} -c 50 -P 16 -q`;
     } else {
-      // Default: PostgreSQL Native COPY / generate_series
+      
       const keys = Object.keys(sampleRecordsJson[0] || {});
       bulkScript = `-- PostgreSQL High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into "${tableName}")
 -- Method 1: Instant In-Engine Synthetic Generation via generate_series()

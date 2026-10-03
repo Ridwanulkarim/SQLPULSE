@@ -47,12 +47,12 @@ function getEngineMeta(engineId: string) {
 
 function normalizeFingerprint(query: string): string {
   let fp = query.trim();
-  // Replace string literals
+  
   fp = fp.replace(/'[^']*'/g, '?');
   fp = fp.replace(/"[^"]*"/g, '?');
-  // Replace numbers
+  
   fp = fp.replace(/\b\d+\b/g, '?');
-  // Collapse whitespace
+  
   fp = fp.replace(/\s+/g, ' ');
   return fp;
 }
@@ -61,7 +61,6 @@ function extractTableAndColumns(query: string): { table: string; columns: string
   let table = 'target_table';
   const columns: string[] = [];
 
-  // Match table from FROM or UPDATE or INTO or JOIN or db.<collection>
   const mongoMatch = query.match(/db\.([a-zA-Z0-9_]+)\./i);
   const sqlMatch = query.match(/(?:FROM|JOIN|UPDATE|INTO)\s+([a-zA-Z0-9_\.]+)/i);
 
@@ -71,7 +70,6 @@ function extractTableAndColumns(query: string): { table: string; columns: string
     table = sqlMatch[1].replace(/[`"']/g, '').split('.').pop() || 'target_table';
   }
 
-  // Match columns from WHERE clauses: WHERE col1 = ... AND col2 = ...
   const whereMatch = query.match(/WHERE\s+([\s\S]+?)(?:GROUP|ORDER|LIMIT|HAVING|;|$)/i);
   if (whereMatch && whereMatch[1]) {
     const wherePart = whereMatch[1];
@@ -84,7 +82,6 @@ function extractTableAndColumns(query: string): { table: string; columns: string
     }
   }
 
-  // Match ORDER BY columns
   const orderMatch = query.match(/ORDER\s+BY\s+([\s\S]+?)(?:LIMIT|;|$)/i);
   if (orderMatch && orderMatch[1]) {
     const orderCols = orderMatch[1].split(',').map(s => s.trim().split(/\s+/)[0].toLowerCase());
@@ -114,7 +111,7 @@ function generateIndexRemediation(engineId: string, table: string, columns: stri
   } else if (norm === 'clickhouse') {
     return `ALTER TABLE ${table} ADD INDEX idx_${table}_${colSlug} (${colList}) TYPE minmax GRANULARITY 4;`;
   } else {
-    // PostgreSQL / Relational default
+    
     return `CREATE INDEX CONCURRENTLY idx_${table}_${colSlug} ON ${table}(${colList});`;
   }
 }
@@ -126,7 +123,6 @@ export class LogInspector {
 
     const parsedEntries: { query: string; durationMs: number }[] = [];
 
-    // Parse lines or multiline query entries
     const lines = rawContent.split(/\r?\n/);
     let currentQuery = '';
     let currentDurationMs = 0;
@@ -135,9 +131,8 @@ export class LogInspector {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Check PostgreSQL log: LOG: duration: 852.410 ms statement: SELECT ...
       const pgMatch = line.match(/(?:duration:\s*([0-9.]+)\s*ms\s*(?:statement:\s*)?|statement:\s*)([\s\S]+)/i);
-      // Check MySQL slow log: # Query_time: 1.420100
+      
       const myTimeMatch = line.match(/#\s*Query_time:\s*([0-9.]+)/i);
 
       if (pgMatch) {
@@ -155,7 +150,6 @@ export class LogInspector {
       }
     }
 
-    // If no specific lines were matched, parse semicolon-separated statements or single block
     if (parsedEntries.length === 0 && rawContent.length > 0) {
       const stmts = rawContent.split(';').map(s => s.trim()).filter(s => s.length > 5);
       for (const stmt of stmts) {
@@ -166,7 +160,6 @@ export class LogInspector {
       }
     }
 
-    // If still empty (e.g. initial empty load), provide default engine-specific sample
     if (parsedEntries.length === 0) {
       parsedEntries.push(
         { query: `SELECT * FROM orders WHERE customer_id = 94812 AND status = 'completed' ORDER BY created_at DESC LIMIT 20;`, durationMs: 852.4 },
@@ -175,7 +168,6 @@ export class LogInspector {
       );
     }
 
-    // Group entries by fingerprint
     const groupMap = new Map<string, {
       sample: string;
       calls: number;
@@ -192,7 +184,7 @@ export class LogInspector {
         });
       }
       const g = groupMap.get(fp)!;
-      // Simulate realistic production query volume multiplier if small sample
+      
       const multiplier = entry.durationMs > 1000 ? 450 : 1200;
       g.calls += multiplier;
       for (let k = 0; k < 10; k++) {
@@ -233,7 +225,6 @@ export class LogInspector {
       });
     }
 
-    // Sort groups by total time descending
     groups.sort((a, b) => b.totalTimeMs - a.totalTimeMs);
 
     const totalParsed = groups.reduce((acc, g) => acc + g.totalCalls, 0);

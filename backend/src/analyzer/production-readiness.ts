@@ -11,7 +11,7 @@ export interface ReadinessCheckItem {
 
 export interface ProductionReadinessResult {
   engine: string;
-  overallScore: number; // 0 to 100
+  overallScore: number; 
   letterGrade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
   riskLevel: 'LOW' | 'MODERATE' | 'CRITICAL';
   passedChecksCount: number;

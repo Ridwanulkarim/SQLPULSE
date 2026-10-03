@@ -8,7 +8,6 @@ import apiRoutes from './routes/api.routes';
 
 const app = express();
 
-// Security and utility middlewares
 app.use(
   helmet({
     contentSecurityPolicy: false, // Allows inline scripts & fonts in Vite React bundle
@@ -18,7 +17,6 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 
-// API Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -27,10 +25,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routing
 app.use('/api/v1', apiRoutes);
 
-// Static frontend serving (Single-server unified mode)
 const candidateDistPaths = [
   path.resolve(__dirname, '../../frontend/dist'),
   path.resolve(__dirname, '../frontend/dist'),
@@ -44,7 +40,6 @@ if (frontendDist) {
   console.log(`📦 Serving React frontend from: ${frontendDist}`);
   app.use(express.static(frontendDist));
 
-  // SPA fallback for client-side routing
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
       return next();
@@ -53,7 +48,6 @@ if (frontendDist) {
   });
 }
 
-// Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled Server Error:', err);
   res.status(500).json({

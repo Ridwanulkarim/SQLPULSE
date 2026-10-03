@@ -29,7 +29,6 @@ export const ConnectHubTab: React.FC = () => {
   const [copiedUri, setCopiedUri] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
-  // Auto-adjust port default on engine change
   useEffect(() => {
     const norm = selectedEngine.toLowerCase();
     if (norm === 'mysql' || norm === 'mariadb') setPort(3306);
@@ -81,7 +80,7 @@ export const ConnectHubTab: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 text-white shadow-xl shadow-purple-950/20 border border-purple-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -102,7 +101,6 @@ export const ConnectHubTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Inputs Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-6">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -194,7 +192,7 @@ export const ConnectHubTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Generated URI Card */}
+          
           <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -228,7 +226,6 @@ export const ConnectHubTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Programming Languages Boilerplate Tabs */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-purple-50/80 border-b border-purple-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-purple-200 overflow-x-auto">
@@ -266,7 +263,6 @@ export const ConnectHubTab: React.FC = () => {
             </pre>
           </div>
 
-          {/* ORM Configurations */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-indigo-50/80 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">

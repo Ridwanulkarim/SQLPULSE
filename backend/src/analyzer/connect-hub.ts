@@ -102,7 +102,6 @@ export class ConnectHubGenerator {
 
     const port = req.port || defaultPort;
 
-    // Generate URI
     let connectionUri = '';
     let maskedUri = '';
     let jdbcUrl = '';
@@ -136,7 +135,6 @@ DATABASE_SSL="${ssl}"
 DATABASE_POOL_SIZE="${pool}"
 `;
 
-    // Code Snippets
     const codeSnippets: CodeSnippet[] = [
       {
         language: 'typescript',
@@ -165,7 +163,6 @@ DATABASE_POOL_SIZE="${pool}"
       },
     ];
 
-    // ORM Snippets
     const ormSnippets: OrmSnippet[] = [
       {
         orm: 'prisma',

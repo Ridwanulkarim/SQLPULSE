@@ -1,4 +1,3 @@
-// Auto-generated 440+ Database Catalog from DB-Engines Official Ranking Index
 import { DatabaseEngineMetadata } from "./index";
 
 export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [

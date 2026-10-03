@@ -47,7 +47,6 @@ export function App() {
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
-  // Sync theme with HTML root class and localStorage
   useEffect(() => {
     localStorage.setItem('sqlpulse_theme', currentTheme);
     if (currentTheme === 'theme-dark') {
@@ -66,12 +65,10 @@ export function App() {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  // Comparison State
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [baselineResult, setBaselineResult] = useState<PlanAnalysisResult | null>(null);
   const [optimizedResult, setOptimizedResult] = useState<PlanAnalysisResult | null>(null);
 
-  // Global Keyboard Shortcuts (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -192,7 +189,7 @@ export function App() {
 
   return (
     <div className={`min-h-screen flex flex-col relative ${currentTheme} font-sans`}>
-      {/* Ambient background glow orbs */}
+      
       {currentTheme === 'theme-lavender' && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
           <div className="absolute top-[-10%] left-[-5%] w-[45vw] h-[45vw] rounded-full bg-purple-200/40 blur-[100px]" />
@@ -213,7 +210,7 @@ export function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 relative z-10">
-        {/* Next-Elite Style Clean Minimalist Hero */}
+        
         <div className="text-center max-w-3xl mx-auto space-y-4 pt-2 pb-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 text-xs font-semibold text-zinc-800 dark:text-zinc-200 shadow-xs">
             <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
@@ -253,7 +250,7 @@ export function App() {
 
         {activeTab === 'plan' && (
           <>
-            {/* Input Section with Multi-Database Selector */}
+            
             <PlanInput
               onAnalyze={handleAnalyze}
               isLoading={isLoading}
@@ -262,7 +259,6 @@ export function App() {
               onSelectEngine={setSelectedEngine}
             />
 
-            {/* Plan Regression Comparison Trigger Bar */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm">
               <div className="flex items-center gap-2">
                 <GitCompare className="w-4 h-4 text-purple-600 shrink-0" />
@@ -284,16 +280,13 @@ export function App() {
               </button>
             </div>
 
-            {/* Analysis Dashboard */}
             {analysisResult && (
               <div className="space-y-8">
-                {/* 1. Metrics Score & Cards */}
+                
                 <MetricsOverview data={analysisResult} />
 
-                {/* 2. Visual Execution Tree Graph & Node Inspector */}
                 <VisualPlanGraph nodes={analysisResult.graph.nodes} />
 
-                {/* 3. Bottlenecks & 1-Click Fixes */}
                 <BottlenecksList
                   bottlenecks={analysisResult.bottlenecks}
                   recommendations={analysisResult.recommendations}
@@ -398,7 +391,6 @@ export function App() {
         {activeTab === 'vector_tuner' && <VectorRpmTab />}
       </main>
 
-      {/* Global Spotlight Search Modal (Cmd+K) */}
       <CommandPaletteModal
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
@@ -409,7 +401,6 @@ export function App() {
         }}
       />
 
-      {/* Comparison Modal */}
       <PlanComparisonModal
         isOpen={isCompareOpen}
         onClose={() => setIsCompareOpen(false)}
@@ -417,7 +408,6 @@ export function App() {
         optimizedPlan={optimizedResult}
       />
 
-      {/* Export Report Modal */}
       <ExportReportModal
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
@@ -425,7 +415,6 @@ export function App() {
         query={rawQuery}
       />
 
-      {/* Share Modal */}
       {shareUrl && (
         <ShareModal
           isOpen={isShareOpen}
@@ -434,7 +423,6 @@ export function App() {
         />
       )}
 
-      {/* Footer */}
       <footer className="border-t border-purple-200/50 py-6 text-center text-xs text-slate-500 relative z-10 font-sans">
         <p>
           SQLPulse — Universal Database Engineering Studio • {DATABASE_CATALOG.length} Engines Supported Across SQL, NoSQL, Vector AI, Graph, Time-Series &amp; In-Memory. Press <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-purple-200 shadow-xs">⌘K</kbd> to search anytime.

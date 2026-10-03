@@ -56,7 +56,7 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white shadow-xl shadow-blue-950/20 border border-blue-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -77,7 +77,6 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
         </div>
       </div>
 
-      {/* Controls Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -162,7 +161,7 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
 
       {result && (
         <div className="space-y-6">
-          {/* HA Metrics Summary */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-1">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
@@ -207,7 +206,6 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
             </div>
           </div>
 
-          {/* Interactive Node Cluster Grid */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm p-5 space-y-4">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
               <Server className="w-4 h-4 text-blue-600" />
@@ -279,9 +277,8 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
             </div>
           </div>
 
-          {/* Failover Simulation Timeline & HA Config */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Failover Timeline */}
+            
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-4">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-cyan-600" />
@@ -311,7 +308,6 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
               </div>
             </div>
 
-            {/* HA Configuration File */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
@@ -337,7 +333,6 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
             </div>
           </div>
 
-          {/* Expert Recommendations */}
           <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/60 border border-purple-200 space-y-2">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-purple-950 flex items-center gap-2">
               <Shield className="w-4 h-4 text-blue-600" />

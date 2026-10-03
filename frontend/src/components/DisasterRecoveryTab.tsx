@@ -77,7 +77,7 @@ export const DisasterRecoveryTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-teal-950 via-slate-900 to-purple-950 text-white shadow-xl shadow-teal-950/20 border border-teal-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -98,7 +98,6 @@ export const DisasterRecoveryTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Inputs Configuration Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-6">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -111,7 +110,7 @@ export const DisasterRecoveryTab: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 border-t border-purple-100">
-          {/* Database Size */}
+          
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span className="flex items-center gap-1.5">
@@ -130,7 +129,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             />
           </div>
 
-          {/* Daily Change Rate */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span>Daily Write / Change Rate</span>
@@ -146,7 +144,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             />
           </div>
 
-          {/* Storage IO Throughput */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span className="flex items-center gap-1.5">
@@ -166,7 +163,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             </select>
           </div>
 
-          {/* Network Bandwidth */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-800">
               <Cloud className="w-4 h-4 text-blue-600 inline mr-1" /> Cloud Network Ingress / Egress
@@ -183,7 +179,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             </select>
           </div>
 
-          {/* Backup Strategy */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-800">
               <Layers className="w-4 h-4 text-indigo-600 inline mr-1" /> Backup Architecture
@@ -200,7 +195,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             </select>
           </div>
 
-          {/* Cloud Storage Destination */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-800">
               Cloud Storage Destination
@@ -221,9 +215,9 @@ export const DisasterRecoveryTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Key Metric Scorecards */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* RPO Card */}
+            
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-teal-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Recovery Point (RPO)</span>
@@ -236,7 +230,6 @@ export const DisasterRecoveryTab: React.FC = () => {
               <p className="text-[11px] text-slate-500 pt-1 leading-tight">{result.rpo.explanation}</p>
             </div>
 
-            {/* RTO Card */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Recovery Time (RTO)</span>
@@ -251,7 +244,6 @@ export const DisasterRecoveryTab: React.FC = () => {
               </p>
             </div>
 
-            {/* Storage Footprint Card */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-indigo-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">30-Day Storage Retention</span>
@@ -268,7 +260,6 @@ export const DisasterRecoveryTab: React.FC = () => {
               </p>
             </div>
 
-            {/* Monthly Cloud Cost Card */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-emerald-200 shadow-sm space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Cloud Storage Cost</span>
@@ -286,7 +277,6 @@ export const DisasterRecoveryTab: React.FC = () => {
             </div>
           </div>
 
-          {/* RTO Stage Breakdown */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-4">
             <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <Clock className="w-4 h-4 text-purple-600" />
@@ -305,9 +295,8 @@ export const DisasterRecoveryTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Code Viewer & Automation Scripts */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
-            {/* Header Code Tabs */}
+            
             <div className="px-4 py-3 bg-purple-50/80 border-b border-purple-200 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-purple-200">
                 <button
@@ -366,7 +355,6 @@ export const DisasterRecoveryTab: React.FC = () => {
               </button>
             </div>
 
-            {/* Code Output */}
             <pre className="p-4 font-mono text-xs sm:text-sm bg-slate-950 text-teal-200 overflow-x-auto selection:bg-teal-600 selection:text-white max-h-[500px] overflow-y-auto">
               {getCurrentCode()}
             </pre>

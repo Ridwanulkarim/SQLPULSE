@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { X, Download, FileText, Check, Copy, Code, FileCode } from 'lucide-react';
 import { PlanAnalysisResult } from '../types';
 
-
 interface ExportReportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -104,7 +103,7 @@ ${r.suggestedSql ? `\`\`\`sql\n${r.suggestedSql}\n\`\`\`` : ''}
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white/95 rounded-2xl sm:rounded-3xl border border-purple-200/80 shadow-2xl max-w-2xl w-full p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[92vh] overflow-y-auto scrollbar-thin">
-        {/* Header */}
+        
         <div className="flex items-center justify-between border-b border-purple-200/70 pb-3 sm:pb-4 gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-purple-100 flex items-center justify-center text-purple-700 shadow-sm shrink-0">
@@ -128,9 +127,8 @@ ${r.suggestedSql ? `\`\`\`sql\n${r.suggestedSql}\n\`\`\`` : ''}
           </button>
         </div>
 
-        {/* Options Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Markdown Option */}
+          
           <div className="p-4 rounded-2xl border border-purple-200/80 bg-white space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -162,7 +160,6 @@ ${r.suggestedSql ? `\`\`\`sql\n${r.suggestedSql}\n\`\`\`` : ''}
             </div>
           </div>
 
-          {/* JSON Option */}
           <div className="p-4 rounded-2xl border border-indigo-200/80 bg-white space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -195,7 +192,6 @@ ${r.suggestedSql ? `\`\`\`sql\n${r.suggestedSql}\n\`\`\`` : ''}
           </div>
         </div>
 
-        {/* Preview snippet */}
         <div className="space-y-1.5">
           <span className="text-[10px] uppercase font-bold text-slate-500">Report Preview:</span>
           <pre className="bg-slate-950 text-slate-300 p-3 rounded-xl text-[11px] font-mono border border-slate-800 max-h-36 overflow-y-auto leading-relaxed">

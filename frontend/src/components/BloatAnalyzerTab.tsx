@@ -55,7 +55,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-amber-950 to-orange-950 text-white shadow-xl shadow-amber-950/20 border border-amber-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -76,7 +76,6 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
         </div>
       </div>
 
-      {/* Controls Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -171,7 +170,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
 
       {result && (
         <div className="space-y-6">
-          {/* Key Metric Cards */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-1">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
@@ -210,7 +209,6 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             </div>
           </div>
 
-          {/* Bloat Breakdown Table */}
           <div className="rounded-2xl bg-white border border-purple-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 bg-amber-50/70 border-b border-amber-100 flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-amber-700" />
@@ -254,9 +252,8 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             </div>
           </div>
 
-          {/* Scripts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Zero-Downtime Repack Script */}
+            
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
@@ -284,7 +281,6 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
               </div>
             </div>
 
-            {/* Background Autovacuum Tuning */}
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between">
@@ -313,7 +309,6 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             </div>
           </div>
 
-          {/* Diagnostic Inspection Query */}
           <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -336,7 +331,6 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             </pre>
           </div>
 
-          {/* Expert Recommendations */}
           <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 space-y-2">
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-purple-950 dark:text-purple-200 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />

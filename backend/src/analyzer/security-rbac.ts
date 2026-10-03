@@ -241,7 +241,7 @@ security:
   enableEncryption: true
   encryptionKeyFile: /var/lib/mongodb/master-key`;
     } else {
-      // Default: PostgreSQL Native Row-Level Security & RBAC
+      
       roles = [
         {
           name: 'app_service_rw',

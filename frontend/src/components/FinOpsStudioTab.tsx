@@ -83,7 +83,7 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Header Banner - Next-Elite Clean Style */}
+      
       <div className="p-4 sm:p-6 rounded-2xl bg-white border border-zinc-200 shadow-xs relative overflow-hidden">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -104,7 +104,6 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
         </div>
       </div>
 
-      {/* Inputs Form */}
       <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-4">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -254,10 +253,9 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
         </div>
       </div>
 
-      {/* Results Section */}
       {result && (
         <div className="space-y-6">
-          {/* Top Summary Cards */}
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 rounded-2xl bg-white/90 border border-emerald-200/80 shadow-sm backdrop-blur-md">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Estimated Monthly Cost</div>
@@ -301,7 +299,6 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
             </div>
           </div>
 
-          {/* Cost Breakdown Table */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
             <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-emerald-600" />
@@ -335,7 +332,6 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
             </div>
           </div>
 
-          {/* Savings Opportunities */}
           <div className="space-y-3">
             <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-emerald-600" />
@@ -377,7 +373,6 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
             </div>
           </div>
 
-          {/* Infrastructure as Code (Terraform) */}
           <div className="p-4 sm:p-6 rounded-2xl bg-white/90 border border-purple-200/80 shadow-sm backdrop-blur-md space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">

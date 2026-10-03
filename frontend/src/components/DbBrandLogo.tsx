@@ -13,7 +13,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
 }) => {
   const normalized = (engineId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // 1. PostgreSQL (Iconic Blue Elephant)
   if (normalized.includes('postgres') || normalized.includes('neon') || normalized.includes('timescale') && normalized.includes('pg')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -31,7 +30,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 2. MySQL (Iconic Dolphin Silhouette)
   if (normalized.includes('mysql') || normalized.includes('percona') || normalized.includes('mariadb')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -48,7 +46,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 3. Oracle Database (Official Red Pill Badge)
   if (normalized.includes('oracle')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -62,7 +59,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 4. Microsoft SQL Server (Azure / Microsoft DB Block)
   if (normalized.includes('sqlserver') || normalized.includes('mssql') || normalized.includes('microsoft')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -74,7 +70,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 5. MongoDB (Green Leaf Silhouette)
   if (normalized.includes('mongo')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -92,7 +87,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 6. Redis (Red Stacked In-Memory Cubes)
   if (normalized.includes('redis') || normalized.includes('keydb') || normalized.includes('valkey') || normalized.includes('dragonfly')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -114,7 +108,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 7. ClickHouse (Yellow-Orange Column Bars Histogram)
   if (normalized.includes('clickhouse')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -128,7 +121,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 8. DuckDB (Iconic Yellow Duck)
   if (normalized.includes('duckdb')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -141,7 +133,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 9. SQLite (Blue Feather & Cube)
   if (normalized.includes('sqlite') || normalized.includes('turso') || normalized.includes('libsql')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -158,7 +149,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 10. Snowflake (Cyan Ice Crystal)
   if (normalized.includes('snowflake')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -174,7 +164,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 11. Neo4j (Graph Connected Nodes)
   if (normalized.includes('neo4j') || normalized.includes('memgraph') || normalized.includes('graph')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -189,7 +178,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 12. Cassandra / ScyllaDB (Distributed Ring / Wide Column)
   if (normalized.includes('cassandra') || normalized.includes('scylla') || normalized.includes('hbase')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -203,7 +191,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 13. Elasticsearch / OpenSearch (Cluster Ring)
   if (normalized.includes('elastic') || normalized.includes('opensearch') || normalized.includes('solr')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -214,7 +201,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 14. Supabase (Green Lightning Polygon)
   if (normalized.includes('supabase')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -227,7 +213,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 15. DynamoDB (AWS Prism Hex)
   if (normalized.includes('dynamo') || normalized.includes('amazon') || normalized.includes('aurora') || normalized.includes('redshift')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -248,7 +233,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 16. CockroachDB (Green Shield)
   if (normalized.includes('cockroach')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -262,7 +246,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 17. Vector AI Databases (Weaviate, Pinecone, Milvus, Qdrant, Chroma)
   if (normalized.includes('vector') || normalized.includes('weaviate') || normalized.includes('pinecone') || normalized.includes('milvus') || normalized.includes('qdrant') || normalized.includes('chroma')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -274,7 +257,6 @@ export const DbBrandLogo: React.FC<DbBrandLogoProps> = ({
     );
   }
 
-  // 18. Fallback for all other engines: High-tech 2-letter monogram badge with category gradient
   const initials = engineId ? engineId.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() : 'DB';
   return (
     <div

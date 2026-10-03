@@ -45,7 +45,6 @@ export class QuerySynthesizer {
     const prompt = req.prompt.trim();
     const domain = req.domainPreset || 'ecommerce';
 
-    // Keyword & intent detection from prompt (bilingual English / Bengali support)
     const isBengali = /[\u0980-\u09FF]/.test(prompt);
     const lowerPrompt = prompt.toLowerCase();
 
@@ -69,7 +68,7 @@ export class QuerySynthesizer {
     } else if (meta.id === 'clickhouse') {
       return this.synthesizeClickHouse(prompt, meta, isTopN, isDateFilter);
     } else {
-      // Default: High performance Relational SQL (Postgres, MySQL, Oracle, SQL Server, SQLite, etc.)
+      
       return this.synthesizeRelational(prompt, meta, isTopN, isDateFilter, isSumOrCount, isInactiveOrNot);
     }
   }

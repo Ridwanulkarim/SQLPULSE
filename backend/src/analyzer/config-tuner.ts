@@ -79,17 +79,16 @@ export class ConfigAutoTuner {
     } else if (normalizedEngine === 'elasticsearch' || normalizedEngine === 'opensearch') {
       return this.tuneElasticsearch(req, meta, ram, cores, conns, storage, workload);
     } else {
-      // Universal Generator for any of the 447 engines
+      
       return this.tuneUniversal(req, meta, ram, cores, conns, storage, workload);
     }
   }
 
   private tunePostgres(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
-    // Calculations based on modern PostgreSQL sizing formulas
+    
     const sharedBuffersGb = +(ram * (workload === 'olap_dw' ? 0.35 : 0.25)).toFixed(2);
     const effectiveCacheGb = +(ram * 0.75).toFixed(2);
     
-    // Work mem per query backend
     let workMemMb = Math.floor(((ram * 1024) * 0.20) / (conns * (workload === 'olap_dw' ? 2 : 4)));
     if (workMemMb < 4) workMemMb = 4;
     if (workMemMb > 2048) workMemMb = 2048;

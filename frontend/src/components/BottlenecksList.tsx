@@ -25,7 +25,7 @@ export const BottlenecksList: React.FC<BottlenecksListProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Bottlenecks Found Section */}
+      
       <div className={`${cardClass} rounded-2xl p-5 shadow-lg`}>
         <h3 className={`text-sm font-bold flex items-center gap-2 mb-4 ${isLavender ? 'text-slate-900' : 'text-white'}`}>
           <AlertOctagon className="w-4 h-4 text-rose-500" />
@@ -84,7 +84,6 @@ export const BottlenecksList: React.FC<BottlenecksListProps> = ({
                   </div>
                 </div>
 
-                {/* Suggested Fix SQL */}
                 {item.suggestedSql && (
                   <div className={`mt-3 pt-3 border-t ${isLavender ? 'border-purple-200/60' : 'border-slate-800/80'}`}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -124,7 +123,6 @@ export const BottlenecksList: React.FC<BottlenecksListProps> = ({
         )}
       </div>
 
-      {/* Summary Recommendations */}
       <div className={`${cardClass} rounded-2xl p-5 shadow-lg`}>
         <h3 className={`text-sm font-bold flex items-center gap-2 mb-4 ${isLavender ? 'text-slate-900' : 'text-white'}`}>
           <Lightbulb className={`w-4 h-4 ${isLavender ? 'text-purple-600' : 'text-emerald-400'}`} />

@@ -6,8 +6,8 @@ export interface IndexDefinition {
   columns: string[];
   isUnique?: boolean;
   isPrimary?: boolean;
-  indexType?: string; // btree, gin, gist, hash, brin
-  predicate?: string; // WHERE condition for partial index
+  indexType?: string; 
+  predicate?: string; 
   sizeMb?: number;
   scansCount?: number;
 }
@@ -36,7 +36,7 @@ export interface IndexDoctorResult {
   engine: string;
   engineName: string;
   tableName: string;
-  healthScore: number; // 0-100
+  healthScore: number; 
   totalIndexesAnalyzed: number;
   redundanciesCount: number;
   totalEstimatedWasteMb: number;
@@ -75,7 +75,6 @@ export class IndexDoctorAnalyzer {
     const tableName = req.tableName || 'orders';
     const norm = req.engine.toLowerCase();
 
-    // If no indexes supplied, use realistic sample indexes with deliberate redundancies
     let indexes: IndexDefinition[] = req.indexes || [
       { name: 'orders_pkey', tableName, columns: ['id'], isPrimary: true, sizeMb: 280, scansCount: 1450000 },
       { name: 'idx_orders_customer_id', tableName, columns: ['customer_id'], sizeMb: 180, scansCount: 94000 },
@@ -86,7 +85,6 @@ export class IndexDoctorAnalyzer {
       { name: 'idx_orders_created_at_desc', tableName, columns: ['created_at'], sizeMb: 195, scansCount: 620000 }
     ];
 
-    // Parse raw DDL if supplied
     if (req.rawIndexDdl && req.rawIndexDdl.trim().length > 0) {
       const parsed: IndexDefinition[] = [];
       const lines = req.rawIndexDdl.split(';');
@@ -115,8 +113,6 @@ export class IndexDoctorAnalyzer {
     const findings: RedundantIndexFinding[] = [];
     let totalWasteMb = 0;
 
-    // Check 1: Prefix redundancy
-    // An index (A) is redundant if another index (A, B) exists on the same table
     for (let i = 0; i < indexes.length; i++) {
       const idxA = indexes[i];
       if (idxA.isPrimary || idxA.isUnique) continue;
@@ -126,7 +122,6 @@ export class IndexDoctorAnalyzer {
         const idxB = indexes[j];
         if (idxA.tableName !== idxB.tableName) continue;
 
-        // Check if idxA columns are an exact prefix subset of idxB
         const isPrefix = idxA.columns.length < idxB.columns.length &&
           idxA.columns.every((col, colIdx) => idxB.columns[colIdx] === col);
 
@@ -150,7 +145,6 @@ export class IndexDoctorAnalyzer {
           break;
         }
 
-        // Check for duplicate identical columns
         if (idxA.columns.length === idxB.columns.length &&
             idxA.columns.every((col, colIdx) => idxB.columns[colIdx] === col) &&
             i > j) {
@@ -175,7 +169,6 @@ export class IndexDoctorAnalyzer {
       }
     }
 
-    // Check 2: Low-cardinality leading column anti-pattern
     for (const idx of indexes) {
       if (idx.columns.length >= 2 && (idx.columns[0] === 'status' || idx.columns[0] === 'is_active' || idx.columns[0] === 'is_deleted')) {
         const waste = Math.round((idx.sizeMb || 150) * 0.4);

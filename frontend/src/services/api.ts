@@ -84,7 +84,6 @@ export const adviseQuery = async (
   return json.data;
 };
 
-// 1. SQL Transpiler
 export const transpileSql = async (
   sourceEngine: string,
   targetEngine: string,
@@ -104,7 +103,6 @@ export const transpileSql = async (
   return json.data;
 };
 
-// 2. Database Config Auto-Tuner
 export const tuneDatabaseConfig = async (params: {
   engine: string;
   ramGb: number;
@@ -127,7 +125,6 @@ export const tuneDatabaseConfig = async (params: {
   return json.data;
 };
 
-// 3. Deadlock Simulator
 export const simulateDeadlockScenario = async (params: {
   engine: string;
   scenarioId?: string;
@@ -148,7 +145,6 @@ export const simulateDeadlockScenario = async (params: {
   return json.data;
 };
 
-// 4. Disaster Recovery Calculator
 export const calculateDisasterRecovery = async (params: {
   engine: string;
   dbSizeGb: number;
@@ -172,7 +168,6 @@ export const calculateDisasterRecovery = async (params: {
   return json.data;
 };
 
-// 5. Query Synthesizer
 export const synthesizeQuery = async (params: {
   prompt: string;
   targetEngine: string;
@@ -193,7 +188,6 @@ export const synthesizeQuery = async (params: {
   return json.data;
 };
 
-// 6. Connect Hub & DSN Studio
 export const fetchConnectHubConfig = async (params: {
   engine: string;
   host?: string;
@@ -218,7 +212,6 @@ export const fetchConnectHubConfig = async (params: {
   return json.data;
 };
 
-// 7. Big Data Partitioning Architect
 export const planPartitionStrategy = async (params: {
   engine: string;
   tableName: string;
@@ -241,7 +234,6 @@ export const planPartitionStrategy = async (params: {
   return json.data;
 };
 
-// 8. Slow Query Log Inspector
 export const inspectSlowLogs = async (params: {
   engine: string;
   logContent?: string;
@@ -260,7 +252,6 @@ export const inspectSlowLogs = async (params: {
   return json.data;
 };
 
-// 9. Bloat & Vacuum Analyzer
 export const analyzeTableBloat = async (params: {
   engine: string;
   tableName?: string;
@@ -282,7 +273,6 @@ export const analyzeTableBloat = async (params: {
   return json.data;
 };
 
-// 10. Replication Topology Simulator
 export const simulateReplicationTopology = async (params: {
   engine: string;
   primaryRegion?: string;
@@ -305,7 +295,6 @@ export const simulateReplicationTopology = async (params: {
   return json.data;
 };
 
-// 11. Security RBAC & RLS Generator
 export const generateSecurityRbac = async (params: {
   engine: string;
   tableName?: string;
@@ -327,7 +316,6 @@ export const generateSecurityRbac = async (params: {
   return json.data;
 };
 
-// 12. Synthetic Mock Data Generator
 export const generateMockDataset = async (params: {
   engine: string;
   preset?: string;
@@ -348,7 +336,6 @@ export const generateMockDataset = async (params: {
   return json.data;
 };
 
-// 13. Cloud FinOps & Database Cost Architect
 export const calculateFinOps = async (params: {
   engine: string;
   cloudProvider?: string;
@@ -376,7 +363,6 @@ export const calculateFinOps = async (params: {
   return json.data;
 };
 
-// 14. Index Doctor & Redundant Index Auditor
 export const auditIndexDoctor = async (params: {
   engine: string;
   tableName?: string;
@@ -397,7 +383,6 @@ export const auditIndexDoctor = async (params: {
   return json.data;
 };
 
-// 15. Production-to-Staging PII Data Masking & Sanitizer
 export const sanitizePii = async (params: {
   engine: string;
   tableName?: string;
@@ -418,7 +403,6 @@ export const sanitizePii = async (params: {
   return json.data;
 };
 
-// 16. SQL AST Query Rewriter & Sargability Optimizer
 export const rewriteQuery = async (params: {
   engine: string;
   query: string;
@@ -438,7 +422,6 @@ export const rewriteQuery = async (params: {
   return json.data;
 };
 
-// 17. Schema Diff & Drift Detection Studio
 export const diffSchema = async (params: {
   engine: string;
   sourceEnv?: string;
@@ -458,7 +441,6 @@ export const diffSchema = async (params: {
   return json.data;
 };
 
-// 18. ORM Query & N+1 Latency Profiler
 export const profileOrm = async (params: {
   framework: string;
   rawQueryOrCode?: string;
@@ -476,7 +458,6 @@ export const profileOrm = async (params: {
   return json.data;
 };
 
-// 19. Production Readiness & Health Scorecard
 export const auditReadiness = async (params: {
   engine: string;
   environmentType?: string;
@@ -494,7 +475,6 @@ export const auditReadiness = async (params: {
   return json.data;
 };
 
-// 20. Chaos & Fault Injection Simulator
 export const simulateChaos = async (params: {
   engine: string;
   scenarioId?: string;
@@ -513,7 +493,6 @@ export const simulateChaos = async (params: {
   return json.data;
 };
 
-// 21. CDC & Transactional Outbox Architect
 export const generateCdcOutbox = async (params: {
   engine: string;
   sourceTable?: string;
@@ -531,7 +510,6 @@ export const generateCdcOutbox = async (params: {
   return json.data;
 };
 
-// 22. Vector Search & HNSW Index Tuner
 export const tuneVectorIndex = async (params: {
   engine: string;
   dimension?: number;

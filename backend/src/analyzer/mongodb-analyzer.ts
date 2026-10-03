@@ -28,7 +28,6 @@ export class MongoDBAnalyzer {
       const stageDocs = stage.docsExamined || 0;
       const stageReturned = stage.nReturned || 0;
 
-      // Rule 1: COLLSCAN (Collection Scan)
       if (stageName === 'COLLSCAN' && (totalDocsExamined > 500 || stageDocs > 500)) {
         const filterKeys = Object.keys(stage.filter || {});
         const fieldName = filterKeys[0] || 'field_name';
@@ -46,7 +45,6 @@ export class MongoDBAnalyzer {
         });
       }
 
-      // Rule 2: In-Memory SORT Stage (32MB Ram Limit Risk)
       if (stageName === 'SORT') {
         bottlenecks.push({
           id: `mongo_sort_${Math.random().toString(36).substring(2, 7)}`,

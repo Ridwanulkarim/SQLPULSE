@@ -12,7 +12,6 @@ export const pool = connectionString
     })
   : null;
 
-// In-memory fallback repository when running locally without active PostgreSQL connection
 const inMemoryStore = new Map<string, any>();
 
 export const reportRepository = {

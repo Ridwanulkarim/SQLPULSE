@@ -72,7 +72,7 @@ export class PartitionArchitect {
     } else if (norm === 'cassandra' || norm === 'scylladb') {
       return this.planCassandra(meta, table, col, strategy, rows, retention);
     } else {
-      // Default: PostgreSQL Declarative Partitioning
+      
       return this.planPostgres(meta, table, col, strategy, rows, retention);
     }
   }

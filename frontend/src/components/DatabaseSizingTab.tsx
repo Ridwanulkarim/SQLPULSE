@@ -10,7 +10,6 @@ export const DatabaseSizingTab: React.FC = () => {
 
   const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
 
-  // Auto-switch sizing model based on selected engine's category
   useEffect(() => {
     if (currentDb.category === 'vector' || currentDb.category === 'search') {
       setActiveSubTab('vector');
@@ -19,30 +18,25 @@ export const DatabaseSizingTab: React.FC = () => {
     }
   }, [selectedEngine]);
 
-  // Vector Calculator State
-  const [vectorCount, setVectorCount] = useState<number>(1000000); // 1M
-  const [dimension, setDimension] = useState<number>(1536); // OpenAI text-embedding-3-small
+  const [vectorCount, setVectorCount] = useState<number>(1000000); 
+  const [dimension, setDimension] = useState<number>(1536); 
   const [quantization, setQuantization] = useState<'fp32' | 'fp16' | 'sq8' | 'pq'>('fp16');
   const [hnswM, setHnswM] = useState<number>(16);
   const efConstruction = 128;
 
-  // Storage & IOPS Calculator State
-  const [dailyWrites, setDailyWrites] = useState<number>(5000000); // 5M rows/day
-  const [avgRowSizeBytes, setAvgRowSizeBytes] = useState<number>(450); // 450 bytes
-  const [retentionDays, setRetentionDays] = useState<number>(365); // 1 year
-  const [indexOverheadPercent, setIndexOverheadPercent] = useState<number>(40); // 40%
-  const peakTpsMultiplier = 3; // 3x peak
+  const [dailyWrites, setDailyWrites] = useState<number>(5000000); 
+  const [avgRowSizeBytes, setAvgRowSizeBytes] = useState<number>(450); 
+  const [retentionDays, setRetentionDays] = useState<number>(365); 
+  const [indexOverheadPercent, setIndexOverheadPercent] = useState<number>(40); 
+  const peakTpsMultiplier = 3; 
 
-  // Partitioning State
   const [partitionTable, setPartitionTable] = useState<string>('orders');
   const partitionKey = 'created_at';
 
-  // Connection Pooler State
-  const [dbCpuCores, setDbCpuCores] = useState<number>(16); // 16 cores
-  const [appReplicas, setAppReplicas] = useState<number>(25); // 25 pod instances
-  const [threadsPerApp, setThreadsPerApp] = useState<number>(20); // 20 threads/pod = 500 client conns
+  const [dbCpuCores, setDbCpuCores] = useState<number>(16); 
+  const [appReplicas, setAppReplicas] = useState<number>(25); 
+  const [threadsPerApp, setThreadsPerApp] = useState<number>(20); 
   const nvmeSpindles = 4;
-
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -50,9 +44,6 @@ export const DatabaseSizingTab: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // ================= CALCULATIONS =================
-
-  // 1. Vector Sizing Calculations
   const bytesPerFloat = quantization === 'fp32' ? 4 : quantization === 'fp16' ? 2 : quantization === 'sq8' ? 1 : 0.25;
   const rawVectorBytes = vectorCount * dimension * bytesPerFloat;
   const rawVectorGB = rawVectorBytes / (1024 * 1024 * 1024);
@@ -60,7 +51,7 @@ export const DatabaseSizingTab: React.FC = () => {
   const hnswGraphBytes = vectorCount * (hnswM * 8 * 1.5 + 32);
   const hnswGraphGB = hnswGraphBytes / (1024 * 1024 * 1024);
 
-  const totalVectorRamGB = (rawVectorGB + hnswGraphGB) * 1.25; // 25% query heap buffer
+  const totalVectorRamGB = (rawVectorGB + hnswGraphGB) * 1.25; 
   const estimatedQps = Math.round(15000 / (efConstruction / 64));
 
   let recommendedInstance = 'AWS r6i.large (2 vCPU, 16 GB RAM)';
@@ -69,7 +60,6 @@ export const DatabaseSizingTab: React.FC = () => {
   else if (totalVectorRamGB > 64) recommendedInstance = 'AWS r6i.2xlarge (8 vCPU, 64 GB RAM)';
   else if (totalVectorRamGB > 32) recommendedInstance = 'AWS r6i.xlarge (4 vCPU, 32 GB RAM)';
 
-  // 2. Storage & IOPS Calculations
   const compressionRatio = currentDb.category === 'olap' ? 0.35 : 1.0;
   const rawDataPerDayBytes = dailyWrites * avgRowSizeBytes * compressionRatio;
   const rawDataTotalBytes = rawDataPerDayBytes * retentionDays;
@@ -81,15 +71,12 @@ export const DatabaseSizingTab: React.FC = () => {
   const estimatedWriteIops = Math.round(peakWriteTps * (1 + (indexOverheadPercent / 100) * 2));
   const recommendedBufferPoolGB = Math.max(8, Math.round(rawDataTotalGB * (currentDb.category === 'keyvalue' ? 1.2 : 0.25)));
 
-  // 3. Connection Pooler Calculations
-  // Official Hardware Formula: connections = ((CPU_cores * 2) + effective_spindle_count)
   const optimalBackendConnections = dbCpuCores * 2 + nvmeSpindles;
   const totalAppConnectionsDemand = appReplicas * threadsPerApp;
   const contextSwitchOverhead = totalAppConnectionsDemand > 300 ? 'Severe (CPU Context Thrashing)' : 'Moderate';
-  const memoryPerUnpooledConnectionMB = 10; // ~10MB per backend backend process in Postgres
+  const memoryPerUnpooledConnectionMB = 10; 
   const unpooledMemoryWastedGB = ((totalAppConnectionsDemand * memoryPerUnpooledConnectionMB) / 1024).toFixed(1);
 
-  // 4. Config Generators
   const generatePgbouncerConfig = () => {
     return `# ===================================================================
 # PGBOUNCER PRODUCTION CONFIGURATION (for ${currentDb.name})
@@ -187,7 +174,7 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
 
   return (
     <div className="space-y-6">
-      {/* Sub-Tab Navigation Header */}
+      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
@@ -214,7 +201,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           </div>
         </div>
 
-        {/* 4 Model Sub-Tabs */}
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-purple-200/60 text-xs font-semibold w-full sm:w-fit overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveSubTab('vector')}
@@ -262,7 +248,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           </button>
         </div>
 
-        {/* 1. VECTOR SIZING VIEW */}
         {activeSubTab === 'vector' && (
           <div className="space-y-6 pt-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
@@ -400,7 +385,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           </div>
         )}
 
-        {/* 2. STORAGE & IOPS VIEW */}
         {activeSubTab === 'oltp' && (
           <div className="space-y-6 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -493,7 +477,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           </div>
         )}
 
-        {/* 3. CONNECTION POOLER VIEW (PgBouncer / ProxySQL Sizing) */}
         {activeSubTab === 'pooler' && (
           <div className="space-y-6 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -548,7 +531,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
               </div>
             </div>
 
-            {/* Sizing Comparison Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl border border-rose-300 bg-rose-50/70 space-y-1 shadow-sm">
                 <span className="text-[10px] uppercase font-bold text-rose-800">Direct Client Connections</span>
@@ -583,7 +565,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
               </div>
             </div>
 
-            {/* Config Output */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700">
@@ -614,7 +595,6 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           </div>
         )}
 
-        {/* 4. PARTITIONING VIEW */}
         {activeSubTab === 'partitioning' && (
           <div className="space-y-4 pt-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

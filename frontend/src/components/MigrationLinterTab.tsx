@@ -41,7 +41,6 @@ export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
     }
   };
 
-  // Auto-lint default script on mount or when engine changes
   useEffect(() => {
     handleLint();
   }, [selectedEngine]);
@@ -51,7 +50,6 @@ export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
-
 
   const scenarios = [
     {
@@ -129,7 +127,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
 
   return (
     <div className="space-y-6">
-      {/* Top Input Box */}
+      
       <div className="glass-card-light rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-200/60 pb-3">
           <div>
@@ -148,7 +146,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            {/* Universal 447 Database Engine Selector */}
+            
             <UniversalDbSelector
               selectedEngine={selectedEngine}
               onSelectEngine={(eng) => {
@@ -157,7 +155,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
               label="Dialect"
             />
 
-            {/* Permanent CI/CD Linter Button */}
             <button
               type="button"
               onClick={() => setShowCiCdModal(true)}
@@ -169,7 +166,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
           </div>
         </div>
 
-        {/* Real-World Outage Incident Scenarios */}
         <div className="space-y-1.5">
           <span className="text-[10px] uppercase font-bold tracking-wider text-purple-900/70 flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
@@ -236,10 +232,9 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
         </form>
       </div>
 
-      {/* Results Section */}
       {result && (
         <div className="space-y-6">
-          {/* Status Banner */}
+          
           <div
             className={`p-4 sm:p-5 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg ${
               result.isSafeForProduction
@@ -303,7 +298,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
             </div>
           </div>
 
-          {/* Production Runbook Modal/Drawer */}
           {showRunbook && (
             <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-3 border border-purple-300">
               <div className="flex items-center justify-between">
@@ -337,7 +331,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
             </div>
           )}
 
-          {/* Detailed Findings */}
           <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Lock className="w-4 h-4 text-amber-600" />
@@ -364,7 +357,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
                   </span>
                 </div>
 
-                {/* Unsafe Statement */}
                 <div>
                   <span className="text-[10px] uppercase font-bold text-rose-700 block mb-1">
                     Unsafe Statement:
@@ -374,7 +366,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
                   </pre>
                 </div>
 
-                {/* Safe Fix */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] uppercase font-bold text-emerald-700">
@@ -408,7 +399,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
         </div>
       )}
 
-      {/* Zero-Downtime Knowledge Hub & Lock Risk Matrix */}
       <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-4">
         <div
           className="flex items-center justify-between cursor-pointer"
@@ -427,7 +417,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
 
         {showLockMatrix && (
           <div className="space-y-4 pt-2 border-t border-purple-200/50">
-            {/* Table Lock Hierarchy Table */}
+            
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
@@ -482,7 +472,6 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
         )}
       </div>
 
-      {/* CI/CD Generator Modal */}
       <CiCdLinterModal
         isOpen={showCiCdModal}
         onClose={() => setShowCiCdModal(false)}
@@ -491,4 +480,3 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
     </div>
   );
 };
-

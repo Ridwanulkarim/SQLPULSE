@@ -48,7 +48,7 @@ export const ProductionReadinessTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
+      
       <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-teal-950 via-slate-900 to-indigo-950 text-white shadow-xl shadow-teal-950/20 border border-teal-500/30 backdrop-blur-xl relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -69,7 +69,6 @@ export const ProductionReadinessTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Control Strip */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white/80 border border-teal-200/70 shadow-sm backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 flex-1 min-w-[280px]">
           <div className="w-64">
@@ -112,7 +111,7 @@ export const ProductionReadinessTab: React.FC = () => {
 
       {result && (
         <div className="space-y-6">
-          {/* Executive Readiness Scorecard Banner */}
+          
           <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 to-slate-950 text-white border border-teal-500/40 shadow-xl flex flex-wrap items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex flex-col items-center justify-center font-black text-2xl sm:text-3xl border-2 ${
@@ -159,7 +158,6 @@ export const ProductionReadinessTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Audit Checks Checklist */}
           <div className="rounded-2xl bg-white border border-teal-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-teal-50/70 border-b border-teal-200 flex items-center justify-between">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-teal-950 flex items-center gap-1.5">
@@ -212,7 +210,6 @@ export const ProductionReadinessTab: React.FC = () => {
             </div>
           </div>
 
-          {/* 1-Click Hardening Remediation Bash Script */}
           <div className="rounded-2xl bg-white border border-teal-200/80 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
