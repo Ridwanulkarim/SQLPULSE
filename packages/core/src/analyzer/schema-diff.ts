@@ -1,4 +1,4 @@
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineMetadata } from '../types/db-catalog.data';
 
 export interface SchemaDiffChange {
   id: string;
@@ -15,6 +15,7 @@ export interface SchemaDiffChange {
 
 export interface SchemaDiffResult {
   engine: string;
+  engineName: string;
   sourceEnvironment: string;
   targetEnvironment: string;
   totalDriftCount: number;
@@ -34,9 +35,131 @@ export function analyzeSchemaDiff(options: {
   sourceDdl?: string;
   targetDdl?: string;
 }): SchemaDiffResult {
-  const engine = (options.engine || 'postgresql').toLowerCase();
+  const meta = getEngineMetadata(options.engine);
+  const engine = (meta.id || 'postgresql').toLowerCase();
   const sourceEnv = options.sourceEnv || 'Git / Staging (Source)';
   const targetEnv = options.targetEnv || 'Live Production (Target)';
+
+  const isMySQL = engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona';
+  const isOracle = engine === 'oracle';
+  const isMSSQL = engine.includes('mssql') || engine.includes('sql_server') || engine.includes('microsoft_sql_server') || engine.includes('sqlserver');
+  const isSQLite = engine === 'sqlite' || engine === 'turso';
+
+  // 1. Column Added DDL
+  const columnForwardDdl = isMySQL
+    ? 'ALTER TABLE users ADD COLUMN two_factor_secret VARCHAR(128) NULL, ALGORITHM=INPLACE, LOCK=NONE;'
+    : isOracle
+    ? 'ALTER TABLE users ADD (two_factor_secret VARCHAR2(128) NULL);'
+    : isMSSQL
+    ? "IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'two_factor_secret') ALTER TABLE users ADD two_factor_secret NVARCHAR(128) NULL;"
+    : isSQLite
+    ? 'ALTER TABLE users ADD COLUMN two_factor_secret TEXT NULL;'
+    : 'ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(128) NULL;';
+
+  const columnRollbackDdl = isMySQL
+    ? 'ALTER TABLE users DROP COLUMN two_factor_secret, ALGORITHM=INPLACE, LOCK=NONE;'
+    : isOracle
+    ? 'ALTER TABLE users DROP COLUMN two_factor_secret;'
+    : isMSSQL
+    ? 'ALTER TABLE users DROP COLUMN two_factor_secret;'
+    : isSQLite
+    ? '-- SQLite requires table rebuild to drop columns in legacy versions'
+    : 'ALTER TABLE users DROP COLUMN IF EXISTS two_factor_secret;';
+
+  // 2. Index Missing DDL
+  const indexForwardDdl = isMySQL
+    ? 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) ALGORITHM=INPLACE, LOCK=NONE;'
+    : isOracle
+    ? 'CREATE INDEX idx_orders_cust_stat ON orders (customer_id, status, created_at DESC) ONLINE;'
+    : isMSSQL
+    ? 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) WITH (ONLINE = ON);'
+    : isSQLite
+    ? 'CREATE INDEX IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);'
+    : 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);';
+
+  const indexRollbackDdl = isMySQL
+    ? 'DROP INDEX idx_orders_customer_status_created ON orders;'
+    : isOracle
+    ? 'DROP INDEX idx_orders_cust_stat ONLINE;'
+    : isMSSQL
+    ? 'DROP INDEX idx_orders_customer_status_created ON orders;'
+    : isSQLite
+    ? 'DROP INDEX IF EXISTS idx_orders_customer_status_created;'
+    : 'DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_status_created;';
+
+  // 3. Table Added DDL
+  const tableForwardDdl = isMySQL
+    ? `CREATE TABLE IF NOT EXISTS audit_event_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    payload JSON,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC) ALGORITHM=INPLACE, LOCK=NONE;`
+    : isOracle
+    ? `CREATE TABLE audit_event_logs (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id NUMBER NOT NULL,
+    action VARCHAR2(64) NOT NULL,
+    payload CLOB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC) ONLINE;`
+    : isMSSQL
+    ? `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='audit_event_logs' AND xtype='U')
+CREATE TABLE audit_event_logs (
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    action NVARCHAR(64) NOT NULL,
+    payload NVARCHAR(MAX),
+    created_at DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+);
+CREATE INDEX idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC) WITH (ONLINE = ON);`
+    : isSQLite
+    ? `CREATE TABLE IF NOT EXISTS audit_event_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    payload TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC);`
+    : `CREATE TABLE IF NOT EXISTS audit_event_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC);`;
+
+  // 4. Constraint Changed DDL
+  const constraintForwardDdl = isMySQL
+    ? `ALTER TABLE orders DROP FOREIGN KEY fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT;`
+    : isOracle
+    ? `ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT ENABLE NOVALIDATE;`
+    : isMSSQL
+    ? `ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;
+ALTER TABLE orders WITH NOCHECK ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE NO ACTION;`
+    : `-- PostgreSQL zero-downtime foreign key validation
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT NOT VALID;
+ALTER TABLE orders VALIDATE CONSTRAINT fk_orders_customer_id;`;
+
+  const constraintRollbackDdl = isMySQL
+    ? `ALTER TABLE orders DROP FOREIGN KEY fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;`
+    : isOracle
+    ? `ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;`
+    : isMSSQL
+    ? `ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;`
+    : `ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;
+ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;`;
 
   const changes: SchemaDiffChange[] = [
     {
@@ -47,12 +170,8 @@ export function analyzeSchemaDiff(options: {
       sourceDef: 'two_factor_secret VARCHAR(128) NULL',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: engine === 'mysql'
-        ? 'ALTER TABLE users ADD COLUMN two_factor_secret VARCHAR(128) NULL, ALGORITHM=INPLACE, LOCK=NONE;'
-        : 'ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(128) NULL;',
-      rollbackDdl: engine === 'mysql'
-        ? 'ALTER TABLE users DROP COLUMN two_factor_secret, ALGORITHM=INPLACE, LOCK=NONE;'
-        : 'ALTER TABLE users DROP COLUMN IF EXISTS two_factor_secret;',
+      safeForwardDdl: columnForwardDdl,
+      rollbackDdl: columnRollbackDdl,
       description: 'New 2FA secret column present in development schema but missing in production.',
     },
     {
@@ -63,14 +182,8 @@ export function analyzeSchemaDiff(options: {
       sourceDef: 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC)',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: engine === 'mysql'
-        ? 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) ALGORITHM=INPLACE, LOCK=NONE;'
-        : engine === 'oracle'
-        ? 'CREATE INDEX idx_orders_cust_stat ON orders (customer_id, status, created_at DESC) ONLINE;'
-        : 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);',
-      rollbackDdl: engine === 'mysql'
-        ? 'DROP INDEX idx_orders_customer_status_created ON orders;'
-        : 'DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_status_created;',
+      safeForwardDdl: indexForwardDdl,
+      rollbackDdl: indexRollbackDdl,
       description: 'Critical composite B-Tree index missing in production, causing full table scans on customer dashboard queries.',
     },
     {
@@ -81,12 +194,25 @@ export function analyzeSchemaDiff(options: {
       sourceDef: 'amount NUMERIC(14, 4) NOT NULL',
       targetDef: 'amount NUMERIC(10, 2) NOT NULL',
       impactLevel: 'BREAKING',
-      safeForwardDdl: `-- STEP 1: Add new shadow column to avoid exclusive table lock
+      safeForwardDdl: isMySQL
+        ? `-- STEP 1: Add new shadow column (ALGORITHM=INPLACE)
+ALTER TABLE payments ADD COLUMN amount_v2 DECIMAL(14, 4) NULL;
+-- STEP 2: Backfill asynchronously in batches of 5000 rows
+UPDATE payments SET amount_v2 = amount WHERE amount_v2 IS NULL LIMIT 5000;
+-- STEP 3: Rename during scheduled maintenance`
+        : isOracle
+        ? `-- STEP 1: Add shadow column
+ALTER TABLE payments ADD (amount_v2 NUMBER(14, 4));
+-- STEP 2: Backfill data in chunks
+UPDATE payments SET amount_v2 = amount WHERE amount_v2 IS NULL;`
+        : `-- STEP 1: Add new shadow column to avoid exclusive table lock
 ALTER TABLE payments ADD COLUMN amount_v2 NUMERIC(14, 4);
 -- STEP 2: Backfill data asynchronously in chunks
 UPDATE payments SET amount_v2 = amount WHERE amount_v2 IS NULL;
 -- STEP 3: Switch column pointers during off-peak maintenance window`,
-      rollbackDdl: 'ALTER TABLE payments DROP COLUMN IF EXISTS amount_v2;',
+      rollbackDdl: isMySQL
+        ? 'ALTER TABLE payments DROP COLUMN amount_v2, ALGORITHM=INPLACE;'
+        : 'ALTER TABLE payments DROP COLUMN IF EXISTS amount_v2;',
       description: 'High risk: Expanding column precision directly requires a table rewrite or table lock. Shadow column pattern recommended.',
     },
     {
@@ -94,18 +220,13 @@ UPDATE payments SET amount_v2 = amount WHERE amount_v2 IS NULL;
       type: 'TABLE_ADDED',
       tableName: 'audit_event_logs',
       targetObject: 'TABLE audit_event_logs',
-      sourceDef: 'CREATE TABLE audit_event_logs (id BIGSERIAL PRIMARY KEY, user_id BIGINT, action VARCHAR(64), payload JSONB, created_at TIMESTAMPTZ DEFAULT NOW())',
+      sourceDef: 'CREATE TABLE audit_event_logs (...)',
       targetDef: '<Table Not Found in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: `CREATE TABLE IF NOT EXISTS audit_event_logs (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    action VARCHAR(64) NOT NULL,
-    payload JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC);`,
-      rollbackDdl: 'DROP TABLE IF EXISTS audit_event_logs CASCADE;',
+      safeForwardDdl: tableForwardDdl,
+      rollbackDdl: isMySQL
+        ? 'DROP TABLE IF EXISTS audit_event_logs;'
+        : 'DROP TABLE IF EXISTS audit_event_logs CASCADE;',
       description: 'New audit event logging table added in migration branch.',
     },
     {
@@ -116,12 +237,8 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_logs_user_created ON audit_eve
       sourceDef: 'FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT',
       targetDef: 'FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE',
       impactLevel: 'WARNING',
-      safeForwardDdl: `-- PostgreSQL zero-downtime foreign key validation
-ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;
-ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT NOT VALID;
-ALTER TABLE orders VALIDATE CONSTRAINT fk_orders_customer_id;`,
-      rollbackDdl: `ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;
-ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;`,
+      safeForwardDdl: constraintForwardDdl,
+      rollbackDdl: constraintRollbackDdl,
       description: 'Foreign key cascade rule modified to restrict mode. Use NOT VALID + VALIDATE to avoid table lock.',
     }
   ];
@@ -133,7 +250,7 @@ ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id
   const forwardMigrationScript = `-- ==========================================================
 -- SQLPulse Automated Zero-Downtime Forward Migration Script
 -- Source: ${sourceEnv} ➔ Target: ${targetEnv}
--- Database Engine: ${engine.toUpperCase()}
+-- Database Engine: ${meta.name} (${engine.toUpperCase()})
 -- Generated at: ${new Date().toISOString()}
 -- ==========================================================
 
@@ -156,7 +273,7 @@ ${changes.find(c => c.type === 'CONSTRAINT_CHANGED')?.safeForwardDdl || '-- No c
 
   const rollbackMigrationScript = `-- ==========================================================
 -- SQLPulse Reversible Rollback Script
--- Target Engine: ${engine.toUpperCase()}
+-- Target Engine: ${meta.name} (${engine.toUpperCase()})
 -- ==========================================================
 
 BEGIN;
@@ -177,14 +294,19 @@ ${changes.find(c => c.type === 'INDEX_MISSING')?.rollbackDdl || ''}
 `;
 
   const preflightChecks = [
-    `Verify replica replication lag is < 500ms before running ALTER TABLE.`,
-    `Ensure active lock_timeout is set to '3s' to prevent cascade queuing of application transactions.`,
+    `Verify replica replication lag is < 500ms before running ALTER TABLE on ${meta.name}.`,
+    isPostgresEngine(engine)
+      ? `Ensure active lock_timeout is set to '3s' to prevent cascade queuing of application transactions.`
+      : isMySQL
+      ? `Verify innodb_online_alter_log_max_size is large enough for active DML workloads.`
+      : `Ensure transaction log space is sufficient to prevent rollback exhaustion.`,
     `Check free disk space: Table rewrites require at least 2.5x the table's total physical size.`,
     `Execute during lowest QPS maintenance window or blue/green staging environment.`
   ];
 
   return {
     engine,
+    engineName: meta.name,
     sourceEnvironment: sourceEnv,
     targetEnvironment: targetEnv,
     totalDriftCount: changes.length,
@@ -196,4 +318,17 @@ ${changes.find(c => c.type === 'INDEX_MISSING')?.rollbackDdl || ''}
     rollbackMigrationScript,
     preflightChecks,
   };
+}
+
+function isPostgresEngine(engine: string): boolean {
+  return [
+    'postgres',
+    'postgresql',
+    'cockroachdb',
+    'timescaledb',
+    'yugabytedb',
+    'amazon_aurora',
+    'supabase',
+    'neon',
+  ].includes(engine.toLowerCase());
 }

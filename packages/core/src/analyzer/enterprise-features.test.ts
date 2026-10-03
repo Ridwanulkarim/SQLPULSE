@@ -14,6 +14,7 @@ import { FinOpsCalculatorAnalyzer } from './finops-calculator';
 import { IndexDoctorAnalyzer } from './index-doctor';
 import { PiiSanitizerAnalyzer } from './pii-sanitizer';
 import { QueryRewriterAnalyzer } from './query-rewriter';
+import { analyzeSchemaDiff } from './schema-diff';
 
 describe('Enterprise Multi-Engine Database Features Test Suite', () => {
   const transpiler = new SqlTranspiler();
@@ -251,5 +252,21 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(res.optimizedQuery).toContain('EXISTS');
     expect(res.optimizationsApplied.length).toBeGreaterThanOrEqual(2);
     expect(res.zeroDowntimeIndexDdl).toContain('CONCURRENTLY');
+  });
+
+  test('17. analyzeSchemaDiff generates dialect-specific zero-downtime forward and rollback DDL', () => {
+    const pgDiff = analyzeSchemaDiff({ engine: 'postgresql' });
+    expect(pgDiff.totalDriftCount).toBe(5);
+    expect(pgDiff.forwardMigrationScript).toContain('CONCURRENTLY');
+    expect(pgDiff.breakingChangesCount).toBeGreaterThan(0);
+
+    const mysqlDiff = analyzeSchemaDiff({ engine: 'mysql' });
+    expect(mysqlDiff.forwardMigrationScript).toContain('ALGORITHM=INPLACE, LOCK=NONE');
+
+    const oracleDiff = analyzeSchemaDiff({ engine: 'oracle' });
+    expect(oracleDiff.forwardMigrationScript).toContain('ONLINE');
+
+    const mssqlDiff = analyzeSchemaDiff({ engine: 'microsoft_sql_server' });
+    expect(mssqlDiff.forwardMigrationScript).toContain('WITH (ONLINE = ON)');
   });
 });
