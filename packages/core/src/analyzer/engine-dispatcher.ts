@@ -3,7 +3,7 @@ import {
   PlanAnalysisResult,
   MigrationAnalysisResult,
 } from '../types/plan.types';
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
 import { PlanAnalyzer as PostgresPlanAnalyzer } from './plan-analyzer';
 import { MigrationLinter as PostgresMigrationLinter } from './migration-linter';
 import { MySQLAnalyzer } from './mysql-analyzer';
@@ -21,7 +21,7 @@ export class MultiEngineDispatcher {
   private queryAdvisor = new QueryAdvisor();
 
   public analyzePlan(engine: DatabaseEngine, plan: any): PlanAnalysisResult {
-    const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
+    const metadata = getEngineMetadata(engine);
     let result: PlanAnalysisResult;
 
     const nativePostgresEngines = [
@@ -31,9 +31,13 @@ export class MultiEngineDispatcher {
       'timescale',
       'timescaledb',
       'yugabyte',
+      'yugabytedb',
+      'amazon_aurora',
+      'aurora_postgres',
+      'aurora',
+      'postgres_xl',
       'supabase',
       'neon',
-      'aurora_postgres',
     ];
 
     let isFallback = false;
@@ -72,17 +76,17 @@ export class MultiEngineDispatcher {
     if (isFallback) {
       const adaptSqlForDialect = (sql?: string): string | undefined => {
         if (!sql) return sql;
-        const e = engine.toLowerCase();
+        const e = (engine || '').toLowerCase();
         if (e.includes('oracle')) {
-          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ONLINE;');
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY(?:\s+IF\s+NOT\s+EXISTS)?\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ONLINE;');
         }
-        if (e.includes('mssql') || e.includes('sql_server') || e.includes('sqlserver')) {
-          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) WITH (ONLINE = ON);');
+        if (e.includes('mssql') || e.includes('sql_server') || e.includes('sqlserver') || e.includes('microsoft_sql_server')) {
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY(?:\s+IF\s+NOT\s+EXISTS)?\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) WITH (ONLINE = ON);');
         }
         if (e.includes('mysql') || e.includes('mariadb')) {
-          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ALGORITHM=INPLACE, LOCK=NONE;');
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY(?:\s+IF\s+NOT\s+EXISTS)?\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ALGORITHM=INPLACE, LOCK=NONE;');
         }
-        return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY/gi, 'CREATE INDEX /* verify dialect syntax */');
+        return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY(?:\s+IF\s+NOT\s+EXISTS)?/gi, 'CREATE INDEX /* verify dialect syntax */');
       };
 
       const adaptedBottlenecks = result.bottlenecks.map((b) => ({

@@ -125,9 +125,9 @@ export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [
   {
     "id": "elasticsearch",
     "name": "Elasticsearch",
-    "category": "relational",
-    "categoryLabel": "Relational (SQL)",
-    "icon": "🏛️",
+    "category": "search",
+    "categoryLabel": "Search Engines",
+    "icon": "🔍",
     "rank": 10,
     "popularityScore": 94.11,
     "commandHint": "GET /<index>/_search?explain=true",
@@ -191,12 +191,12 @@ export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [
   {
     "id": "amazon_dynamodb",
     "name": "Amazon DynamoDB",
-    "category": "relational",
-    "categoryLabel": "Relational (SQL)",
-    "icon": "🏛️",
+    "category": "document",
+    "categoryLabel": "Document NoSQL",
+    "icon": "🍃",
     "rank": 15,
     "popularityScore": 53.41,
-    "commandHint": "EXPLAIN <QUERY> /* Amazon DynamoDB */",
+    "commandHint": "aws dynamodb execute-statement --statement \"<QUERY>\" --return-consumed-capacity TOTAL",
     "description": "#15 Ranked on DB-Engines. Popularity score: 53.41."
   },
   {
@@ -4919,3 +4919,49 @@ export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [
     "description": "Kafka-compatible streaming data platform in C++."
   }
 ];
+
+export function getEngineMetadata(engine: string = 'postgres'): DatabaseEngineMetadata {
+  const norm = (engine || '').toLowerCase().trim();
+  const found = DATABASE_CATALOG.find((d) => d.id === norm || d.id === engine);
+  if (found) return found;
+
+  // Well-known Aliases
+  if (norm === 'postgres' || norm === 'postgresql') {
+    return DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+  }
+  if (norm === 'aurora' || norm === 'aurora_postgres' || norm === 'amazon_aurora') {
+    return DATABASE_CATALOG.find((d) => d.id === 'amazon_aurora') || DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+  }
+  if (norm === 'timescale' || norm === 'timescaledb') {
+    return DATABASE_CATALOG.find((d) => d.id === 'timescaledb') || DATABASE_CATALOG[0];
+  }
+  if (norm === 'yugabyte' || norm === 'yugabytedb') {
+    return DATABASE_CATALOG.find((d) => d.id === 'yugabytedb') || DATABASE_CATALOG[0];
+  }
+  if (norm === 'mssql' || norm === 'sqlserver' || norm === 'sql_server') {
+    return DATABASE_CATALOG.find((d) => d.id === 'microsoft_sql_server') || DATABASE_CATALOG[0];
+  }
+  if (norm === 'dynamodb' || norm === 'amazon_dynamodb') {
+    return DATABASE_CATALOG.find((d) => d.id === 'amazon_dynamodb') || DATABASE_CATALOG[0];
+  }
+
+  // Dynamic fallback for custom/unknown engines (Do NOT default to Oracle)
+  const formattedName = engine
+    ? engine
+        .split(/[_-]/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ') + ' (Custom)'
+    : 'Unknown Engine';
+
+  return {
+    id: (engine || 'unknown') as any,
+    name: formattedName,
+    category: 'relational',
+    categoryLabel: 'Relational (SQL)',
+    icon: '🗄️',
+    commandHint: 'EXPLAIN <QUERY>',
+    description: `Custom or uncataloged database engine (${engine}).`,
+    rank: 999,
+    popularityScore: 0,
+  };
+}

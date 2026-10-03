@@ -1,10 +1,10 @@
 import { MigrationAnalysisResult, MigrationSafetyCheck, DatabaseEngine } from '../types/plan.types';
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineMetadata } from '../types/db-catalog.data';
 
 export class MigrationLinter {
   
   public lint(sqlScript: string, engine: DatabaseEngine = 'postgres'): MigrationAnalysisResult {
-    const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
+    const metadata = getEngineMetadata(engine);
     const category = metadata.category || 'relational';
     const statements = this.splitStatements(sqlScript);
     const findings: MigrationSafetyCheck[] = [];

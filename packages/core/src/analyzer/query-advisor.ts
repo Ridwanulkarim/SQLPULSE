@@ -1,5 +1,5 @@
 import { DatabaseEngine } from '../types/plan.types';
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineMetadata } from '../types/db-catalog.data';
 
 export interface QueryAntiPatternFinding {
   id: string;
@@ -32,7 +32,7 @@ export interface QueryAdvisorResult {
 export class QueryAdvisor {
   public analyze(query: string, engine: DatabaseEngine = 'postgres'): QueryAdvisorResult {
     const cleanQuery = query.trim();
-    const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
+    const metadata = getEngineMetadata(engine);
     const category = metadata.category || 'relational';
     const findings: QueryAntiPatternFinding[] = [];
 
