@@ -14,7 +14,11 @@
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@sqlpulse/core": ["../packages/core/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../packages/core/src"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "../packages/core/src/**/*.test.ts"]
 }
