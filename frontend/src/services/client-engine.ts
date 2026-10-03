@@ -1,28 +1,31 @@
-import { SAMPLES_BY_ENGINE } from '../samples/sample-data';
-import { MultiEngineDispatcher } from '../analyzer/engine-dispatcher';
-import { SqlTranspiler } from '../analyzer/transpiler';
-import { ConfigAutoTuner } from '../analyzer/config-tuner';
-import { DeadlockSimulator } from '../analyzer/deadlock-simulator';
-import { DisasterRecoveryCalculator } from '../analyzer/disaster-recovery';
-import { QuerySynthesizer } from '../analyzer/query-synthesizer';
-import { ConnectHubGenerator } from '../analyzer/connect-hub';
-import { PartitionArchitect } from '../analyzer/partition-architect';
-import { LogInspector } from '../analyzer/log-inspector';
-import { BloatAnalyzer } from '../analyzer/bloat-analyzer';
-import { ReplicationTopologyAnalyzer } from '../analyzer/replication-topology';
-import { SecurityRbacAnalyzer } from '../analyzer/security-rbac';
-import { MockGeneratorAnalyzer } from '../analyzer/mock-generator';
-import { FinOpsCalculatorAnalyzer } from '../analyzer/finops-calculator';
-import { IndexDoctorAnalyzer } from '../analyzer/index-doctor';
-import { PiiSanitizerAnalyzer } from '../analyzer/pii-sanitizer';
-import { QueryRewriterAnalyzer } from '../analyzer/query-rewriter';
-import { analyzeSchemaDiff } from '../analyzer/schema-diff';
-import { profileOrmQuery } from '../analyzer/orm-profiler';
-import { auditProductionReadiness } from '../analyzer/production-readiness';
-import { simulateChaosScenario } from '../analyzer/chaos-simulator';
-import { generateCdcOutboxArchitecture } from '../analyzer/cdc-outbox';
-import { tuneVectorIndex } from '../analyzer/vector-tuner';
-import { DatabaseEngine } from '../types';
+import {
+  SAMPLES_BY_ENGINE,
+  MultiEngineDispatcher,
+  SqlTranspiler,
+  ConfigAutoTuner,
+  DeadlockSimulator,
+  DisasterRecoveryCalculator,
+  QuerySynthesizer,
+  ConnectHubGenerator,
+  PartitionArchitect,
+  LogInspector,
+  BloatAnalyzer,
+  ReplicationTopologyAnalyzer,
+  SecurityRbacAnalyzer,
+  MockGeneratorAnalyzer,
+  FinOpsCalculatorAnalyzer,
+  IndexDoctorAnalyzer,
+  PiiSanitizerAnalyzer,
+  QueryRewriterAnalyzer,
+  analyzeSchemaDiff,
+  profileOrmQuery,
+  auditProductionReadiness,
+  simulateChaosScenario,
+  generateCdcOutboxArchitecture,
+  tuneVectorIndex,
+  PlanAnalyzer,
+  DatabaseEngine,
+} from '@sqlpulse/core';
 
 const dispatcher = new MultiEngineDispatcher();
 const transpiler = new SqlTranspiler();
@@ -41,6 +44,7 @@ const finOpsCalculator = new FinOpsCalculatorAnalyzer();
 const indexDoctorAnalyzer = new IndexDoctorAnalyzer();
 const piiSanitizerAnalyzer = new PiiSanitizerAnalyzer();
 const queryRewriterAnalyzer = new QueryRewriterAnalyzer();
+const planAnalyzer = new PlanAnalyzer();
 
 export const clientEngine = {
   getSamples(engine: DatabaseEngine = 'postgres') {
@@ -104,6 +108,10 @@ export const clientEngine = {
     return replicationAnalyzer.analyze(params);
   },
 
+  simulateReplicationTopology(params: any) {
+    return replicationAnalyzer.analyze(params);
+  },
+
   generateSecurityRbac(params: any) {
     return securityRbacAnalyzer.analyze(params);
   },
@@ -148,46 +156,49 @@ export const clientEngine = {
     return generateCdcOutboxArchitecture(params);
   },
 
+  buildCdcOutbox(params: any) {
+    return generateCdcOutboxArchitecture(params);
+  },
+
+  tuneVector(params: any) {
+    return tuneVectorIndex(params);
+  },
+
   tuneVectorIndex(params: any) {
     return tuneVectorIndex(params);
   },
 
-  saveReport(title: string, raw_query: string, raw_plan: any) {
-    const id = 'report_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-    const reportData = {
-      id,
-      title,
-      raw_query,
-      raw_plan,
-      created_at: new Date().toISOString(),
-    };
-    try {
-      localStorage.setItem(`sqlpulse_report_${id}`, JSON.stringify(reportData));
-    } catch (e) {
-      // ignore
-    }
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sqlpulse.vercel.app';
+  saveReport(title?: string, raw_query?: string, raw_plan?: any) {
+    const analysisResult = planAnalyzer.analyze(raw_plan || {});
     return {
-      reportId: id,
-      shareUrl: `${origin}/?report=${id}`,
+      success: true,
+      reportId: 'offline_local_report',
+      shareUrl: '/report/offline_local_report',
+      data: {
+        id: 'offline_local_report',
+        title: title || 'PostgreSQL Query Analysis',
+        raw_query,
+        raw_plan,
+        performance_score: analysisResult.performanceScore,
+        total_cost: analysisResult.totalCost,
+        execution_time_ms: analysisResult.executionTimeMs,
+        planning_time_ms: analysisResult.planningTimeMs,
+        total_memory_hits: analysisResult.totalMemoryHits,
+        total_disk_reads: analysisResult.totalDiskReads,
+        cache_hit_ratio: analysisResult.cacheHitRatioPercentage,
+        bottlenecks: analysisResult.bottlenecks,
+        recommendations: analysisResult.recommendations,
+        graph: analysisResult.graph,
+      },
     };
   },
 
   fetchReport(id: string) {
-    try {
-      const data = localStorage.getItem(`sqlpulse_report_${id}`);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch (e) {
-      // ignore
-    }
     return {
       id,
-      title: 'Saved Query Plan Optimization Report',
-      raw_query: "SELECT * FROM orders WHERE status = 'completed';",
-      raw_plan: SAMPLES_BY_ENGINE.postgres.slow,
-      created_at: new Date().toISOString(),
+      title: 'Local Report',
+      raw_plan: {},
+      performance_score: 100,
     };
   },
 };

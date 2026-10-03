@@ -1,6 +1,6 @@
-import { saveReport, getReportById, listRecentReports } from '../controllers/report.controller';
-import { analyzePlan, lintMigration, transpileSql, tuneConfig } from '../controllers/analyze.controller';
-import { reportRepository } from '../db/db';
+import { saveReport, getReportById, listRecentReports } from './controllers/report.controller';
+import { analyzePlan, lintMigration, transpileSql, tuneConfig } from './controllers/analyze.controller';
+import { reportRepository } from './db/db';
 
 function createMockReqRes(options: {
   body?: any;
@@ -135,7 +135,19 @@ describe('SQLPulse API Integration & Security Tests', () => {
       expect(res.data.success).toBe(false);
     });
 
-    it('listRecentReports caps pagination limit at 50', async () => {
+    it('listRecentReports returns 403 Forbidden when unauthenticated', async () => {
+      const { req, res } = createMockReqRes({
+        query: { limit: 10 },
+      });
+
+      await listRecentReports(req, res);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.data.success).toBe(false);
+      expect(res.data.error).toContain('Public report listing is restricted for privacy');
+    });
+
+    it('listRecentReports returns 200 and caps pagination limit at 50 with admin auth', async () => {
       for (let i = 0; i < 5; i++) {
         await reportRepository.saveReport({
           id: `report_${i}`,
@@ -148,10 +160,13 @@ describe('SQLPulse API Integration & Security Tests', () => {
       }
 
       const { req, res } = createMockReqRes({
+        headers: { 'x-admin-key': 'admin_secret_token' },
         query: { limit: 1000000 },
       });
 
+      process.env.ADMIN_API_KEY = 'admin_secret_token';
       await listRecentReports(req, res);
+      delete process.env.ADMIN_API_KEY;
 
       expect(res.statusCode).toBe(200);
       expect(res.data.success).toBe(true);

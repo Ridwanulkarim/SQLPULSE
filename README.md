@@ -199,7 +199,7 @@ The repository includes a root `vercel.json` configured for zero-config Vite dep
 1. Import the repository into **[Vercel Dashboard](https://vercel.com)**.
 2. Vercel automatically detects `vercel.json`:
    - **Framework Preset**: `Vite`
-   - **Build Command**: `npm --prefix frontend install && npm --prefix frontend run build`
+   - **Build Command**: `npm install && npm --prefix frontend run build`
    - **Output Directory**: `frontend/dist`
 3. (Optional) If deploying with an external backend API, set the Environment Variable:
    ```env

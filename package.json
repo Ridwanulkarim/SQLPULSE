@@ -1,9 +1,15 @@
 {
   "name": "sqlpulse",
   "version": "1.0.0",
+  "private": true,
   "description": "SQLPulse — Multi-Engine Database Performance Visualizer, Migration Linter & Engineering Studios across 447 Database Systems",
+  "workspaces": [
+    "packages/*",
+    "backend",
+    "frontend"
+  ],
   "scripts": {
-    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "install:all": "npm install",
     "build:frontend": "npm --prefix frontend run build",
     "build:backend": "npm --prefix backend run build",
     "build": "npm run build:frontend && npm run build:backend",

@@ -23,21 +23,15 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-          cache-dependency-path: |
-            backend/package.json
-            frontend/package.json
 
-      - name: Install backend dependencies
-        run: npm --prefix backend ci || npm --prefix backend install
+      - name: Install dependencies (Workspaces)
+        run: npm install
 
-      - name: Run backend tests
-        run: npm --prefix backend test
+      - name: Run automated test suite
+        run: npm test
 
       - name: Build backend TypeScript
-        run: npm --prefix backend run build
-
-      - name: Install frontend dependencies
-        run: npm --prefix frontend ci || npm --prefix frontend install
+        run: npm run build:backend
 
       - name: Build frontend bundle
-        run: npm --prefix frontend run build
+        run: npm run build:frontend

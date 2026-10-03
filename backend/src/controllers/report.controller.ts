@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4, validate as isValidUuid } from 'uuid';
 import { reportRepository } from '../db/db';
-import { PlanAnalyzer } from '../analyzer/plan-analyzer';
+import { PlanAnalyzer } from '@sqlpulse/core';
 import { saveReportSchema } from '../validators/schemas';
 
 const planAnalyzer = new PlanAnalyzer();
@@ -58,8 +58,17 @@ export const getReportById = async (req: Request, res: Response): Promise<void> 
   try {
     const { id } = req.params;
     if (!id || (!isValidUuid(id) && !id.startsWith('report_'))) {
-      res.status(400).json({ success: false, error: 'Invalid report ID format.' });
+      res.status(400).json({ success: false, error: 'Invalid report ID format. Must be a valid UUID permalink.' });
       return;
+    }
+
+    const reportAccessKey = process.env.REPORT_ACCESS_KEY;
+    if (reportAccessKey) {
+      const providedKey = req.headers['x-report-key'] || req.query.key;
+      if (providedKey !== reportAccessKey) {
+        res.status(401).json({ success: false, error: 'Unauthorized: Valid report access key required.' });
+        return;
+      }
     }
 
     const report = await reportRepository.getReportById(id);
@@ -83,6 +92,17 @@ export const getReportById = async (req: Request, res: Response): Promise<void> 
 
 export const listRecentReports = async (req: Request, res: Response): Promise<void> => {
   try {
+    const adminKey = req.headers['x-admin-key'] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+    const requiredKey = process.env.ADMIN_API_KEY;
+
+    if (!adminKey || (requiredKey && adminKey !== requiredKey)) {
+      res.status(403).json({
+        success: false,
+        error: 'Public report listing is restricted for privacy. Access reports directly using their unique unguessable permalink ID.',
+      });
+      return;
+    }
+
     const requestedLimit = Number(req.query.limit);
     const safeLimit = Math.min(50, Math.max(1, isNaN(requestedLimit) ? 10 : requestedLimit));
     const reports = await reportRepository.getRecentReports(safeLimit);
