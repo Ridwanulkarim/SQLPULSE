@@ -135,6 +135,54 @@ describe('SQLPulse API Integration & Security Tests', () => {
       expect(res.data.success).toBe(false);
     });
 
+    it('getReportById requires x-report-key header and rejects URL query parameter when REPORT_ACCESS_KEY is configured', async () => {
+      process.env.REPORT_ACCESS_KEY = 'vault_secret_report_key_778';
+
+      const reportId = 'report_secret_test_vault_123';
+      await reportRepository.saveReport({
+        id: reportId,
+        title: 'Secret Protected Report',
+        raw_plan: validPlan,
+        performance_score: 95,
+        total_cost: 10,
+        execution_time_ms: 1,
+        planning_time_ms: 1,
+        total_memory_hits: 10,
+        total_disk_reads: 0,
+        cache_hit_ratio: 100,
+        bottlenecks: [],
+        recommendations: [],
+        graph: { nodes: [], edges: [] },
+      });
+
+      // 1. Missing header -> 401
+      const { req: noKeyReq, res: noKeyRes } = createMockReqRes({
+        params: { id: reportId },
+      });
+      await getReportById(noKeyReq, noKeyRes);
+      expect(noKeyRes.statusCode).toBe(401);
+      expect(noKeyRes.data.error).toContain('x-report-key');
+
+      // 2. URL query key -> rejected with 401 (URL query secrets not allowed)
+      const { req: queryKeyReq, res: queryKeyRes } = createMockReqRes({
+        params: { id: reportId },
+        query: { key: 'vault_secret_report_key_778' },
+      });
+      await getReportById(queryKeyReq, queryKeyRes);
+      expect(queryKeyRes.statusCode).toBe(401);
+
+      // 3. Proper x-report-key HTTP header -> 200 OK
+      const { req: headerKeyReq, res: headerKeyRes } = createMockReqRes({
+        params: { id: reportId },
+        headers: { 'x-report-key': 'vault_secret_report_key_778' },
+      });
+      await getReportById(headerKeyReq, headerKeyRes);
+      expect(headerKeyRes.statusCode).toBe(200);
+      expect(headerKeyRes.data.data.title).toBe('Secret Protected Report');
+
+      delete process.env.REPORT_ACCESS_KEY;
+    });
+
     it('listRecentReports returns 403 when ADMIN_API_KEY is not configured on server', async () => {
       delete process.env.ADMIN_API_KEY;
       const { req, res } = createMockReqRes({

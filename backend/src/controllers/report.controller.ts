@@ -74,10 +74,10 @@ export const getReportById = async (req: Request, res: Response): Promise<void> 
 
     const reportAccessKey = process.env.REPORT_ACCESS_KEY;
     if (reportAccessKey && reportAccessKey.trim().length > 0) {
-      const rawProvided = req.headers['x-report-key'] || req.query.key;
+      const rawProvided = req.headers['x-report-key'];
       const providedKey = typeof rawProvided === 'string' ? rawProvided : null;
       if (!providedKey || !timingSafeMatch(providedKey, reportAccessKey)) {
-        res.status(401).json({ success: false, error: 'Unauthorized: Valid report access key required.' });
+        res.status(401).json({ success: false, error: 'Unauthorized: Valid report access key required via "x-report-key" header.' });
         return;
       }
     }
