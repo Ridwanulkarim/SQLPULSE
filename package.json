@@ -32,6 +32,12 @@
     "migration-linter"
   ],
   "optionalDependencies": {
+    "@esbuild/darwin-arm64": "^0.21.5",
+    "@esbuild/darwin-x64": "^0.21.5",
+    "@esbuild/linux-arm64": "^0.21.5",
+    "@esbuild/linux-x64": "^0.21.5",
+    "@rollup/rollup-linux-arm64-gnu": "^4.22.4",
+    "@rollup/rollup-linux-arm64-musl": "^4.22.4",
     "@rollup/rollup-linux-x64-gnu": "^4.22.4",
     "@rollup/rollup-linux-x64-musl": "^4.22.4"
   },
