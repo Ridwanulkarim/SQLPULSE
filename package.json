@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "install:all": "npm install",
-    "build:core": "npm --prefix packages/core run build",
+    "build:core": "npm --prefix backend run build:core",
     "build:backend": "npm --prefix backend run build",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:core && npm run build:backend && npm run build:frontend",

@@ -4,6 +4,7 @@
   "description": "PostgreSQL Query Performance Analyzer & Safe Migration Advisor Engine",
   "main": "dist/server.js",
   "scripts": {
+    "build:core": "tsc -p ../packages/core/tsconfig.json",
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
