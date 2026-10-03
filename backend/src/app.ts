@@ -27,8 +27,9 @@ app.use(
   })
 );
 
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+const originEnv = process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN;
+const allowedOrigins = originEnv
+  ? originEnv.split(',').map((o) => o.trim())
   : ['http://localhost:5173', 'http://localhost:4000', 'https://sqlpulse.vercel.app'];
 
 app.use(
