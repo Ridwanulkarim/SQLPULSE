@@ -230,17 +230,18 @@ The repository includes a root `vercel.json` configured for zero-config Vite dep
 
 ## 🧪 Automated Test Suite
 
-Run the full automated test suite using Jest and Supertest:
+Run the full automated test suite using Jest:
 
 ```bash
-npm --prefix backend test
+npm test
 ```
 
 Test coverage includes:
-* `api-integration.test.ts` — Supertest HTTP endpoint tests, Zod validation, UUID format checks, pagination capping (max 50), and bounded LRU memory store eviction (max 500).
-* `plan-analyzer.test.ts` — PostgreSQL sequential scan, disk sort spill, and I/O buffer calculation tests.
-* `migration-linter.test.ts` — DDL lock hazard rules, non-concurrent index detection, and safe alternative generation.
-* `enterprise-features.test.ts` — Multi-engine routing, FinOps pricing calculators, PII masking, and transpile engines.
+* `backend/src/api-integration.test.ts` — API endpoint integration tests, Zod validation, UUID format checks, constant-time timingSafe admin key verification, malformed JSON 400 bad request handling, pagination capping (max 50), and bounded LRU memory store eviction (max 500).
+* `packages/core/src/analyzer/plan-analyzer.test.ts` — PostgreSQL sequential scan, disk sort spill, I/O buffer calculation, multi-engine category routing, and dynamic unknown engine metadata resolution.
+* `packages/core/src/analyzer/migration-linter.test.ts` — DDL lock hazard rules, non-concurrent index detection, and safe alternative generation.
+* `packages/core/src/analyzer/transpiler.test.ts` — Cross-engine SQL transpilation across Oracle, MSSQL, MySQL, ClickHouse, Snowflake, MongoDB, Milvus, Pinecone, and Neo4j Cypher.
+* `packages/core/src/analyzer/enterprise-features.test.ts` — Multi-engine routing, FinOps pricing calculators, PII masking, and engineering studio tests.
 
 ---
 

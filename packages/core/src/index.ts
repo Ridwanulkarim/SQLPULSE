@@ -33,6 +33,7 @@ export * from './analyzer/production-readiness';
 export * from './analyzer/chaos-simulator';
 export * from './analyzer/cdc-outbox';
 export * from './analyzer/vector-tuner';
+export * from './analyzer/sql-utils';
 
 // Samples
 export * from './samples/sample-data';

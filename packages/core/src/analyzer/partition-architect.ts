@@ -1,4 +1,5 @@
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
+import { sanitizeSqlIdentifier } from './sql-utils';
 
 export interface PartitionRequest {
   engine: string;
@@ -36,27 +37,11 @@ export interface PartitionResult {
   expertGuidelines: string[];
 }
 
-function getEngineMeta(engineId: string) {
-  const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
-  if (found) return found;
-  return {
-    id: engineId,
-    name: engineId.charAt(0).toUpperCase() + engineId.slice(1),
-    category: 'relational',
-    categoryLabel: 'Relational (SQL)',
-    icon: '🗄️',
-    rank: 999,
-    popularityScore: 10,
-    commandHint: 'EXPLAIN <query>',
-    description: 'Database Engine'
-  };
-}
-
 export class PartitionArchitect {
   public plan(req: PartitionRequest): PartitionResult {
-    const meta = getEngineMeta(req.engine);
-    const table = req.tableName || 'events_log';
-    const col = req.partitionColumn || 'created_at';
+    const meta = getEngineMetadata(req.engine);
+    const table = sanitizeSqlIdentifier(req.tableName, 'events_log');
+    const col = sanitizeSqlIdentifier(req.partitionColumn, 'created_at');
     const strategy = req.strategy || 'range_monthly';
     const rows = Math.max(100000, req.estimatedMonthlyRows || 10000000);
     const retention = Math.max(1, req.retentionMonths || 12);

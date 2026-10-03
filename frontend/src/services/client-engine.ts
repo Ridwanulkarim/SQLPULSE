@@ -167,38 +167,4 @@ export const clientEngine = {
   tuneVectorIndex(params: any) {
     return tuneVectorIndex(params);
   },
-
-  saveReport(title?: string, raw_query?: string, raw_plan?: any) {
-    const analysisResult = planAnalyzer.analyze(raw_plan || {});
-    return {
-      success: true,
-      reportId: 'offline_local_report',
-      shareUrl: '/report/offline_local_report',
-      data: {
-        id: 'offline_local_report',
-        title: title || 'PostgreSQL Query Analysis',
-        raw_query,
-        raw_plan,
-        performance_score: analysisResult.performanceScore,
-        total_cost: analysisResult.totalCost,
-        execution_time_ms: analysisResult.executionTimeMs,
-        planning_time_ms: analysisResult.planningTimeMs,
-        total_memory_hits: analysisResult.totalMemoryHits,
-        total_disk_reads: analysisResult.totalDiskReads,
-        cache_hit_ratio: analysisResult.cacheHitRatioPercentage,
-        bottlenecks: analysisResult.bottlenecks,
-        recommendations: analysisResult.recommendations,
-        graph: analysisResult.graph,
-      },
-    };
-  },
-
-  fetchReport(id: string) {
-    return {
-      id,
-      title: 'Local Report',
-      raw_plan: {},
-      performance_score: 100,
-    };
-  },
 };

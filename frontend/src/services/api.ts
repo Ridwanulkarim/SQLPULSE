@@ -38,22 +38,53 @@ async function safeRequest<T>(
   try {
     const res = await fetch(url, options);
     const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('application/json')) {
-      const json = await res.json();
-      if (json && json.success && json.data !== undefined) {
-        return json.data;
-      }
-      if (json && json.samples !== undefined) {
-        return json.samples;
-      }
-      if (json && json.shareUrl !== undefined) {
+
+    if (res.ok) {
+      if (contentType.includes('application/json')) {
+        const json = await res.json();
+        if (json && json.success && json.data !== undefined) {
+          return json.data;
+        }
+        if (json && json.samples !== undefined) {
+          return json.samples;
+        }
+        if (json && json.shareUrl !== undefined) {
+          return json;
+        }
         return json;
       }
+      return (await res.text()) as unknown as T;
     }
-  } catch (err) {
-    // Fall back to client-side heuristic engine
+
+    // Backend returned an explicit HTTP error (4xx / 5xx) -> DO NOT mask with fallback!
+    let errorMsg = `Server error (HTTP ${res.status}): ${res.statusText}`;
+    if (contentType.includes('application/json')) {
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.error) {
+          errorMsg = errJson.error;
+        }
+      } catch (_) {}
+    }
+    throw new Error(errorMsg);
+  } catch (err: any) {
+    // If the error was an explicit HTTP error thrown above, surface it directly to the UI
+    const isNetworkOffline =
+      err.name === 'TypeError' ||
+      (err.message && (
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('NetworkError') ||
+        err.message.includes('fetch failed') ||
+        err.message.includes('ERR_CONNECTION_REFUSED')
+      ));
+
+    if (isNetworkOffline) {
+      // Backend is unavailable or client is offline -> run local client-side heuristic engine
+      return fallbackFn();
+    }
+
+    throw err;
   }
-  return fallbackFn();
 }
 
 export const analyzeQueryPlan = async (
@@ -502,21 +533,45 @@ export const fetchSamples = async (engine: DatabaseEngine = 'postgres') => {
 };
 
 export const saveReportPermalink = async (title: string, raw_query: string, raw_plan: any) => {
-  return safeRequest(
-    `${API_BASE}/reports`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, raw_query, raw_plan }),
-    },
-    () => clientEngine.saveReport(title, raw_query, raw_plan)
-  );
+  const res = await fetch(`${API_BASE}/reports`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, raw_query, raw_plan }),
+  });
+  const contentType = res.headers.get('content-type') || '';
+  if (!res.ok) {
+    let errorMsg = `Failed to save analysis report (HTTP ${res.status})`;
+    if (contentType.includes('application/json')) {
+      try {
+        const json = await res.json();
+        if (json && json.error) errorMsg = json.error;
+      } catch (_) {}
+    }
+    throw new Error(errorMsg);
+  }
+  return res.json();
 };
 
-export const fetchReportById = async (id: string) => {
-  return safeRequest(
-    `${API_BASE}/reports/${id}`,
-    { method: 'GET' },
-    () => clientEngine.fetchReport(id)
-  );
+export const fetchReportById = async (id: string, accessKey?: string) => {
+  const headers: Record<string, string> = {};
+  if (accessKey) {
+    headers['x-report-key'] = accessKey;
+  }
+  const res = await fetch(`${API_BASE}/reports/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    headers,
+  });
+  const contentType = res.headers.get('content-type') || '';
+  if (!res.ok) {
+    let errorMsg = `Analysis report "${id}" could not be retrieved (HTTP ${res.status})`;
+    if (contentType.includes('application/json')) {
+      try {
+        const json = await res.json();
+        if (json && json.error) errorMsg = json.error;
+      } catch (_) {}
+    }
+    throw new Error(errorMsg);
+  }
+  const json = await res.json();
+  return json.data;
 };
