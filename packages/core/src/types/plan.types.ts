@@ -92,6 +92,8 @@ export interface GraphEdgeData {
 export interface PlanAnalysisResult {
   engine?: DatabaseEngine;
   engineMetadata?: DatabaseEngineMetadata;
+  isFallbackAnalysis?: boolean;
+  fallbackNotice?: string;
   performanceScore: number;
   executionTimeMs: number;
   planningTimeMs: number;

@@ -24,6 +24,20 @@ export class MultiEngineDispatcher {
     const metadata = DATABASE_CATALOG.find((d) => d.id === engine) || DATABASE_CATALOG[0];
     let result: PlanAnalysisResult;
 
+    const nativePostgresEngines = [
+      'postgres',
+      'postgresql',
+      'cockroachdb',
+      'timescale',
+      'timescaledb',
+      'yugabyte',
+      'supabase',
+      'neon',
+      'aurora_postgres',
+    ];
+
+    let isFallback = false;
+
     if (engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona') {
       result = this.mysqlAnalyzer.analyze(plan);
     } else if (engine === 'sqlite' || engine === 'turso' || engine === 'spatialite') {
@@ -49,14 +63,54 @@ export class MultiEngineDispatcher {
     } else if (metadata.category === 'wide_column') {
       result = SpecializedAnalyzers.analyzeWideColumn(plan, engine);
     } else {
-      
       result = this.postgresAnalyzer.analyze(plan);
+      if (!nativePostgresEngines.includes(engine.toLowerCase())) {
+        isFallback = true;
+      }
+    }
+
+    if (isFallback) {
+      const adaptSqlForDialect = (sql?: string): string | undefined => {
+        if (!sql) return sql;
+        const e = engine.toLowerCase();
+        if (e.includes('oracle')) {
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ONLINE;');
+        }
+        if (e.includes('mssql') || e.includes('sql_server') || e.includes('sqlserver')) {
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) WITH (ONLINE = ON);');
+        }
+        if (e.includes('mysql') || e.includes('mariadb')) {
+          return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY\s+(\w+)\s+ON\s+(\w+)\s*\(([^)]+)\);?/gi, 'CREATE INDEX $1 ON $2($3) ALGORITHM=INPLACE, LOCK=NONE;');
+        }
+        return sql.replace(/CREATE\s+INDEX\s+CONCURRENTLY/gi, 'CREATE INDEX /* verify dialect syntax */');
+      };
+
+      const adaptedBottlenecks = result.bottlenecks.map((b) => ({
+        ...b,
+        suggestedSql: adaptSqlForDialect(b.suggestedSql),
+      }));
+
+      const adaptedRecommendations = result.recommendations.map((r) => ({
+        ...r,
+        suggestedSql: adaptSqlForDialect(r.suggestedSql),
+      }));
+
+      return {
+        ...result,
+        engine,
+        engineMetadata: metadata,
+        isFallbackAnalysis: true,
+        fallbackNotice: `A dedicated native execution plan parser for ${metadata.name} is in preview. The plan metrics and recommendations below use generic relational heuristics — verify dialect syntax and indexing hints with ${metadata.name} documentation.`,
+        bottlenecks: adaptedBottlenecks,
+        recommendations: adaptedRecommendations,
+      };
     }
 
     return {
       ...result,
       engine,
       engineMetadata: metadata,
+      isFallbackAnalysis: false,
     };
   }
 

@@ -320,4 +320,50 @@ describe('SQLPulse API Integration & Security Tests', () => {
       expect(res.data.data.keyParameters.length).toBeGreaterThan(0);
     });
   });
+
+  describe('HTTP Middleware & Server Error Handling', () => {
+    it('returns 400 Bad Request instead of 500 when client sends malformed JSON', () => {
+      const { jsonErrorHandler } = require('./app');
+      const { req, res } = createMockReqRes();
+      let nextCalled = false;
+      const next = () => {
+        nextCalled = true;
+      };
+
+      const syntaxError = new SyntaxError('Unexpected token in JSON at position 10');
+      (syntaxError as any).status = 400;
+
+      jsonErrorHandler(syntaxError, req, res, next);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.data.success).toBe(false);
+      expect(res.data.error).toContain('Malformed JSON payload');
+      expect(nextCalled).toBe(false);
+    });
+
+    it('passes normal errors to next middleware', () => {
+      const { jsonErrorHandler } = require('./app');
+      const { req, res } = createMockReqRes();
+      let nextError: any = null;
+      const next = (err?: any) => {
+        nextError = err;
+      };
+
+      const runtimeError = new Error('Database connection timed out');
+      jsonErrorHandler(runtimeError, req, res, next);
+
+      expect(nextError).toBe(runtimeError);
+    });
+
+    it('returns 200 healthy status on GET /health', () => {
+      const { healthHandler } = require('./app');
+      const { req, res } = createMockReqRes();
+
+      healthHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.data.status).toBe('healthy');
+      expect(res.data.service).toBe('SQLPulse Engine');
+    });
+  });
 });

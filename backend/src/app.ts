@@ -72,18 +72,34 @@ app.use('/api/v1/reports', (req, res, next) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
+
+export function jsonErrorHandler(err: any, _req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400) {
+    res.status(400).json({
+      success: false,
+      error: 'Malformed JSON payload in request body. Please verify your JSON syntax.',
+    });
+    return;
+  }
+  next(err);
+}
+
+app.use(jsonErrorHandler);
+
 if (!isProduction) {
   app.use(morgan('dev'));
 }
 
-app.get('/health', (_req, res) => {
+export function healthHandler(_req: express.Request, res: express.Response) {
   res.json({
     status: 'healthy',
     service: 'SQLPulse Engine',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
-});
+}
+
+app.get('/health', healthHandler);
 
 app.use('/api/v1', apiRoutes);
 
@@ -107,9 +123,16 @@ if (frontendDist) {
   });
 }
 
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+export function globalErrorHandler(err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) {
   if (err.message && err.message.includes('CORS policy')) {
     res.status(403).json({ success: false, error: err.message });
+    return;
+  }
+  if (err instanceof SyntaxError && (err as any).status === 400) {
+    res.status(400).json({
+      success: false,
+      error: 'Malformed JSON payload in request body.',
+    });
     return;
   }
   console.error('Server Internal Error:', err);
@@ -117,6 +140,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
     success: false,
     error: isProduction ? 'An unexpected internal error occurred.' : err.message || 'Internal Server Error',
   });
-});
+}
+
+app.use(globalErrorHandler);
 
 export default app;
