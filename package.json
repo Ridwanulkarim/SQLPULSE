@@ -1,0 +1,17 @@
+{
+  "name": "sqlpulse",
+  "version": "1.0.0",
+  "description": "SQLPulse — Unified Single-Server PostgreSQL Performance Visualizer & Migration Advisor",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "build": "npm run build:frontend && npm run build:backend",
+    "start": "node backend/dist/server.js",
+    "dev": "npm --prefix backend run dev",
+    "test": "npm --prefix backend test"
+  },
+  "keywords": ["postgresql", "explain-analyze", "single-server", "fullstack", "react", "express"],
+  "author": "",
+  "license": "MIT"
+}

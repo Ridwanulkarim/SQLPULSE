@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "SQLPulse API Collection",
+    "description": "Postman collection with automated test assertions for SQLPulse (Postgres Plan Analyzer & Migration Linter)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Service is healthy', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql('healthy');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analyze Query Plan (Slow Seq Scan)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id WHERE orders.status = 'completed' ORDER BY orders.created_at DESC;\",\n  \"plan\": [\n    {\n      \"Plan\": {\n        \"Node Type\": \"Sort\",\n        \"Startup Cost\": 48325.2,\n        \"Total Cost\": 50825.2,\n        \"Plan Rows\": 100000,\n        \"Plan Width\": 214,\n        \"Actual Startup Time\": 342.15,\n        \"Actual Total Time\": 415.82,\n        \"Actual Rows\": 94500,\n        \"Actual Loops\": 1,\n        \"Sort Key\": [\"orders.created_at DESC\"],\n        \"Sort Method\": \"external merge\",\n        \"Sort Space Used\": 24576,\n        \"Sort Space Type\": \"Disk\",\n        \"Shared Hit Blocks\": 120,\n        \"Shared Read Blocks\": 8540,\n        \"Plans\": [\n          {\n            \"Node Type\": \"Seq Scan\",\n            \"Relation Name\": \"orders\",\n            \"Startup Cost\": 0.0,\n            \"Total Cost\": 24500.0,\n            \"Plan Rows\": 150000,\n            \"Plan Width\": 128,\n            \"Actual Rows\": 94500,\n            \"Filter\": \"(status = 'completed' AND total_amount > 150)\",\n            \"Rows Removed by Filter\": 55500\n          }\n        ]\n      },\n      \"Execution Time\": 430.15\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/analyze/plan",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "analyze", "plan"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test('Bottlenecks detected with index recommendations', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.success).to.be.true;",
+              "    pm.expect(jsonData.data.bottlenecks.length).to.be.above(0);",
+              "    pm.expect(jsonData.data.performanceScore).to.be.below(85);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lint DDL Migration (Detect Locks)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sql\": \"CREATE INDEX idx_orders_customer_id ON orders(customer_id);\\nALTER TABLE order_items ADD CONSTRAINT fk_order_items_order_id FOREIGN KEY (order_id) REFERENCES orders(id);\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/analyze/migration",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "analyze", "migration"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Flags unsafe index creation', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data.isSafeForProduction).to.be.false;",
+              "    pm.expect(jsonData.data.findings.length).to.be.above(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Save & Share Report Permalink",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Q3 Production Slow Query Analysis\",\n  \"raw_query\": \"SELECT * FROM orders WHERE status = 'completed';\",\n  \"raw_plan\": {\n    \"Plan\": {\n      \"Node Type\": \"Seq Scan\",\n      \"Relation Name\": \"orders\",\n      \"Total Cost\": 24500,\n      \"Plan Rows\": 150000,\n      \"Plan Width\": 128,\n      \"Actual Rows\": 94500,\n      \"Filter\": \"(status = 'completed')\",\n      \"Rows Removed by Filter\": 55500\n    },\n    \"Execution Time\": 195.2\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "reports"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns reportId and shareable link', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.success).to.be.true;",
+              "    pm.expect(jsonData.reportId).to.be.a('string');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    }
+  ]
+}
