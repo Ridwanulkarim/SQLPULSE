@@ -1,4 +1,5 @@
-import { MigrationAnalysisResult, MigrationSafetyCheck, DatabaseEngine, DATABASE_CATALOG } from '../types/plan.types';
+import { MigrationAnalysisResult, MigrationSafetyCheck, DatabaseEngine } from '../types/plan.types';
+import { DATABASE_CATALOG } from '../types/db-catalog.data';
 
 export class MigrationLinter {
   

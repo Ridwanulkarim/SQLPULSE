@@ -2,8 +2,8 @@ import {
   DatabaseEngine,
   PlanAnalysisResult,
   MigrationAnalysisResult,
-  DATABASE_CATALOG,
 } from '../types/plan.types';
+import { DATABASE_CATALOG } from '../types/db-catalog.data';
 import { PlanAnalyzer as PostgresPlanAnalyzer } from './plan-analyzer';
 import { MigrationLinter as PostgresMigrationLinter } from './migration-linter';
 import { MySQLAnalyzer } from './mysql-analyzer';

@@ -1,4 +1,4 @@
-import { DATABASE_CATALOG } from '../types/plan.types';
+import { DATABASE_CATALOG } from '../types/db-catalog.data';
 
 export interface SchemaDiffChange {
   id: string;

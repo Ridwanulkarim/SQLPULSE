@@ -2,13 +2,13 @@
   "name": "@sqlpulse/core",
   "version": "1.0.0",
   "description": "SQLPulse Core Engine, AST Analyzers, Catalog, and Types",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "module": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "test": "jest",
-    "build": "tsc"
+    "build": "../../backend/node_modules/.bin/tsc -p tsconfig.json"
   },
-  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.13",
     "@types/node": "^22.5.5",

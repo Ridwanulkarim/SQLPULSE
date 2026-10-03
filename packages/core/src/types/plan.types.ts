@@ -1,5 +1,3 @@
-import { DATABASE_CATALOG } from './db-catalog.data';
-
 export type DatabaseCategory =
   | 'relational'
   | 'olap'
@@ -27,8 +25,6 @@ export interface DatabaseEngineMetadata {
   rank?: number;
   popularityScore?: number;
 }
-
-export { DATABASE_CATALOG };
 
 export type NodeTypeName = string;
 
