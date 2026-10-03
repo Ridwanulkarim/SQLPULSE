@@ -1,10 +1,20 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { v4 as uuidv4, validate as isValidUuid } from 'uuid';
 import { reportRepository } from '../db/db';
 import { PlanAnalyzer } from '@sqlpulse/core';
 import { saveReportSchema } from '../validators/schemas';
 
 const planAnalyzer = new PlanAnalyzer();
+
+function timingSafeMatch(provided: string, expected: string): boolean {
+  const bufA = Buffer.from(provided);
+  const bufB = Buffer.from(expected);
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export const saveReport = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -63,9 +73,10 @@ export const getReportById = async (req: Request, res: Response): Promise<void> 
     }
 
     const reportAccessKey = process.env.REPORT_ACCESS_KEY;
-    if (reportAccessKey) {
-      const providedKey = req.headers['x-report-key'] || req.query.key;
-      if (providedKey !== reportAccessKey) {
+    if (reportAccessKey && reportAccessKey.trim().length > 0) {
+      const rawProvided = req.headers['x-report-key'] || req.query.key;
+      const providedKey = typeof rawProvided === 'string' ? rawProvided : null;
+      if (!providedKey || !timingSafeMatch(providedKey, reportAccessKey)) {
         res.status(401).json({ success: false, error: 'Unauthorized: Valid report access key required.' });
         return;
       }
@@ -92,13 +103,23 @@ export const getReportById = async (req: Request, res: Response): Promise<void> 
 
 export const listRecentReports = async (req: Request, res: Response): Promise<void> => {
   try {
-    const adminKey = req.headers['x-admin-key'] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
     const requiredKey = process.env.ADMIN_API_KEY;
 
-    if (!adminKey || (requiredKey && adminKey !== requiredKey)) {
+    if (!requiredKey || requiredKey.trim().length === 0) {
       res.status(403).json({
         success: false,
-        error: 'Public report listing is restricted for privacy. Access reports directly using their unique unguessable permalink ID.',
+        error: 'Public report listing is disabled because ADMIN_API_KEY is not configured on the server.',
+      });
+      return;
+    }
+
+    const rawHeader = req.headers['x-admin-key'] || (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+    const adminKey = typeof rawHeader === 'string' ? rawHeader : null;
+
+    if (!adminKey || !timingSafeMatch(adminKey, requiredKey)) {
+      res.status(403).json({
+        success: false,
+        error: 'Access denied: Valid administrative credentials required to list saved reports.',
       });
       return;
     }

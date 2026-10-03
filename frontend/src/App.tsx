@@ -7,7 +7,7 @@ import { VisualPlanGraph } from './components/VisualPlanGraph';
 import { BottlenecksList } from './components/BottlenecksList';
 import { analyzeQueryPlan, fetchSamples, saveReportPermalink } from './services/api';
 import { PlanAnalysisResult, DatabaseEngine, DATABASE_CATALOG } from './types';
-import { GitCompare, Database, Search } from 'lucide-react';
+import { GitCompare, Database, Search, AlertTriangle } from 'lucide-react';
 
 const MigrationLinterTab = lazy(() => import('./components/MigrationLinterTab').then((m) => ({ default: m.MigrationLinterTab })));
 const QueryAdvisorTab = lazy(() => import('./components/QueryAdvisorTab').then((m) => ({ default: m.QueryAdvisorTab })));
@@ -291,6 +291,19 @@ export function App() {
 
               {analysisResult && (
                 <div className="space-y-8">
+                  {!['postgres', 'postgresql', 'mysql', 'mariadb', 'sqlite', 'mongodb', 'redis'].includes(selectedEngine.toLowerCase()) && (
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 flex items-start gap-3 shadow-xs">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-xs space-y-1">
+                        <p className="font-bold">
+                          Generic Relational Heuristics Fallback Notice ({DATABASE_CATALOG.find(db => db.id === selectedEngine)?.name || selectedEngine})
+                        </p>
+                        <p className="text-amber-700/90 dark:text-amber-400/90 leading-relaxed">
+                          A dedicated native execution plan parser for <strong>{DATABASE_CATALOG.find(db => db.id === selectedEngine)?.name || selectedEngine}</strong> is currently in preview. The plan metrics, cost models, and recommendations below are approximated using general relational heuristics. Please verify indexing syntax and query hints against your engine&apos;s official documentation before applying them in production.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <MetricsOverview data={analysisResult} />
                   <VisualPlanGraph nodes={analysisResult.graph.nodes} />
                   <BottlenecksList

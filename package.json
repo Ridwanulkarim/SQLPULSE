@@ -2,7 +2,7 @@
   "name": "sqlpulse",
   "version": "1.0.0",
   "private": true,
-  "description": "SQLPulse — Multi-Engine Database Performance Visualizer, Migration Linter & Engineering Studios across 447 Database Systems",
+  "description": "SQLPulse — Multi-Engine Database Performance Visualizer, Migration Linter & Engineering Studios with 10 Core Analyzers and 447-Engine Catalog Matrix",
   "workspaces": [
     "packages/*",
     "backend",

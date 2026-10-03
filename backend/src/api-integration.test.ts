@@ -135,8 +135,10 @@ describe('SQLPulse API Integration & Security Tests', () => {
       expect(res.data.success).toBe(false);
     });
 
-    it('listRecentReports returns 403 Forbidden when unauthenticated', async () => {
+    it('listRecentReports returns 403 when ADMIN_API_KEY is not configured on server', async () => {
+      delete process.env.ADMIN_API_KEY;
       const { req, res } = createMockReqRes({
+        headers: { 'x-admin-key': 'attacker_provided_key' },
         query: { limit: 10 },
       });
 
@@ -144,10 +146,32 @@ describe('SQLPulse API Integration & Security Tests', () => {
 
       expect(res.statusCode).toBe(403);
       expect(res.data.success).toBe(false);
-      expect(res.data.error).toContain('Public report listing is restricted for privacy');
+      expect(res.data.error).toContain('ADMIN_API_KEY is not configured');
     });
 
-    it('listRecentReports returns 200 and caps pagination limit at 50 with admin auth', async () => {
+    it('listRecentReports returns 403 when unauthenticated or wrong key is provided', async () => {
+      process.env.ADMIN_API_KEY = 'secret_production_admin_key_99182';
+
+      const { req: unauthReq, res: unauthRes } = createMockReqRes({
+        query: { limit: 10 },
+      });
+      await listRecentReports(unauthReq, unauthRes);
+      expect(unauthRes.statusCode).toBe(403);
+
+      const { req: wrongReq, res: wrongRes } = createMockReqRes({
+        headers: { 'x-admin-key': 'wrong_key_123' },
+        query: { limit: 10 },
+      });
+      await listRecentReports(wrongReq, wrongRes);
+      expect(wrongRes.statusCode).toBe(403);
+      expect(wrongRes.data.error).toContain('Access denied');
+
+      delete process.env.ADMIN_API_KEY;
+    });
+
+    it('listRecentReports accepts valid admin key via x-admin-key or Bearer token', async () => {
+      process.env.ADMIN_API_KEY = 'secret_admin_token_4829';
+
       for (let i = 0; i < 5; i++) {
         await reportRepository.saveReport({
           id: `report_${i}`,
@@ -159,19 +183,24 @@ describe('SQLPulse API Integration & Security Tests', () => {
         });
       }
 
-      const { req, res } = createMockReqRes({
-        headers: { 'x-admin-key': 'admin_secret_token' },
+      const { req: headerReq, res: headerRes } = createMockReqRes({
+        headers: { 'x-admin-key': 'secret_admin_token_4829' },
         query: { limit: 1000000 },
       });
+      await listRecentReports(headerReq, headerRes);
+      expect(headerRes.statusCode).toBe(200);
+      expect(headerRes.data.success).toBe(true);
+      expect(headerRes.data.count).toBe(5);
 
-      process.env.ADMIN_API_KEY = 'admin_secret_token';
-      await listRecentReports(req, res);
+      const { req: bearerReq, res: bearerRes } = createMockReqRes({
+        headers: { authorization: 'Bearer secret_admin_token_4829' },
+        query: { limit: 50 },
+      });
+      await listRecentReports(bearerReq, bearerRes);
+      expect(bearerRes.statusCode).toBe(200);
+      expect(bearerRes.data.count).toBe(5);
+
       delete process.env.ADMIN_API_KEY;
-
-      expect(res.statusCode).toBe(200);
-      expect(res.data.success).toBe(true);
-      expect(res.data.count).toBeLessThanOrEqual(50);
-      expect(res.data.data.length).toBe(5);
     });
 
     it('in-memory repository evicts oldest keys when exceeding 500 max capacity', async () => {

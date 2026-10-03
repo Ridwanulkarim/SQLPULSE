@@ -119,7 +119,8 @@ export class SqlTranspiler {
         if (/NUMBER\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/i.test(result)) {
           result = result.replace(/NUMBER\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/gi, 'NUMERIC($1, $2)');
           mappings.push({ sourceType: 'NUMBER(p, s)', targetType: 'NUMERIC(p, s)', notes: 'Exact arbitrary precision decimal arithmetic.' });
-        } else if (/NUMBER\s*\(\s*(\d+)\s*\)/i.test(result)) {
+        }
+        if (/NUMBER\s*\(\s*(\d+)\s*\)/i.test(result)) {
           result = result.replace(/NUMBER\s*\(\s*(\d+)\s*\)/gi, (m, p1) => {
             const precision = parseInt(p1, 10);
             if (precision <= 4) return 'SMALLINT';
@@ -127,7 +128,8 @@ export class SqlTranspiler {
             return 'BIGINT';
           });
           mappings.push({ sourceType: 'NUMBER(N)', targetType: 'SMALLINT/INT/BIGINT', notes: 'Mapped to native Postgres integer types based on precision.' });
-        } else if (/NUMBER/i.test(result)) {
+        }
+        if (/\bNUMBER\b/i.test(result)) {
           result = result.replace(/\bNUMBER\b/gi, 'NUMERIC');
           mappings.push({ sourceType: 'NUMBER', targetType: 'NUMERIC', notes: 'Default unbounded Oracle number to Postgres NUMERIC.' });
         }
@@ -174,7 +176,8 @@ export class SqlTranspiler {
         result = result.replace(/\bINT\s+AUTO_INCREMENT\b/gi, 'SERIAL');
         result = result.replace(/\bBIGINT\s+AUTO_INCREMENT\b/gi, 'BIGSERIAL');
         result = result.replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ');
-        result = result.replace(/\bTINYINT\(1\)\b/gi, 'BOOLEAN');
+        result = result.replace(/\bTINYINT\s*\(\s*1\s*\)/gi, 'BOOLEAN');
+        result = result.replace(/\bTINYINT\b/gi, 'SMALLINT');
         result = result.replace(/\bLONGTEXT\b/gi, 'TEXT');
         result = result.replace(/\bMEDIUMTEXT\b/gi, 'TEXT');
         result = result.replace(/\bJSON\b/gi, 'JSONB');
