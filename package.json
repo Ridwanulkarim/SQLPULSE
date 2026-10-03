@@ -31,6 +31,10 @@
     "finops",
     "migration-linter"
   ],
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.22.4",
+    "@rollup/rollup-linux-x64-musl": "^4.22.4"
+  },
   "author": "",
   "license": "MIT"
 }
