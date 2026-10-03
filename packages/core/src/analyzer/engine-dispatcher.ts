@@ -66,6 +66,18 @@ export class MultiEngineDispatcher {
       result = SpecializedAnalyzers.analyzeTimeSeries(plan, engine);
     } else if (metadata.category === 'wide_column') {
       result = SpecializedAnalyzers.analyzeWideColumn(plan, engine);
+    } else if (
+      metadata.category === 'olap' ||
+      engine === 'clickhouse' ||
+      engine === 'snowflake' ||
+      engine === 'duckdb' ||
+      engine === 'bigquery' ||
+      engine === 'google_bigquery' ||
+      engine === 'amazon_redshift' ||
+      engine === 'redshift' ||
+      engine === 'databricks'
+    ) {
+      result = SpecializedAnalyzers.analyzeOlap(plan, engine);
     } else {
       result = this.postgresAnalyzer.analyze(plan);
       if (!nativePostgresEngines.includes(engine.toLowerCase())) {

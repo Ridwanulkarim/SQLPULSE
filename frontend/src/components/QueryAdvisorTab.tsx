@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adviseQuery } from '../services/api';
 import { DatabaseEngine, QueryAdvisorResult, DATABASE_CATALOG } from '../types';
 import { UniversalDbSelector } from './UniversalDbSelector';
@@ -15,19 +15,29 @@ export const QueryAdvisorTab: React.FC = () => {
 
   const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
 
-  const handleAdvise = async (e?: React.FormEvent) => {
+  const handleAdvise = async (e?: React.FormEvent, sqlToRun = queryText, eng = selectedEngine) => {
     if (e) e.preventDefault();
-    if (!queryText.trim()) return;
+    if (!sqlToRun.trim()) return;
 
     setIsLoading(true);
     try {
-      const res = await adviseQuery(queryText, selectedEngine);
+      const res = await adviseQuery(sqlToRun, eng);
       setResult(res);
     } catch (err: any) {
       alert(err.message || 'Failed to analyze query');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    handleAdvise(undefined, queryText, selectedEngine);
+  }, [selectedEngine]);
+
+  const handleApplyPreset = (preset: typeof presets[0]) => {
+    setSelectedEngine(preset.engine);
+    setQueryText(preset.sql);
+    handleAdvise(undefined, preset.sql, preset.engine);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -120,10 +130,7 @@ export const QueryAdvisorTab: React.FC = () => {
               <button
                 key={idx}
                 type="button"
-                onClick={() => {
-                  setSelectedEngine(preset.engine);
-                  setQueryText(preset.sql);
-                }}
+                onClick={() => handleApplyPreset(preset)}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition flex items-center gap-1.5 shadow-sm border ${
                   selectedEngine === preset.engine
                     ? 'bg-purple-100/90 text-purple-950 border-purple-300 font-bold'

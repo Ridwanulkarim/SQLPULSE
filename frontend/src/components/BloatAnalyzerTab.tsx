@@ -43,7 +43,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
 
   useEffect(() => {
     handleAnalyze();
-  }, [selectedEngine]);
+  }, [selectedEngine, tableName, totalTableSizeGb, deadTuplePercentage, avgDailyUpdates]);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);

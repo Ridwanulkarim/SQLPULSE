@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Terminal,
   Copy,
@@ -87,6 +87,10 @@ export const QuerySynthesizerTab: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    handleSynthesize(prompt, targetEngine, domainPreset);
+  }, [targetEngine, domainPreset]);
 
   const applySamplePrompt = (sample: typeof samplePrompts[0]) => {
     setPrompt(sample.text);

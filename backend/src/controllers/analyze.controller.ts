@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   MultiEngineDispatcher,
   SAMPLES_BY_ENGINE,
+  getSamplesForEngine,
   DatabaseEngine,
   SqlTranspiler,
   ConfigAutoTuner,
@@ -140,8 +141,8 @@ export const adviseQuery = (req: Request, res: Response): void => {
 };
 
 export const getSamples = (req: Request, res: Response): void => {
-  const engine = (req.query.engine as DatabaseEngine) || 'postgres';
-  const engineSamples = (SAMPLES_BY_ENGINE as any)[engine] || SAMPLES_BY_ENGINE.postgres;
+  const engine = (req.query.engine as string) || 'postgres';
+  const engineSamples = getSamplesForEngine(engine);
 
   res.json({
     success: true,

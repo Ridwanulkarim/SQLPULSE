@@ -1,5 +1,6 @@
 import {
   SAMPLES_BY_ENGINE,
+  getSamplesForEngine,
   MultiEngineDispatcher,
   SqlTranspiler,
   ConfigAutoTuner,
@@ -48,11 +49,11 @@ const planAnalyzer = new PlanAnalyzer();
 
 export const clientEngine = {
   getSamples(engine: DatabaseEngine = 'postgres') {
-    const fallback = (SAMPLES_BY_ENGINE as any)[engine] || SAMPLES_BY_ENGINE.postgres;
+    const samples = getSamplesForEngine(engine);
     return {
-      slowPlan: fallback.slow,
-      optimizedPlan: fallback.optimized,
-      migrationSql: fallback.migration,
+      slowPlan: samples.slow,
+      optimizedPlan: samples.optimized,
+      migrationSql: samples.migration,
     };
   },
 

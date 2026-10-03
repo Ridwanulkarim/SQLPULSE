@@ -122,11 +122,11 @@ LIMIT 10;`,
     },
   ];
 
-  const handleTranspile = async () => {
-    if (!sourceCode.trim()) return;
+  const handleTranspile = async (src = sourceEngine, tgt = targetEngine, code = sourceCode) => {
+    if (!code.trim()) return;
     setIsLoading(true);
     try {
-      const res = await transpileSql(sourceEngine, targetEngine, sourceCode);
+      const res = await transpileSql(src, tgt, code);
       setResult(res);
     } catch (err: any) {
       alert(err.message || 'Transpilation failed');
@@ -136,7 +136,7 @@ LIMIT 10;`,
   };
 
   useEffect(() => {
-    handleTranspile();
+    handleTranspile(sourceEngine, targetEngine, sourceCode);
   }, [sourceEngine, targetEngine]);
 
   const handleCopy = () => {
@@ -150,15 +150,18 @@ LIMIT 10;`,
     setSourceEngine(preset.src);
     setTargetEngine(preset.tgt);
     setSourceCode(preset.code);
+    handleTranspile(preset.src, preset.tgt, preset.code);
   };
 
   const swapEngines = () => {
     const temp = sourceEngine;
-    setSourceEngine(targetEngine);
-    setTargetEngine(temp);
-    if (result) {
-      setSourceCode(result.transpiledCode);
-    }
+    const newTarget = temp;
+    const newSource = targetEngine;
+    const newCode = result ? result.transpiledCode : sourceCode;
+    setSourceEngine(newSource);
+    setTargetEngine(newTarget);
+    setSourceCode(newCode);
+    handleTranspile(newSource, newTarget, newCode);
   };
 
   const srcMeta = DATABASE_CATALOG.find(db => db.id === sourceEngine) || { id: sourceEngine, name: sourceEngine, icon: '🗄️' };
@@ -249,7 +252,7 @@ LIMIT 10;`,
             </div>
             <button
               type="button"
-              onClick={handleTranspile}
+              onClick={() => handleTranspile(sourceEngine, targetEngine, sourceCode)}
               disabled={isLoading}
               className="px-3 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-sm transition disabled:opacity-50"
             >

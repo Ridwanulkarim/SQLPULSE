@@ -36,14 +36,44 @@ CREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`);
   const [result, setResult] = useState<IndexDoctorResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedMigration, setCopiedMigration] = useState(false);
+  const indexPresets = [
+    {
+      label: '🛒 E-Commerce Overlapping Left-Prefix',
+      table: 'orders',
+      engine: 'postgresql',
+      ddl: `CREATE INDEX idx_orders_customer_id ON orders (customer_id);
+CREATE INDEX idx_orders_customer_and_created ON orders (customer_id, created_at);
+CREATE INDEX idx_orders_status_and_user ON orders (status, customer_id);
+CREATE INDEX idx_orders_tenant_status ON orders (tenant_id, status);
+CREATE INDEX idx_orders_tenant_only ON orders (tenant_id);
+CREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`
+    },
+    {
+      label: '💳 SaaS Billing Duplicate Indices',
+      table: 'invoices',
+      engine: 'mysql',
+      ddl: `CREATE INDEX idx_inv_account ON invoices (account_id);
+CREATE INDEX idx_inv_account_status ON invoices (account_id, status);
+CREATE INDEX idx_inv_account_due ON invoices (account_id, due_date);
+CREATE INDEX idx_inv_status_only ON invoices (status);`
+    },
+    {
+      label: '👥 User Profile Cardinality Overkill',
+      table: 'users',
+      engine: 'oracle',
+      ddl: `CREATE INDEX idx_users_org ON users (organization_id);
+CREATE INDEX idx_users_org_role ON users (organization_id, role);
+CREATE INDEX idx_users_is_active ON users (is_active);`
+    }
+  ];
 
-  const runAudit = async () => {
+  const runAudit = async (tbl = tableName, ddl = rawDdl, eng = selectedEngine) => {
     setIsLoading(true);
     try {
       const res = await auditIndexDoctor({
-        engine: selectedEngine,
-        tableName,
-        rawIndexDdl: rawDdl,
+        engine: eng,
+        tableName: tbl,
+        rawIndexDdl: ddl,
       });
       setResult(res);
     } catch (err: any) {
@@ -54,8 +84,15 @@ CREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`);
   };
 
   useEffect(() => {
-    runAudit();
+    runAudit(tableName, rawDdl, selectedEngine);
   }, [selectedEngine, tableName]);
+
+  const handleApplyPreset = (p: typeof indexPresets[0]) => {
+    onSelectEngine(p.engine);
+    setTableName(p.table);
+    setRawDdl(p.ddl);
+    runAudit(p.table, p.ddl, p.engine);
+  };
 
   const handleCopyMigration = () => {
     if (!result) return;
@@ -103,6 +140,29 @@ CREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`);
           />
         </div>
 
+        <div className="space-y-1.5">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-900/70 flex items-center gap-1">
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            Quick-Load Index Audit Scenarios:
+          </span>
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+            {indexPresets.map((preset, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleApplyPreset(preset)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition flex items-center gap-1.5 shadow-sm border ${
+                  selectedEngine === preset.engine && tableName === preset.table
+                    ? 'bg-indigo-100/90 text-indigo-950 border-indigo-300 font-bold'
+                    : 'bg-white/80 hover:bg-indigo-50 text-slate-800 border-purple-200/70'
+                }`}
+              >
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-2 border-t border-purple-100">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
@@ -135,7 +195,7 @@ CREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`);
         <div className="flex justify-end pt-1">
           <button
             type="button"
-            onClick={runAudit}
+            onClick={() => runAudit(tableName, rawDdl, selectedEngine)}
             disabled={isLoading}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition active:scale-95 flex items-center gap-1.5"
           >

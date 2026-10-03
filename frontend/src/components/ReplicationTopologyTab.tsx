@@ -43,7 +43,7 @@ export const ReplicationTopologyTab: React.FC<ReplicationTopologyTabProps> = ({
 
   useEffect(() => {
     handleSimulate();
-  }, [selectedEngine]);
+  }, [selectedEngine, primaryRegion, syncReplicasCount, asyncReplicasCount, networkRttMs]);
 
   const copyConfig = () => {
     if (!result) return;

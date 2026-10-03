@@ -21,11 +21,38 @@ export const LogInspectorTab: React.FC = () => {
   const [result, setResult] = useState<LogInspectResult | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  const handleInspect = async () => {
+  const logPresets = [
+    {
+      label: '🐘 Postgres Slow Duration Log',
+      engine: 'postgresql',
+      log: `2026-10-03 08:14:22 UTC [80142]: [3-1] user=app_user,db=prod LOG: duration: 852.410 ms statement: SELECT * FROM orders WHERE customer_id = 94812 AND status = 'completed' ORDER BY created_at DESC LIMIT 20;
+2026-10-03 08:14:25 UTC [80145]: [4-1] user=app_user,db=prod LOG: duration: 1420.100 ms statement: SELECT c.id, sum(o.total) FROM customers c JOIN orders o ON c.id = o.customer_id WHERE o.created_at >= NOW() - INTERVAL '30 days' GROUP BY c.id;
+2026-10-03 08:14:28 UTC [80148]: [5-1] user=app_user,db=prod LOG: duration: 512.920 ms statement: UPDATE inventory SET stock = stock - 1 WHERE product_id = 1042;`
+    },
+    {
+      label: '🐬 MySQL Slow Query Log',
+      engine: 'mysql',
+      log: `# Time: 2026-10-03T11:22:15.124500Z
+# User@Host: app[app] @ [10.0.4.12]  Id: 4892
+# Query_time: 2.854120  Lock_time: 0.000140 Rows_sent: 10  Rows_examined: 450000
+SELECT * FROM transactions WHERE user_id = 49102 AND status = 'settled' ORDER BY id DESC LIMIT 10;`
+    },
+    {
+      label: '⚡ Redis SLOWLOG Output',
+      engine: 'redis',
+      log: `1) 1) (integer) 124
+   2) (integer) 1696238120
+   3) (integer) 85400
+   4) 1) "KEYS"
+      2) "cache:session:*"`
+    }
+  ];
+
+  const handleInspect = async (logToInspect = logContent, eng = selectedEngine) => {
     try {
       const res = await inspectSlowLogs({
-        engine: selectedEngine,
-        logContent,
+        engine: eng,
+        logContent: logToInspect,
       });
       setResult(res);
     } catch (err: any) {
@@ -34,8 +61,14 @@ export const LogInspectorTab: React.FC = () => {
   };
 
   useEffect(() => {
-    handleInspect();
+    handleInspect(logContent, selectedEngine);
   }, [selectedEngine]);
+
+  const handleApplyPreset = (preset: typeof logPresets[0]) => {
+    setSelectedEngine(preset.engine);
+    setLogContent(preset.log);
+    handleInspect(preset.log, preset.engine);
+  };
 
   const handleCopy = (sql: string, idx: number) => {
     navigator.clipboard.writeText(sql);
@@ -79,6 +112,29 @@ export const LogInspectorTab: React.FC = () => {
           />
         </div>
 
+        <div className="space-y-1.5">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-rose-900/70 flex items-center gap-1">
+            <Zap className="w-3.5 h-3.5 text-rose-500" />
+            Quick-Load Engine Log Samples:
+          </span>
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+            {logPresets.map((preset, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleApplyPreset(preset)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition flex items-center gap-1.5 shadow-sm border ${
+                  selectedEngine === preset.engine
+                    ? 'bg-rose-100/90 text-rose-950 border-rose-300 font-bold'
+                    : 'bg-white/80 hover:bg-rose-50 text-slate-800 border-purple-200/70'
+                }`}
+              >
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -86,7 +142,7 @@ export const LogInspectorTab: React.FC = () => {
             </label>
             <button
               type="button"
-              onClick={handleInspect}
+              onClick={() => handleInspect(logContent, selectedEngine)}
               className="px-3.5 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-sm transition active:scale-95"
             >
               Analyze Log ➔

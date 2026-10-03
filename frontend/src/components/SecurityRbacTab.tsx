@@ -41,7 +41,7 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
 
   useEffect(() => {
     handleGenerate();
-  }, [selectedEngine]);
+  }, [selectedEngine, tableName, tenantColumn, enforceTls]);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);

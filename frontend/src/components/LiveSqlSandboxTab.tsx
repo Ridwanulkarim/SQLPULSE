@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu, Info } from 'lucide-react';
 
 interface MockRow {
@@ -26,7 +26,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
     sampleRows: MockRow[];
   } | null>(null);
 
-  const runLiveQuery = () => {
+  const runLiveQuery = (withIndex = hasIndex, size = datasetSize) => {
     setIsRunning(true);
     setTimeout(() => {
       let latencyMs = 0;
@@ -36,13 +36,13 @@ export const LiveSqlSandboxTab: React.FC = () => {
       let memoryHits = 0;
       let diskReads = 0;
 
-      if (!hasIndex) {
-        latencyMs = parseFloat((35 + Math.random() * 25 + (datasetSize / 100000) * 45).toFixed(2));
-        rowsExamined = datasetSize;
+      if (!withIndex) {
+        latencyMs = parseFloat((35 + Math.random() * 25 + (size / 100000) * 45).toFixed(2));
+        rowsExamined = size;
         rowsReturned = 14;
         scanType = 'Sequential Scan (Full Table Scan)';
-        memoryHits = Math.round(datasetSize * 0.4);
-        diskReads = Math.round(datasetSize * 0.6);
+        memoryHits = Math.round(size * 0.4);
+        diskReads = Math.round(size * 0.6);
       } else {
         latencyMs = parseFloat((0.8 + Math.random() * 1.4).toFixed(2));
         rowsExamined = 18;
@@ -73,12 +73,17 @@ export const LiveSqlSandboxTab: React.FC = () => {
         sampleRows,
       });
       setIsRunning(false);
-    }, 400);
+    }, 300);
   };
 
+  useEffect(() => {
+    runLiveQuery(hasIndex, datasetSize);
+  }, [hasIndex, datasetSize]);
+
   const handleApplyIndex = () => {
-    setHasIndex(!hasIndex);
-    setExecutionResult(null);
+    const nextVal = !hasIndex;
+    setHasIndex(nextVal);
+    runLiveQuery(nextVal, datasetSize);
   };
 
   return (
@@ -180,7 +185,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
 
             <button
               type="button"
-              onClick={runLiveQuery}
+              onClick={() => runLiveQuery(hasIndex, datasetSize)}
               disabled={isRunning}
               className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white hover:opacity-95 shadow-lg shadow-purple-500/25 transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
             >

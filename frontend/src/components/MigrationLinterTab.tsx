@@ -26,13 +26,13 @@ export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
 
   const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
 
-  const handleLint = async (e?: React.FormEvent) => {
+  const handleLint = async (e?: React.FormEvent, sqlToLint = sqlText, eng = selectedEngine) => {
     if (e) e.preventDefault();
-    if (!sqlText.trim()) return;
+    if (!sqlToLint.trim()) return;
 
     setIsLoading(true);
     try {
-      const res = await lintMigrationSql(sqlText, selectedEngine);
+      const res = await lintMigrationSql(sqlToLint, eng);
       setResult(res);
     } catch (err: any) {
       alert(err.message || 'Failed to lint migration');
@@ -42,8 +42,14 @@ export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
   };
 
   useEffect(() => {
-    handleLint();
+    handleLint(undefined, sqlText, selectedEngine);
   }, [selectedEngine]);
+
+  const handleApplyScenario = (sc: typeof scenarios[0]) => {
+    setSelectedEngine(sc.engine as DatabaseEngine);
+    setSqlText(sc.sql);
+    handleLint(undefined, sc.sql, sc.engine as DatabaseEngine);
+  };
 
   const handleCopy = (sql: string, id: string) => {
     navigator.clipboard.writeText(sql);
@@ -176,10 +182,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
               <button
                 key={idx}
                 type="button"
-                onClick={() => {
-                  setSelectedEngine(sc.engine);
-                  setSqlText(sc.sql);
-                }}
+                onClick={() => handleApplyScenario(sc)}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition flex items-center gap-1.5 shadow-sm border ${
                   selectedEngine === sc.engine
                     ? 'bg-purple-100/90 text-purple-950 border-purple-300 font-bold'

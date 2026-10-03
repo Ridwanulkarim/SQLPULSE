@@ -91,6 +91,10 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    handleLoadSample('slow', selectedEngine);
+  }, [selectedEngine]);
+
   const handleAnalyze = async (planText: string, query?: string, engine: DatabaseEngine = selectedEngine) => {
     setIsLoading(true);
     try {
@@ -266,6 +270,8 @@ export function App() {
                 onLoadSample={handleLoadSample}
                 selectedEngine={selectedEngine}
                 onSelectEngine={setSelectedEngine}
+                rawPlanInput={rawPlanInput}
+                rawQueryInput={rawQuery}
               />
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 sm:p-3.5 rounded-2xl bg-white/80 border border-purple-200/80 shadow-sm">

@@ -633,6 +633,94 @@ Warning: High inter-shard IPC latency due to missing Partition Key in WHERE clau
 Direct shard-pinned execution on Shard #3 (CPU Core #3). Partition Key matched hash ring. Latency: 0.65ms`,
   },
 
+  clickhouse: {
+    slow: `ClickHouse Pipeline Trace:
+Expression (Projection)
+  Filter (WHERE status = 'completed' AND total_amount > 150)
+    ReadFromMergeTree (orders_distributed)
+    Indexes: None used (Full Table Scan over 50,000,000 uncompressed parts)
+    Selected 120 parts, 50,000,000 rows, 4.20 GB uncompressed
+    Memory Peak: 1.45 GB, Elapsed Time: 340.5ms`,
+    optimized: `ClickHouse Pipeline Trace:
+Expression (Projection)
+  ReadFromMergeTree (orders_distributed)
+    Indexes: MinMax Index (date >= '2026-10-01'), Primary Key (status, customer_id)
+    Selected 2 parts, 1,200 rows, 45 KB
+    Granules: 2/6250 (99.97% pruned via primary key index)
+    Memory Peak: 4.5 MB, Elapsed Time: 1.8ms`,
+    migration: `-- ClickHouse Partition Pruning Schema
+ALTER TABLE orders_distributed ADD INDEX idx_orders_status status TYPE minmax GRANULARITY 4;`,
+  },
+
+  snowflake: {
+    slow: `Snowflake Profile Overview:
+Operator: TableScan [ORDERS]
+Bytes Scanned: 42.8 GB (100% of micro-partitions scanned)
+Partitions Total: 1,420 | Partitions Scanned: 1,420
+Spilling: Bytes Spilled to Remote Storage = 2.4 GB
+Warning: Missing Clustering Key forced full micro-partition scan. Execution Time: 820ms`,
+    optimized: `Snowflake Profile Overview:
+Operator: TableScan [ORDERS]
+Bytes Scanned: 1.2 MB (0.07% of micro-partitions scanned)
+Partitions Total: 1,420 | Partitions Scanned: 1 (Pruning Ratio: 99.93%)
+Spilling: 0 Bytes Spilled
+Clustering Key: (STATUS, CREATED_DATE). Execution Time: 12ms`,
+    migration: `ALTER TABLE orders CLUSTER BY (status, created_date);`,
+  },
+
+  bigquery: {
+    slow: `Google BigQuery Execution Graph:
+Stage S00: Input -> Scan orders (580.4 GB read) -> Filter -> Output
+Slots Consumed: 142 slot-seconds
+Warning: Query scanned 580 GB. No partition filter was applied to _PARTITIONDATE / created_at.`,
+    optimized: `Google BigQuery Execution Graph:
+Stage S00: Input -> Scan orders (14.2 MB read via partition filter) -> Filter -> Output
+Slots Consumed: 0.12 slot-seconds
+Partition Pruned: 2026-10-01 to 2026-10-02 (99.98% bytes saved).`,
+  },
+
+  duckdb: {
+    slow: `DuckDB Physical Plan:
+┌───────────────────────────┐
+│         PROJECTION        │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│           FILTER          │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│      SEQ_SCAN (orders)    │
+│   (Scanned 10,000,000)    │
+└───────────────────────────┘
+Total Execution Time: 185ms`,
+    optimized: `DuckDB Physical Plan:
+┌───────────────────────────┐
+│         PROJECTION        │
+└─────────────┬─────────────┘
+┌─────────────┴─────────────┐
+│       INDEX_SCAN (idx)    │
+│    (Scanned 120 tuples)   │
+└───────────────────────────┘
+Total Execution Time: 0.45ms`,
+  },
+
+  dynamodb: {
+    slow: `DynamoDB Consumed Capacity:
+Operation: Scan
+TableName: orders
+ScannedCount: 150000
+Count: 120
+ConsumedCapacityUnits: 1850.5 RCU
+Warning: FilterExpression evaluated on client side after full table scan. High RCU cost.`,
+    optimized: `DynamoDB Consumed Capacity:
+Operation: Query
+IndexName: CustomerStatusIndex
+KeyConditionExpression: customer_id = :cid AND #st = :st
+ScannedCount: 120
+Count: 120
+ConsumedCapacityUnits: 2.0 RCU
+Direct GSI query execution. Latency: 4ms`,
+  },
+
   datastax: {
     slow: `Astra DB Vector/CQL Trace:
 Warning: ANN vector query combined with ALLOW FILTERING without vector index completion on 'products' table. Latency: 310ms`,
@@ -640,6 +728,107 @@ Warning: ANN vector query combined with ALLOW FILTERING without vector index com
 Direct HNSW Vector index seek with Astra Serverless Vector routing. Latency: 2.1ms`,
   },
 };
+
+export function getSamplesForEngine(engineName: string = 'postgres'): { slow: any; optimized: any; migration?: string } {
+  const norm = (engineName || 'postgres').toLowerCase().trim();
+
+  if (SAMPLES_BY_ENGINE[norm]) {
+    return SAMPLES_BY_ENGINE[norm];
+  }
+
+  // Common aliases
+  const aliasMap: Record<string, string> = {
+    postgresql: 'postgres',
+    supabase: 'postgres',
+    neon: 'postgres',
+    cockroachdb: 'postgres',
+    yugabyte: 'postgres',
+    yugabytedb: 'postgres',
+    amazon_aurora: 'postgres',
+    aurora_postgres: 'postgres',
+    aurora: 'postgres',
+    postgres_xl: 'postgres',
+
+    mariadb: 'mysql',
+    planetscale: 'mysql',
+    percona: 'mysql',
+
+    turso: 'sqlite',
+    spatialite: 'sqlite',
+
+    microsoft_sql_server: 'mssql',
+    sql_server: 'mssql',
+    sqlserver: 'mssql',
+    azure_sql: 'mssql',
+    microsoft_azure_sql_database: 'mssql',
+
+    ibm_db2: 'db2',
+    rds: 'amazon_rds',
+
+    amazon_documentdb: 'documentdb',
+    couchdb: 'mongodb',
+    couchbase: 'mongodb',
+    ravendb: 'mongodb',
+    rethinkdb: 'mongodb',
+
+    amazon_dynamodb: 'dynamodb',
+
+    duckdb: 'duckdb',
+    snowflake: 'snowflake',
+    google_bigquery: 'bigquery',
+    bigquery: 'bigquery',
+    amazon_redshift: 'clickhouse',
+    redshift: 'clickhouse',
+    databricks: 'clickhouse',
+    apache_spark_sql: 'clickhouse',
+    apache_hive: 'clickhouse',
+
+    keydb: 'redis',
+    dragonfly: 'redis',
+    memcached: 'redis',
+    valkey: 'redis',
+
+    apache_cassandra: 'cassandra',
+    scylladb: 'scylladb',
+    hbase: 'cassandra',
+
+    opensearch: 'elasticsearch',
+    apache_solr: 'solr',
+    solr: 'solr',
+    meilisearch: 'meilisearch',
+    algolia: 'algolia',
+    splunk: 'elasticsearch',
+
+    memgraph: 'memgraph',
+    dgraph: 'dgraph',
+    arangodb: 'arangodb',
+    amazon_neptune: 'neo4j',
+
+    timescale: 'timescaledb',
+    influxdb: 'influxdb',
+    dolphindb: 'dolphindb',
+    questdb: 'timescaledb',
+
+    pgvector: 'pinecone',
+    chroma: 'weaviate',
+  };
+
+  if (aliasMap[norm] && SAMPLES_BY_ENGINE[aliasMap[norm]]) {
+    return SAMPLES_BY_ENGINE[aliasMap[norm]];
+  }
+
+  // Fallback by category if known
+  if (norm.includes('click') || norm.includes('olap') || norm.includes('snow') || norm.includes('query')) return SAMPLES_BY_ENGINE.clickhouse || SAMPLES_BY_ENGINE.postgres;
+  if (norm.includes('mongo') || norm.includes('couch') || norm.includes('doc')) return SAMPLES_BY_ENGINE.mongodb;
+  if (norm.includes('vector') || norm.includes('pine') || norm.includes('milvus') || norm.includes('qdrant')) return SAMPLES_BY_ENGINE.pinecone;
+  if (norm.includes('graph') || norm.includes('neo') || norm.includes('dgraph')) return SAMPLES_BY_ENGINE.neo4j;
+  if (norm.includes('time') || norm.includes('metric') || norm.includes('telemetry')) return SAMPLES_BY_ENGINE.timescaledb;
+  if (norm.includes('redis') || norm.includes('cache') || norm.includes('mem')) return SAMPLES_BY_ENGINE.redis;
+  if (norm.includes('cassandra') || norm.includes('scylla')) return SAMPLES_BY_ENGINE.cassandra;
+  if (norm.includes('elastic') || norm.includes('search')) return SAMPLES_BY_ENGINE.elasticsearch;
+
+  return SAMPLES_BY_ENGINE.postgres;
+}
 
 export const SAMPLE_SLOW_PLAN = SAMPLES_BY_ENGINE.postgres.slow;
 export const SAMPLE_OPTIMIZED_PLAN = SAMPLES_BY_ENGINE.postgres.optimized;

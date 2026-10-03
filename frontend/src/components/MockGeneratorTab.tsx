@@ -39,7 +39,7 @@ export const MockGeneratorTab: React.FC<MockGeneratorTabProps> = ({
 
   useEffect(() => {
     handleGenerate();
-  }, [selectedEngine, preset]);
+  }, [selectedEngine, preset, rowCount]);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);

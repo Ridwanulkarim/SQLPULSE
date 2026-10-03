@@ -8,6 +8,8 @@ interface PlanInputProps {
   onLoadSample: (type: 'slow' | 'optimized', engine: DatabaseEngine) => void;
   selectedEngine: DatabaseEngine;
   onSelectEngine: (engine: DatabaseEngine) => void;
+  rawPlanInput?: any;
+  rawQueryInput?: string;
 }
 
 export const PlanInput: React.FC<PlanInputProps> = ({
@@ -16,6 +18,8 @@ export const PlanInput: React.FC<PlanInputProps> = ({
   onLoadSample,
   selectedEngine,
   onSelectEngine,
+  rawPlanInput,
+  rawQueryInput,
 }) => {
   const [planText, setPlanText] = useState('');
   const [queryText, setQueryText] = useState('');
@@ -24,6 +28,22 @@ export const PlanInput: React.FC<PlanInputProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
 
   const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
+
+  useEffect(() => {
+    if (rawPlanInput !== undefined && rawPlanInput !== null) {
+      const formatted = typeof rawPlanInput === 'string' ? rawPlanInput : JSON.stringify(rawPlanInput, null, 2);
+      setPlanText(formatted);
+    }
+  }, [rawPlanInput]);
+
+  useEffect(() => {
+    if (rawQueryInput !== undefined && rawQueryInput !== null) {
+      setQueryText(rawQueryInput);
+      if (rawQueryInput.trim().length > 0) {
+        setShowQueryInput(true);
+      }
+    }
+  }, [rawQueryInput]);
 
   useEffect(() => {
     if (activeCategory !== 'all' && activeCategory !== 'top_ranked' && currentDb.category !== activeCategory) {

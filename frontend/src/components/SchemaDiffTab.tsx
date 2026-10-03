@@ -43,13 +43,13 @@ export const SchemaDiffTab: React.FC = () => {
     }
   ];
 
-  const handleDiff = async () => {
+  const handleDiff = async (engine = selectedEngine, src = sourceEnv, tgt = targetEnv) => {
     setIsLoading(true);
     try {
       const data = await diffSchema({
-        engine: selectedEngine,
-        sourceEnv,
-        targetEnv,
+        engine,
+        sourceEnv: src,
+        targetEnv: tgt,
       });
       setResult(data);
     } catch (err: any) {
@@ -60,8 +60,15 @@ export const SchemaDiffTab: React.FC = () => {
   };
 
   useEffect(() => {
-    handleDiff();
-  }, [selectedEngine]);
+    handleDiff(selectedEngine, sourceEnv, targetEnv);
+  }, [selectedEngine, sourceEnv, targetEnv]);
+
+  const handleApplyPreset = (p: typeof presets[0]) => {
+    setSelectedEngine(p.engine);
+    setSourceEnv(p.source);
+    setTargetEnv(p.target);
+    handleDiff(p.engine, p.source, p.target);
+  };
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -107,11 +114,7 @@ export const SchemaDiffTab: React.FC = () => {
           <button
             key={idx}
             type="button"
-            onClick={() => {
-              setSelectedEngine(p.engine);
-              setSourceEnv(p.source);
-              setTargetEnv(p.target);
-            }}
+            onClick={() => handleApplyPreset(p)}
             className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-indigo-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-400 shadow-sm transition active:scale-95"
           >
             {p.label}
@@ -156,7 +159,7 @@ export const SchemaDiffTab: React.FC = () => {
               />
               <button
                 type="button"
-                onClick={handleDiff}
+                onClick={() => handleDiff(selectedEngine, sourceEnv, targetEnv)}
                 disabled={isLoading}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition active:scale-95 shrink-0"
               >

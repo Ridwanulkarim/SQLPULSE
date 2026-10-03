@@ -38,7 +38,7 @@ export const ProductionReadinessTab: React.FC = () => {
 
   useEffect(() => {
     handleAudit();
-  }, [selectedEngine]);
+  }, [selectedEngine, estimatedQps]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Zap,
   Check,
@@ -48,12 +48,12 @@ export const QueryRewriterTab: React.FC<QueryRewriterTabProps> = ({
     },
   ];
 
-  const handleRewrite = async (queryToRun = inputQuery) => {
+  const handleRewrite = async (queryToRun = inputQuery, eng = selectedEngine) => {
     if (!queryToRun.trim()) return;
     setIsLoading(true);
     try {
       const res = await rewriteQuery({
-        engine: selectedEngine,
+        engine: eng,
         query: queryToRun,
       });
       setResult(res);
@@ -64,9 +64,13 @@ export const QueryRewriterTab: React.FC<QueryRewriterTabProps> = ({
     }
   };
 
+  useEffect(() => {
+    handleRewrite(inputQuery, selectedEngine);
+  }, [selectedEngine]);
+
   const applySample = (sample: typeof sampleAntiPatterns[0]) => {
     setInputQuery(sample.query);
-    handleRewrite(sample.query);
+    handleRewrite(sample.query, selectedEngine);
   };
 
   const handleCopyQuery = () => {
