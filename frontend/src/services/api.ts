@@ -39,36 +39,44 @@ async function safeRequest<T>(
     const res = await fetch(url, options);
     const contentType = res.headers.get('content-type') || '';
 
-    if (res.ok) {
-      if (contentType.includes('application/json')) {
-        const json = await res.json();
-        if (json && json.success && json.data !== undefined) {
-          return json.data;
-        }
-        if (json && json.samples !== undefined) {
-          return json.samples;
-        }
-        if (json && json.shareUrl !== undefined) {
-          return json;
-        }
-        return json;
-      }
-      return (await res.text()) as unknown as T;
+    // If static hosting returns 404 or an HTML page (Vercel/Netlify SPA fallback) or 502/503/504:
+    // This indicates no backend API is running on this route -> run in-browser client-side heuristic engine
+    if (
+      res.status === 404 ||
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504 ||
+      !contentType.includes('application/json')
+    ) {
+      return fallbackFn();
     }
 
-    // Backend returned an explicit HTTP error (4xx / 5xx) -> DO NOT mask with fallback!
-    let errorMsg = `Server error (HTTP ${res.status}): ${res.statusText}`;
-    if (contentType.includes('application/json')) {
-      try {
-        const errJson = await res.json();
-        if (errJson && errJson.error) {
-          errorMsg = errJson.error;
-        }
-      } catch (_) {}
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.success && json.data !== undefined) {
+        return json.data;
+      }
+      if (json && json.samples !== undefined) {
+        return json.samples;
+      }
+      if (json && json.shareUrl !== undefined) {
+        return json;
+      }
+      return json;
     }
+
+    // Backend is a real API returning an explicit JSON error (e.g. 400 Bad Request, 403 Forbidden, 422)
+    let errorMsg = `Server error (HTTP ${res.status}): ${res.statusText}`;
+    try {
+      const errJson = await res.json();
+      if (errJson && errJson.error) {
+        errorMsg = errJson.error;
+      }
+    } catch (_) {}
+
     throw new Error(errorMsg);
   } catch (err: any) {
-    // If the error was an explicit HTTP error thrown above, surface it directly to the UI
+    // If it's a network offline error or fetch failed -> fallback to client-side engine
     const isNetworkOffline =
       err.name === 'TypeError' ||
       (err.message && (
@@ -79,7 +87,6 @@ async function safeRequest<T>(
       ));
 
     if (isNetworkOffline) {
-      // Backend is unavailable or client is offline -> run local client-side heuristic engine
       return fallbackFn();
     }
 
