@@ -12,8 +12,26 @@ import { fetchConnectHubConfig } from '../services/api';
 import { ConnectHubResult, DATABASE_CATALOG } from '../types';
 import { DbBrandLogo } from './DbBrandLogo';
 
-export const ConnectHubTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface ConnectHubTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const ConnectHubTab: React.FC<ConnectHubTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [host, setHost] = useState<string>('db.production.internal');
   const [port, setPort] = useState<number>(5432);
   const [database, setDatabase] = useState<string>('ecommerce_prod');
@@ -108,7 +126,10 @@ export const ConnectHubTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

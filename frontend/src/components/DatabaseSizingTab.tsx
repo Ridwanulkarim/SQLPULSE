@@ -3,8 +3,24 @@ import { DatabaseEngine, DATABASE_CATALOG } from '../types';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { Calculator, Cpu, HardDrive, Layers, Server, Copy, Check, Network } from 'lucide-react';
 
-export const DatabaseSizingTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>('postgres');
+interface DatabaseSizingTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const DatabaseSizingTab: React.FC<DatabaseSizingTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>(
+    (propEngine as DatabaseEngine) || 'postgres'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine as DatabaseEngine);
+    }
+  }, [propEngine]);
   const [activeSubTab, setActiveSubTab] = useState<'vector' | 'oltp' | 'partitioning' | 'pooler'>('oltp');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -78,6 +94,45 @@ export const DatabaseSizingTab: React.FC = () => {
   const unpooledMemoryWastedGB = ((totalAppConnectionsDemand * memoryPerUnpooledConnectionMB) / 1024).toFixed(1);
 
   const generatePgbouncerConfig = () => {
+    if (currentDb.id === 'mysql' || currentDb.id === 'mariadb') {
+      return `# ===================================================================
+# PROXYSQL 2.x PRODUCTION CONFIGURATION (for ${currentDb.name})
+# Target Backend: ${dbCpuCores} CPU Cores -> Optimal Pool: ${optimalBackendConnections} Connections
+# ===================================================================
+
+admin_variables={
+    admin_credentials="admin:admin;radmin:radmin"
+    mysql_ifaces="0.0.0.0:6032"
+}
+
+mysql_variables={
+    threads=${Math.min(8, dbCpuCores)}
+    max_connections=${Math.max(1000, totalAppConnectionsDemand * 2)}
+    default_schema="production_db"
+    connect_timeout_server=3000
+    free_connections_pct=20
+}
+
+mysql_servers=(
+    { address="127.0.0.1", port=3306, hostgroup=0, max_connections=${optimalBackendConnections} }
+)`;
+    } else if (currentDb.id === 'redis' || currentDb.id === 'keydb') {
+      return `# ===================================================================
+# TWEMPROXY / NUTCRACKER CONFIGURATION (for ${currentDb.name})
+# ===================================================================
+
+redis_pool:
+  listen: 0.0.0.0:22121
+  hash: fnv1a_64
+  distribution: ketama
+  auto_eject_hosts: true
+  timeout: 400
+  redis: true
+  server_connections: ${optimalBackendConnections}
+  servers:
+   - 127.0.0.1:6379:1 server1`;
+    }
+
     return `# ===================================================================
 # PGBOUNCER PRODUCTION CONFIGURATION (for ${currentDb.name})
 # Target Backend: ${dbCpuCores} CPU Cores -> Optimal Pool: ${optimalBackendConnections} Connections
@@ -195,7 +250,10 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
           <div className="flex items-center gap-2">
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={(eng) => setSelectedEngine(eng)}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng);
+              }}
               label="Selected Engine"
             />
           </div>

@@ -10,8 +10,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { inspectSlowLogs } from '../services/api';
 import { LogInspectResult, DATABASE_CATALOG } from '../types';
 
-export const LogInspectorTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface LogInspectorTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const LogInspectorTab: React.FC<LogInspectorTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [logContent, setLogContent] = useState<string>(
     `2026-10-03 08:14:22 UTC [80142]: [3-1] user=app_user,db=prod LOG: duration: 852.410 ms statement: SELECT * FROM orders WHERE customer_id = 94812 AND status = 'completed' ORDER BY created_at DESC LIMIT 20;
 2026-10-03 08:14:25 UTC [80145]: [4-1] user=app_user,db=prod LOG: duration: 1420.100 ms statement: SELECT c.id, sum(o.total) FROM customers c JOIN orders o ON c.id = o.customer_id WHERE o.created_at >= NOW() - INTERVAL '30 days' GROUP BY c.id;
@@ -108,7 +126,10 @@ SELECT * FROM transactions WHERE user_id = 49102 AND status = 'settled' ORDER BY
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

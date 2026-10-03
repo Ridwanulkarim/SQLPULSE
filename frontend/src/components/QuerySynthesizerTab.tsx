@@ -14,11 +14,29 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { synthesizeQuery } from '../services/api';
 import { QuerySynthesizeResult, DATABASE_CATALOG } from '../types';
 
-export const QuerySynthesizerTab: React.FC = () => {
+import { DatabaseEngine } from '../types';
+
+interface QuerySynthesizerTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const QuerySynthesizerTab: React.FC<QuerySynthesizerTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
   const [prompt, setPrompt] = useState<string>(
     'Find top 10 customers with highest purchase volume in the last 90 days who have placed at least 3 orders'
   );
-  const [targetEngine, setTargetEngine] = useState<string>('postgresql');
+  const [targetEngine, setTargetEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== targetEngine) {
+      setTargetEngine(propEngine);
+    }
+  }, [propEngine]);
   const [domainPreset, setDomainPreset] = useState<string>('ecommerce');
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -253,7 +271,10 @@ export const QuerySynthesizerTab: React.FC = () => {
             </label>
             <UniversalDbSelector
               selectedEngine={targetEngine}
-              onSelectEngine={setTargetEngine}
+              onSelectEngine={(eng) => {
+                setTargetEngine(eng);
+                onSelectEngine?.(eng as DatabaseEngine);
+              }}
             />
           </div>
 

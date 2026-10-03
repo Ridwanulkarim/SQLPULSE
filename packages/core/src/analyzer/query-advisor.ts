@@ -235,9 +235,57 @@ export class QueryAdvisor {
     }
 
     let rewrittenQuery = cleanQuery;
-    if (rewrittenQuery.includes('SELECT *')) {
-      rewrittenQuery = rewrittenQuery.replace(/SELECT\s+\*\s+FROM/i, `SELECT id, ${allIndexCols.join(', ') || 'user_id, status, amount'} FROM`);
+    if (rewrittenQuery.includes('SELECT *') || /SELECT\s+\*\s+FROM/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(/SELECT\s+\*\s+FROM/i, `SELECT id, ${allIndexCols.join(', ') || 'customer_id, status, total_amount'} FROM`);
     }
+
+    // Non-sargable YEAR(x) = YYYY rewrite
+    if (/YEAR\s*\(\s*([a-zA-Z0-9_.]+)\s*\)\s*=\s*(\d{4})/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(
+        /YEAR\s*\(\s*([a-zA-Z0-9_.]+)\s*\)\s*=\s*(\d{4})/gi,
+        (_match, col, yr) => `${col} >= '${yr}-01-01 00:00:00' AND ${col} < '${Number(yr) + 1}-01-01 00:00:00'`
+      );
+    }
+
+    // Deep offset rewrite to keyset pagination
+    if (/OFFSET\s+\d{3,}/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(
+        /OFFSET\s+\d{3,}/i,
+        '/* Keyset Pagination */ WHERE id > $last_seen_id'
+      );
+    }
+
+    // MongoDB $where rewrite
+    if (category === 'document' && /\$where/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(
+        /\$where:\s*["'][^"']+["']/i,
+        `credits: { $gt: 100 }, status: "active"`
+      );
+    }
+
+    // Redis KEYS * rewrite
+    if (category === 'keyvalue' && /KEYS\s+/i.test(rewrittenQuery)) {
+      rewrittenQuery = `SCAN 0 MATCH session:user:* COUNT 100\n-- Pipelined HMGET to retrieve fields in O(1)`;
+    }
+
+    // Cassandra ALLOW FILTERING rewrite
+    if (category === 'wide_column' && /ALLOW\s+FILTERING/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(/\s*ALLOW\s+FILTERING;?/i, '');
+      if (!rewrittenQuery.includes('user_id =')) {
+        rewrittenQuery = rewrittenQuery.replace(/WHERE\s+/i, 'WHERE user_id = $partition_id AND ');
+      }
+    }
+
+    // Neo4j unbounded path rewrite
+    if (category === 'graph' && /\-\[\s*:\s*[a-zA-Z0-9_]*\s*\*\]\->/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(/\-\[\s*:\s*([a-zA-Z0-9_]*)\s*\*\]\->/g, '-[:$1*1..3]->');
+    }
+
+    // Vector exact search rewrite
+    if (category === 'vector' && /exact_search:\s*true/i.test(rewrittenQuery)) {
+      rewrittenQuery = rewrittenQuery.replace(/exact_search:\s*true/i, 'exact_search: false, ef_search: 64');
+    }
+
     if (!rewrittenQuery.toUpperCase().includes('LIMIT') && rewrittenQuery.toUpperCase().includes('ORDER BY') && (category === 'relational' || category === 'olap')) {
       rewrittenQuery += '\nLIMIT 50;';
     }

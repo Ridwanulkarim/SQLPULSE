@@ -12,8 +12,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { planPartitionStrategy } from '../services/api';
 import { PartitionResult, DATABASE_CATALOG } from '../types';
 
-export const PartitionArchitectTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface PartitionArchitectTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const PartitionArchitectTab: React.FC<PartitionArchitectTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [tableName, setTableName] = useState<string>('order_transactions');
   const [partitionColumn, setPartitionColumn] = useState<string>('created_at');
   const [strategy, setStrategy] = useState<string>('range_monthly');
@@ -84,7 +102,10 @@ export const PartitionArchitectTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

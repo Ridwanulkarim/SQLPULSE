@@ -9,8 +9,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { generateCdcOutbox } from '../services/api';
 import { CdcOutboxResult } from '../types';
 
-export const CdcOutboxTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface CdcOutboxTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const CdcOutboxTab: React.FC<CdcOutboxTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [sourceTable, setSourceTable] = useState<string>('orders');
   const [destinationBroker, setDestinationBroker] = useState<'kafka' | 'rabbitmq' | 'sqs' | 'redis_streams'>('kafka');
   const [activeCodeTab, setActiveCodeTab] = useState<'ddl' | 'debezium' | 'worker'>('ddl');
@@ -85,7 +103,10 @@ export const CdcOutboxTab: React.FC = () => {
             </label>
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={setSelectedEngine}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng as DatabaseEngine);
+              }}
             />
           </div>
 

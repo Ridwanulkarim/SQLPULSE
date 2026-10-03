@@ -11,8 +11,26 @@ import { diffSchema } from '../services/api';
 import { SchemaDiffResult, SchemaDiffChange } from '../types';
 import { DbBrandLogo } from './DbBrandLogo';
 
-export const SchemaDiffTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface SchemaDiffTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const SchemaDiffTab: React.FC<SchemaDiffTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [sourceEnv, setSourceEnv] = useState<string>('Git Migration Branch (Source)');
   const [targetEnv, setTargetEnv] = useState<string>('Live Production Cluster (Target)');
   const [activeCodeTab, setActiveCodeTab] = useState<'forward' | 'rollback'>('forward');
@@ -65,6 +83,7 @@ export const SchemaDiffTab: React.FC = () => {
 
   const handleApplyPreset = (p: typeof presets[0]) => {
     setSelectedEngine(p.engine);
+    onSelectEngine?.(p.engine as DatabaseEngine);
     setSourceEnv(p.source);
     setTargetEnv(p.target);
     handleDiff(p.engine, p.source, p.target);
@@ -130,7 +149,10 @@ export const SchemaDiffTab: React.FC = () => {
             </label>
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={setSelectedEngine}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng as DatabaseEngine);
+              }}
             />
           </div>
 

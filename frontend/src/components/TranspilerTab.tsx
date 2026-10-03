@@ -14,9 +14,27 @@ import { DbBrandLogo } from './DbBrandLogo';
 import { transpileSql } from '../services/api';
 import { TranspileResult, DATABASE_CATALOG } from '../types';
 
-export const TranspilerTab: React.FC = () => {
+import { DatabaseEngine } from '../types';
+
+interface TranspilerTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const TranspilerTab: React.FC<TranspilerTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
   const [sourceEngine, setSourceEngine] = useState<string>('oracle');
-  const [targetEngine, setTargetEngine] = useState<string>('postgresql');
+  const [targetEngine, setTargetEngine] = useState<string>(
+    propEngine && propEngine !== 'oracle' ? propEngine : 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== targetEngine && propEngine !== sourceEngine) {
+      setTargetEngine(propEngine);
+    }
+  }, [propEngine]);
   const [sourceCode, setSourceCode] = useState<string>(
     `-- Oracle DDL & Query Sample
 CREATE TABLE customer_orders (

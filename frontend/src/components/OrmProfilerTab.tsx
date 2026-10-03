@@ -8,9 +8,14 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { profileOrm } from '../services/api';
-import { OrmProfilerResult, OrmIssue } from '../types';
+import { DatabaseEngine, OrmProfilerResult, OrmIssue } from '../types';
 
-export const OrmProfilerTab: React.FC = () => {
+interface OrmProfilerTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
   const [framework, setFramework] = useState<string>('prisma');
   const [activeTab, setActiveTab] = useState<'orm' | 'sql'>('orm');
   const [copied, setCopied] = useState<boolean>(false);

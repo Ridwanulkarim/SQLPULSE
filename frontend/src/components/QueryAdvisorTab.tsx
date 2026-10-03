@@ -4,8 +4,24 @@ import { DatabaseEngine, QueryAdvisorResult, DATABASE_CATALOG } from '../types';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { Copy, Check, Zap, AlertTriangle, CheckCircle2, ShieldAlert, Cpu, ArrowRight, Layers, GitCompare } from 'lucide-react';
 
-export const QueryAdvisorTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>('postgres');
+interface QueryAdvisorTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>(
+    (propEngine as DatabaseEngine) || 'postgres'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine as DatabaseEngine);
+    }
+  }, [propEngine]);
   const [queryText, setQueryText] = useState(
     `SELECT * \nFROM orders o\nJOIN customers c ON o.customer_id = c.id\nWHERE YEAR(o.created_at) = 2024 \n  AND o.status = 'completed'\nORDER BY o.created_at DESC\nOFFSET 15000;`
   );
@@ -35,9 +51,11 @@ export const QueryAdvisorTab: React.FC = () => {
   }, [selectedEngine]);
 
   const handleApplyPreset = (preset: typeof presets[0]) => {
-    setSelectedEngine(preset.engine);
+    const eng = preset.engine as DatabaseEngine;
+    setSelectedEngine(eng);
+    onSelectEngine?.(eng);
     setQueryText(preset.sql);
-    handleAdvise(undefined, preset.sql, preset.engine);
+    handleAdvise(undefined, preset.sql, eng);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -114,7 +132,10 @@ export const QueryAdvisorTab: React.FC = () => {
           <div className="flex items-center gap-2">
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={(eng) => setSelectedEngine(eng)}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng);
+              }}
               label="Target DB"
             />
           </div>

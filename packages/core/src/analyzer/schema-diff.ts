@@ -44,6 +44,9 @@ export function analyzeSchemaDiff(options: {
   const isOracle = engine === 'oracle';
   const isMSSQL = engine.includes('mssql') || engine.includes('sql_server') || engine.includes('microsoft_sql_server') || engine.includes('sqlserver');
   const isSQLite = engine === 'sqlite' || engine === 'turso';
+  const isClickHouse = engine === 'clickhouse';
+  const isSnowflake = engine === 'snowflake';
+  const isMongoDB = engine === 'mongodb' || engine === 'documentdb';
 
   // 1. Column Added DDL
   const columnForwardDdl = isMySQL
@@ -54,6 +57,12 @@ export function analyzeSchemaDiff(options: {
     ? "IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'two_factor_secret') ALTER TABLE users ADD two_factor_secret NVARCHAR(128) NULL;"
     : isSQLite
     ? 'ALTER TABLE users ADD COLUMN two_factor_secret TEXT NULL;'
+    : isClickHouse
+    ? 'ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret Nullable(String);'
+    : isSnowflake
+    ? 'ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(128);'
+    : isMongoDB
+    ? '// MongoDB Schema Validation Update\ndb.runCommand({ collMod: "users", validator: { $jsonSchema: { properties: { two_factor_secret: { bsonType: ["string", "null"] } } } } });'
     : 'ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(128) NULL;';
 
   const columnRollbackDdl = isMySQL
@@ -64,6 +73,12 @@ export function analyzeSchemaDiff(options: {
     ? 'ALTER TABLE users DROP COLUMN two_factor_secret;'
     : isSQLite
     ? '-- SQLite requires table rebuild to drop columns in legacy versions'
+    : isClickHouse
+    ? 'ALTER TABLE users DROP COLUMN IF EXISTS two_factor_secret;'
+    : isSnowflake
+    ? 'ALTER TABLE users DROP COLUMN IF EXISTS two_factor_secret;'
+    : isMongoDB
+    ? '// Remove field validation\ndb.runCommand({ collMod: "users", validationLevel: "off" });'
     : 'ALTER TABLE users DROP COLUMN IF EXISTS two_factor_secret;';
 
   // 2. Index Missing DDL
@@ -75,6 +90,12 @@ export function analyzeSchemaDiff(options: {
     ? 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) WITH (ONLINE = ON);'
     : isSQLite
     ? 'CREATE INDEX IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);'
+    : isClickHouse
+    ? 'ALTER TABLE orders ADD INDEX idx_orders_cust (customer_id, status) TYPE minmax GRANULARITY 4;'
+    : isSnowflake
+    ? 'ALTER TABLE orders CLUSTER BY (customer_id, status, created_at);'
+    : isMongoDB
+    ? 'db.orders.createIndex({ customer_id: 1, status: 1, created_at: -1 }, { background: true });'
     : 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);';
 
   const indexRollbackDdl = isMySQL
@@ -85,6 +106,12 @@ export function analyzeSchemaDiff(options: {
     ? 'DROP INDEX idx_orders_customer_status_created ON orders;'
     : isSQLite
     ? 'DROP INDEX IF EXISTS idx_orders_customer_status_created;'
+    : isClickHouse
+    ? 'ALTER TABLE orders DROP INDEX idx_orders_cust;'
+    : isSnowflake
+    ? 'ALTER TABLE orders DROP CLUSTERING KEY;'
+    : isMongoDB
+    ? 'db.orders.dropIndex("customer_id_1_status_1_created_at_-1");'
     : 'DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_status_created;';
 
   // 3. Table Added DDL
@@ -97,6 +124,25 @@ export function analyzeSchemaDiff(options: {
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_audit_logs_user_created ON audit_event_logs (user_id, created_at DESC) ALGORITHM=INPLACE, LOCK=NONE;`
+    : isClickHouse
+    ? `CREATE TABLE IF NOT EXISTS audit_event_logs (
+    id UInt64,
+    user_id UInt64,
+    action LowCardinality(String),
+    payload String,
+    created_at DateTime64(3, 'UTC') DEFAULT now64()
+) ENGINE = MergeTree()
+ORDER BY (user_id, created_at, id);`
+    : isSnowflake
+    ? `CREATE TABLE IF NOT EXISTS audit_event_logs (
+    id NUMBER AUTOINCREMENT PRIMARY KEY,
+    user_id NUMBER NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    payload VARIANT,
+    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);`
+    : isMongoDB
+    ? `db.createCollection("audit_event_logs");\ndb.audit_event_logs.createIndex({ user_id: 1, created_at: -1 });`
     : isOracle
     ? `CREATE TABLE audit_event_logs (
     id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -234,8 +234,117 @@ aws rds purchase-reserved-db-instances-offering \\
       }
     ];
 
-    const terraformIaC = `# -------------------------------------------------------------
-# Production Cloud Infrastructure as Code (Terraform HCL)
+    let terraformIaC = '';
+    if (provider === 'gcp_alloydb' || provider === 'gcp_cloudsql') {
+      terraformIaC = `# -------------------------------------------------------------
+# Google Cloud Platform Database (Terraform HCL)
+# Engine: ${meta.name} (${providerName})
+# Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
+# -------------------------------------------------------------
+
+resource "google_sql_database_instance" "production_db" {
+  name             = "sqlpulse-prod-${req.engine}"
+  database_version = "POSTGRES_16"
+  region           = "us-central1"
+
+  settings {
+    tier              = "db-custom-${vCpu}-${ramGb * 1024}"
+    availability_type = "${isHa ? 'REGIONAL' : 'ZONAL'}"
+    disk_size         = ${dbSizeGb}
+    disk_type         = "PD_SSD"
+    disk_autoresize   = true
+
+    backup_configuration {
+      enabled                        = true
+      point_in_time_recovery_enabled = true
+      start_time                     = "03:00"
+    }
+
+    user_labels = {
+      environment = "production"
+      managed_by  = "sqlpulse-finops"
+    }
+  }
+}`;
+    } else if (provider === 'azure_sql' || provider === 'azure_cosmos') {
+      terraformIaC = `# -------------------------------------------------------------
+# Microsoft Azure Database (Terraform HCL)
+# Engine: ${meta.name} (${providerName})
+# Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
+# -------------------------------------------------------------
+
+resource "azurerm_postgresql_flexible_server" "production_db" {
+  name                   = "sqlpulse-prod-${req.engine}"
+  resource_group_name    = "rg-production"
+  location               = "eastus"
+  version                = "16"
+  sku_name               = "GP_Standard_D${vCpu}ds_v5"
+  storage_mb             = ${dbSizeGb * 1024}
+  backup_retention_days  = ${backupDays}
+  
+  high_availability {
+    mode = "${isHa ? 'ZoneRedundant' : 'Disabled'}"
+  }
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "SQLPulse FinOps"
+  }
+}`;
+    } else if (provider === 'neon_serverless') {
+      terraformIaC = `# -------------------------------------------------------------
+# Neon Serverless Postgres (Terraform HCL)
+# Engine: ${meta.name} (${providerName})
+# Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
+# -------------------------------------------------------------
+
+resource "neon_project" "production_db" {
+  name                      = "sqlpulse-prod-${req.engine}"
+  region_id                 = "aws-us-east-2"
+  pg_version                = 16
+  history_retention_seconds = ${backupDays * 86400}
+  
+  default_endpoint_settings {
+    autoscaling_limit_min_cu = 0.5
+    autoscaling_limit_max_cu = ${vCpu * 2}
+    suspend_timeout_seconds  = 300
+  }
+}`;
+    } else if (provider === 'supabase_cloud') {
+      terraformIaC = `# -------------------------------------------------------------
+# Supabase Cloud Managed Instance (Terraform HCL)
+# Engine: ${meta.name} (${providerName})
+# Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
+# -------------------------------------------------------------
+
+resource "supabase_project" "production_db" {
+  name        = "sqlpulse-prod-${req.engine}"
+  organization_id = "org-sqlpulse-enterprise"
+  region      = "us-east-1"
+  db_pass     = "Sup3rS3curePass!2026"
+  plan        = "pro"
+}`;
+    } else if (provider === 'mongodb_atlas') {
+      terraformIaC = `# -------------------------------------------------------------
+# MongoDB Atlas Dedicated Cluster (Terraform HCL)
+# Engine: ${meta.name} (${providerName})
+# Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
+# -------------------------------------------------------------
+
+resource "mongodbatlas_cluster" "production_db" {
+  project_id   = "project-sqlpulse-941"
+  name         = "sqlpulse-prod-${req.engine}"
+  cluster_type = "${isHa ? 'REPLICASET' : 'STANDALONE'}"
+  
+  provider_name         = "AWS"
+  provider_region_name  = "US_EAST_1"
+  provider_instance_size_name = "M${vCpu >= 8 ? '50' : '40'}"
+  disk_size_gb          = ${dbSizeGb}
+  auto_scaling_disk_gb_enabled = true
+}`;
+    } else {
+      terraformIaC = `# -------------------------------------------------------------
+# Production AWS RDS / Aurora (Terraform HCL)
 # Target Database: ${meta.name} (${providerName})
 # Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
 # -------------------------------------------------------------
@@ -251,7 +360,7 @@ terraform {
 
 resource "aws_db_instance" "production_db" {
   identifier           = "sqlpulse-prod-${req.engine}"
-  engine               = "${req.engine === 'postgres' ? 'postgres' : req.engine === 'mysql' ? 'mysql' : 'postgres'}"
+  engine               = "${req.engine === 'mysql' ? 'mysql' : 'postgres'}"
   instance_class       = "${instanceType.startsWith('db.') ? instanceType : 'db.r6g.xlarge'}"
   allocated_storage    = ${dbSizeGb}
   max_allocated_storage = ${Math.round(dbSizeGb * 2.5)}
@@ -278,6 +387,7 @@ resource "aws_db_instance" "production_db" {
     CostCenter  = "Core-Infrastructure"
   }
 }`;
+    }
 
     return {
       engine: meta.id,

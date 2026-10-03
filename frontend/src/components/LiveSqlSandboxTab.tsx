@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu, Info } from 'lucide-react';
 
+import { DatabaseEngine } from '../types';
+
 interface MockRow {
   id: number;
   customer_id: number;
@@ -9,7 +11,14 @@ interface MockRow {
   created_at: string;
 }
 
-export const LiveSqlSandboxTab: React.FC = () => {
+interface LiveSqlSandboxTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
+  selectedEngine,
+}) => {
   const [datasetSize, setDatasetSize] = useState<number>(100000);
   const [hasIndex, setHasIndex] = useState<boolean>(false);
   const [sqlQuery, setSqlQuery] = useState<string>(
@@ -26,7 +35,7 @@ export const LiveSqlSandboxTab: React.FC = () => {
     sampleRows: MockRow[];
   } | null>(null);
 
-  const runLiveQuery = (withIndex = hasIndex, size = datasetSize) => {
+  const runLiveQuery = (withIndex = hasIndex, size = datasetSize, queryToRun = sqlQuery) => {
     setIsRunning(true);
     setTimeout(() => {
       let latencyMs = 0;
@@ -36,24 +45,28 @@ export const LiveSqlSandboxTab: React.FC = () => {
       let memoryHits = 0;
       let diskReads = 0;
 
+      // Extract limit if present
+      const limitMatch = queryToRun.match(/LIMIT\s+(\d+)/i);
+      const limitNum = limitMatch ? Math.min(100, parseInt(limitMatch[1], 10)) : 14;
+
       if (!withIndex) {
         latencyMs = parseFloat((35 + Math.random() * 25 + (size / 100000) * 45).toFixed(2));
         rowsExamined = size;
-        rowsReturned = 14;
+        rowsReturned = limitNum;
         scanType = 'Sequential Scan (Full Table Scan)';
         memoryHits = Math.round(size * 0.4);
         diskReads = Math.round(size * 0.6);
       } else {
         latencyMs = parseFloat((0.8 + Math.random() * 1.4).toFixed(2));
-        rowsExamined = 18;
-        rowsReturned = 14;
+        rowsExamined = Math.max(limitNum, Math.round(limitNum * 1.3));
+        rowsReturned = limitNum;
         scanType = 'Index Scan (B-Tree Lookups)';
         memoryHits = 4;
         diskReads = 0;
       }
 
       const sampleRows: MockRow[] = [];
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < Math.min(6, limitNum); i++) {
         sampleRows.push({
           id: 100000 + i * 347,
           customer_id: 4821,
@@ -77,8 +90,8 @@ export const LiveSqlSandboxTab: React.FC = () => {
   };
 
   useEffect(() => {
-    runLiveQuery(hasIndex, datasetSize);
-  }, [hasIndex, datasetSize]);
+    runLiveQuery(hasIndex, datasetSize, sqlQuery);
+  }, [hasIndex, datasetSize, selectedEngine]);
 
   const handleApplyIndex = () => {
     const nextVal = !hasIndex;

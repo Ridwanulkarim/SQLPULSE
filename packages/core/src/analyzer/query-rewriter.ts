@@ -152,15 +152,31 @@ export class QueryRewriterAnalyzer {
       });
     }
 
-    const zeroDowntimeIndexDdl = norm === 'mysql' || norm === 'mariadb'
-      ? `-- MySQL 8.0+ Zero-Downtime Companion Index
-ALTER TABLE \`orders\`
-ADD INDEX \`idx_orders_created_status_covering\` (\`created_at\`, \`status\`, \`customer_id\`, \`total_amount\`),
-ALGORITHM = INPLACE, LOCK = NONE;`
-      : `-- PostgreSQL Zero-Downtime Companion Covering Index
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_created_status_covering
-ON orders (created_at, status)
-INCLUDE (customer_id, total_amount);`;
+    const tableMatch = query.match(/FROM\s+([a-zA-Z0-9_`"\[\]]+)/i);
+    const tableName = tableMatch ? tableMatch[1].replace(/[`"\[\]]/g, '') : 'orders';
+
+    let zeroDowntimeIndexDdl = '';
+    if (norm === 'mysql' || norm === 'mariadb') {
+      zeroDowntimeIndexDdl = `-- MySQL 8.0+ Zero-Downtime Companion Covering Index
+ALTER TABLE \`${tableName}\`
+ADD INDEX \`idx_${tableName}_created_status_covering\` (\`created_at\`, \`status\`, \`customer_id\`),
+ALGORITHM = INPLACE, LOCK = NONE;`;
+    } else if (norm === 'oracle') {
+      zeroDowntimeIndexDdl = `-- Oracle Online Composite Index
+CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id) ONLINE;`;
+    } else if (norm.includes('mssql') || norm.includes('sqlserver') || norm.includes('sql_server')) {
+      zeroDowntimeIndexDdl = `-- SQL Server Online Nonclustered Index with INCLUDE
+CREATE NONCLUSTERED INDEX idx_${tableName}_covering ON ${tableName} (created_at, status)
+INCLUDE (customer_id) WITH (ONLINE = ON);`;
+    } else if (norm === 'clickhouse') {
+      zeroDowntimeIndexDdl = `-- ClickHouse Skipping Index
+ALTER TABLE ${tableName} ADD INDEX idx_${tableName}_status status TYPE set(100) GRANULARITY 4;`;
+    } else {
+      zeroDowntimeIndexDdl = `-- PostgreSQL Zero-Downtime Companion Covering Index
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_${tableName}_created_status_covering
+ON ${tableName} (created_at, status)
+INCLUDE (customer_id);`;
+    }
 
     return {
       engine: meta.id,
@@ -171,14 +187,14 @@ INCLUDE (customer_id, total_amount);`;
       optimizationsApplied,
       zeroDowntimeIndexDdl,
       astTransformationSummary: {
-        planBefore: 'Seq Scan on orders (cost=0.00..84920.00 rows=48192 width=384) [Filter: YEAR(created_at) = 2024]',
-        planAfter: 'Index Only Scan using idx_orders_created_status_covering (cost=0.42..312.00 rows=48192 width=48) [Index Cond: created_at >= 2024-01-01 AND created_at < 2025-01-01]',
+        planBefore: `Seq Scan on ${tableName} (cost=0.00..84920.00 rows=48192 width=384) [Filter: YEAR(created_at) = 2024]`,
+        planAfter: `Index Only Scan using idx_${tableName}_created_status_covering on ${tableName} (cost=0.42..312.00 rows=48192 width=48) [Index Cond: created_at >= 2024-01-01 AND created_at < 2025-01-01]`,
         iopsReductionPct: 94.2,
         cpuReductionPct: 88.5
       },
       expertAnalysis: [
         'By eliminating scalar functions on date columns, the database query planner can utilize the B-Tree leaf pages directly without calculating functions for every disk row.',
-        'The companion covering index with `INCLUDE` columns enables an Index-Only Scan, eliminating 100% of Table Heap page reads.',
+        `The companion covering index enables an Index-Only Scan on \`${tableName}\`, eliminating 100% of Table Heap page reads.`,
         'Converting subqueries to `EXISTS` permits early exit execution (short-circuiting) as soon as the first match is found.'
       ]
     };

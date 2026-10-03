@@ -16,8 +16,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { simulateDeadlockScenario } from '../services/api';
 import { DeadlockSimulationResult, DATABASE_CATALOG } from '../types';
 
-export const DeadlockSimulatorTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface DeadlockSimulatorTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const DeadlockSimulatorTab: React.FC<DeadlockSimulatorTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [selectedScenario, setSelectedScenario] = useState<string>('circular_row_locks');
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -103,7 +121,10 @@ export const DeadlockSimulatorTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

@@ -15,8 +15,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { tuneDatabaseConfig } from '../services/api';
 import { ConfigTuningResult, DATABASE_CATALOG } from '../types';
 
-export const ConfigTunerTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface ConfigTunerTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const ConfigTunerTab: React.FC<ConfigTunerTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [ramGb, setRamGb] = useState<number>(32);
   const [cpuCores, setCpuCores] = useState<number>(8);
   const [storageType, setStorageType] = useState<string>('nvme_ssd');
@@ -112,7 +130,10 @@ export const ConfigTunerTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

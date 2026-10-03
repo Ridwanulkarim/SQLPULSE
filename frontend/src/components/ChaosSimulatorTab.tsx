@@ -9,8 +9,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { simulateChaos } from '../services/api';
 import { ChaosSimulationResult, ChaosStep } from '../types';
 
-export const ChaosSimulatorTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface ChaosSimulatorTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const ChaosSimulatorTab: React.FC<ChaosSimulatorTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [scenarioId, setScenarioId] = useState<string>('primary_crash');
   const [copied, setCopied] = useState<boolean>(false);
   const [result, setResult] = useState<ChaosSimulationResult | null>(null);
@@ -85,7 +103,10 @@ export const ChaosSimulatorTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
         <p className="text-xs text-slate-500 hidden sm:block">

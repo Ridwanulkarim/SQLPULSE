@@ -9,8 +9,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { tuneVectorIndex } from '../services/api';
 import { VectorTuningResult } from '../types';
 
-export const VectorRpmTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('pgvector');
+import { DatabaseEngine } from '../types';
+
+interface VectorRpmTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const VectorRpmTab: React.FC<VectorRpmTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'pgvector'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [dimension, setDimension] = useState<number>(1536);
   const [vectorCount, setVectorCount] = useState<number>(500000);
   const [indexType] = useState<'HNSW' | 'IVFFLAT'>('HNSW');
@@ -83,7 +101,10 @@ export const VectorRpmTab: React.FC = () => {
             </label>
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={setSelectedEngine}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng as DatabaseEngine);
+              }}
             />
           </div>
 

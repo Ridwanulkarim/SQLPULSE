@@ -13,8 +13,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { auditReadiness } from '../services/api';
 import { ProductionReadinessResult, ReadinessCheckItem } from '../types';
 
-export const ProductionReadinessTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface ProductionReadinessTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const ProductionReadinessTab: React.FC<ProductionReadinessTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [estimatedQps, setEstimatedQps] = useState<number>(5000);
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -77,7 +95,10 @@ export const ProductionReadinessTab: React.FC = () => {
             </label>
             <UniversalDbSelector
               selectedEngine={selectedEngine}
-              onSelectEngine={setSelectedEngine}
+              onSelectEngine={(eng) => {
+                setSelectedEngine(eng);
+                onSelectEngine?.(eng as DatabaseEngine);
+              }}
             />
           </div>
 

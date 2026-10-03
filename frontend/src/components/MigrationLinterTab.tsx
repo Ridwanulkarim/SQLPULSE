@@ -7,12 +7,24 @@ import { ShieldCheck, ShieldAlert, Copy, Check, Terminal, Play, Lock, BookOpen, 
 
 interface MigrationLinterTabProps {
   sampleSql?: string;
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
 }
 
 export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
   sampleSql,
+  selectedEngine: propEngine,
+  onSelectEngine,
 }) => {
-  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>('postgres');
+  const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>(
+    (propEngine as DatabaseEngine) || 'postgres'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine as DatabaseEngine);
+    }
+  }, [propEngine]);
   const [sqlText, setSqlText] = useState(
     sampleSql ||
       `-- PostgreSQL Unsafe Schema Migration Script\nCREATE INDEX idx_orders_customer_id ON orders(customer_id);\nALTER TABLE order_items ADD CONSTRAINT fk_order_items_order_id FOREIGN KEY (order_id) REFERENCES orders(id);\nALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL;\nALTER TABLE transactions ALTER COLUMN amount TYPE NUMERIC(18, 4);`
@@ -45,10 +57,17 @@ export const MigrationLinterTab: React.FC<MigrationLinterTabProps> = ({
     handleLint(undefined, sqlText, selectedEngine);
   }, [selectedEngine]);
 
+  const handleEngineChange = (eng: DatabaseEngine) => {
+    setSelectedEngine(eng);
+    onSelectEngine?.(eng);
+  };
+
   const handleApplyScenario = (sc: typeof scenarios[0]) => {
-    setSelectedEngine(sc.engine as DatabaseEngine);
+    const eng = sc.engine as DatabaseEngine;
+    setSelectedEngine(eng);
+    onSelectEngine?.(eng);
     setSqlText(sc.sql);
-    handleLint(undefined, sc.sql, sc.engine as DatabaseEngine);
+    handleLint(undefined, sc.sql, eng);
   };
 
   const handleCopy = (sql: string, id: string) => {
@@ -157,6 +176,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
               selectedEngine={selectedEngine}
               onSelectEngine={(eng) => {
                 setSelectedEngine(eng);
+                onSelectEngine?.(eng);
               }}
               label="Dialect"
             />

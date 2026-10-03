@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DatabaseEngine, DATABASE_CATALOG } from '../types';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { ArrowRightLeft, Layers } from 'lucide-react';
@@ -16,8 +16,24 @@ interface DbArchitectureProfile {
   antiPatterns: string;
 }
 
-export const DatabaseComparisonTab: React.FC = () => {
-  const [db1Id, setDb1Id] = useState<DatabaseEngine>('postgres');
+interface DatabaseComparisonTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const DatabaseComparisonTab: React.FC<DatabaseComparisonTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [db1Id, setDb1Id] = useState<DatabaseEngine>(
+    (propEngine as DatabaseEngine) || 'postgres'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== db1Id) {
+      setDb1Id(propEngine as DatabaseEngine);
+    }
+  }, [propEngine]);
   const [db2Id, setDb2Id] = useState<DatabaseEngine>('mysql');
   const [db3Id, setDb3Id] = useState<DatabaseEngine>('snowflake');
   const [mobileViewMode, setMobileViewMode] = useState<'table' | 'cards'>('table');

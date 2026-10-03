@@ -14,8 +14,26 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { calculateDisasterRecovery } from '../services/api';
 import { DisasterRecoveryResult, DATABASE_CATALOG } from '../types';
 
-export const DisasterRecoveryTab: React.FC = () => {
-  const [selectedEngine, setSelectedEngine] = useState<string>('postgresql');
+import { DatabaseEngine } from '../types';
+
+interface DisasterRecoveryTabProps {
+  selectedEngine?: DatabaseEngine | string;
+  onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export const DisasterRecoveryTab: React.FC<DisasterRecoveryTabProps> = ({
+  selectedEngine: propEngine,
+  onSelectEngine,
+}) => {
+  const [selectedEngine, setSelectedEngine] = useState<string>(
+    (propEngine as string) || 'postgresql'
+  );
+
+  useEffect(() => {
+    if (propEngine && propEngine !== selectedEngine) {
+      setSelectedEngine(propEngine);
+    }
+  }, [propEngine]);
   const [dbSizeGb, setDbSizeGb] = useState<number>(500);
   const [dailyChangePercent, setDailyChangePercent] = useState<number>(10);
   const [networkBandwidthMbps, setNetworkBandwidthMbps] = useState<number>(1000);
@@ -105,7 +123,10 @@ export const DisasterRecoveryTab: React.FC = () => {
           </label>
           <UniversalDbSelector
             selectedEngine={selectedEngine}
-            onSelectEngine={setSelectedEngine}
+            onSelectEngine={(eng) => {
+              setSelectedEngine(eng);
+              onSelectEngine?.(eng as DatabaseEngine);
+            }}
           />
         </div>
 

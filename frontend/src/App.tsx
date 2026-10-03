@@ -321,17 +321,72 @@ export function App() {
             </>
           )}
 
-          {activeTab === 'migration' && <MigrationLinterTab />}
-          {activeTab === 'advisor' && <QueryAdvisorTab />}
-          {activeTab === 'sandbox' && <LiveSqlSandboxTab />}
-          {activeTab === 'transpiler' && <TranspilerTab />}
-          {activeTab === 'tuner' && <ConfigTunerTab />}
-          {activeTab === 'deadlock' && <DeadlockSimulatorTab />}
-          {activeTab === 'disaster' && <DisasterRecoveryTab />}
-          {activeTab === 'synthesizer' && <QuerySynthesizerTab />}
-          {activeTab === 'connect' && <ConnectHubTab />}
-          {activeTab === 'partition' && <PartitionArchitectTab />}
-          {activeTab === 'logs' && <LogInspectorTab />}
+          {activeTab === 'migration' && (
+            <MigrationLinterTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'advisor' && (
+            <QueryAdvisorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'sandbox' && (
+            <LiveSqlSandboxTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'transpiler' && (
+            <TranspilerTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'tuner' && (
+            <ConfigTunerTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'deadlock' && (
+            <DeadlockSimulatorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'disaster' && (
+            <DisasterRecoveryTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'synthesizer' && (
+            <QuerySynthesizerTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'connect' && (
+            <ConnectHubTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'partition' && (
+            <PartitionArchitectTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'logs' && (
+            <LogInspectorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
           {activeTab === 'bloat' && (
             <BloatAnalyzerTab
               selectedEngine={selectedEngine}
@@ -380,14 +435,54 @@ export function App() {
               onSelectEngine={setSelectedEngine}
             />
           )}
-          {activeTab === 'matrix' && <DatabaseComparisonTab />}
-          {activeTab === 'sizing' && <DatabaseSizingTab />}
-          {activeTab === 'schema_diff' && <SchemaDiffTab />}
-          {activeTab === 'orm_profiler' && <OrmProfilerTab />}
-          {activeTab === 'production_readiness' && <ProductionReadinessTab />}
-          {activeTab === 'chaos_simulator' && <ChaosSimulatorTab />}
-          {activeTab === 'cdc_outbox' && <CdcOutboxTab />}
-          {activeTab === 'vector_tuner' && <VectorRpmTab />}
+          {activeTab === 'matrix' && (
+            <DatabaseComparisonTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'sizing' && (
+            <DatabaseSizingTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'schema_diff' && (
+            <SchemaDiffTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'orm_profiler' && (
+            <OrmProfilerTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'production_readiness' && (
+            <ProductionReadinessTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'chaos_simulator' && (
+            <ChaosSimulatorTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'cdc_outbox' && (
+            <CdcOutboxTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
+          {activeTab === 'vector_tuner' && (
+            <VectorRpmTab
+              selectedEngine={selectedEngine}
+              onSelectEngine={setSelectedEngine}
+            />
+          )}
         </Suspense>
       </main>
 
