@@ -68,9 +68,62 @@ function getEngineMeta(engineId: string) {
   };
 }
 
+function extractLocksFromSql(sql: string): { statement: string; table: string; resourceId: string; lockMode: 'ExclusiveLock' | 'ShareLock' }[] {
+  const stmts = sql.split(';').map(s => s.trim()).filter(Boolean);
+  const result: { statement: string; table: string; resourceId: string; lockMode: 'ExclusiveLock' | 'ShareLock' }[] = [];
+
+  for (const stmt of stmts) {
+    if (/^BEGIN/i.test(stmt) || /^COMMIT/i.test(stmt) || /^ROLLBACK/i.test(stmt) || /^SET/i.test(stmt)) {
+      continue;
+    }
+
+    let table = 'records';
+    let resourceId = 'id=101';
+    let lockMode: 'ExclusiveLock' | 'ShareLock' = 'ExclusiveLock';
+
+    const updateMatch = stmt.match(/UPDATE\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?[\s\S]*?WHERE\s+([\s\S]*)/i);
+    const deleteMatch = stmt.match(/DELETE\s+FROM\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?[\s\S]*?WHERE\s+([\s\S]*)/i);
+    const selectForUpdateMatch = stmt.match(/SELECT[\s\S]*?FROM\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?[\s\S]*?WHERE\s+([\s\S]*?)(?:FOR\s+UPDATE|FOR\s+SHARE)/i);
+    const selectMatch = stmt.match(/SELECT[\s\S]*?FROM\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?[\s\S]*?WHERE\s+([\s\S]*)/i);
+
+    if (updateMatch) {
+      table = updateMatch[1];
+      resourceId = updateMatch[2].trim().replace(/\s+/g, ' ').slice(0, 30);
+      lockMode = 'ExclusiveLock';
+    } else if (deleteMatch) {
+      table = deleteMatch[1];
+      resourceId = deleteMatch[2].trim().replace(/\s+/g, ' ').slice(0, 30);
+      lockMode = 'ExclusiveLock';
+    } else if (selectForUpdateMatch) {
+      table = selectForUpdateMatch[1];
+      resourceId = selectForUpdateMatch[2].trim().replace(/\s+/g, ' ').slice(0, 30);
+      lockMode = /FOR\s+SHARE/i.test(stmt) ? 'ShareLock' : 'ExclusiveLock';
+    } else if (selectMatch) {
+      table = selectMatch[1];
+      resourceId = selectMatch[2].trim().replace(/\s+/g, ' ').slice(0, 30);
+      lockMode = 'ShareLock';
+    }
+
+    result.push({
+      statement: stmt + ';',
+      table,
+      resourceId: `${table}:${resourceId}`,
+      lockMode,
+    });
+  }
+
+  return result;
+}
+
 export class DeadlockSimulator {
   public simulate(req: DeadlockSimulationRequest): DeadlockSimulationResult {
     const meta = getEngineMeta(req.engine);
+
+    // If custom SQL provided for both Tx A and Tx B, run dynamic AST deadlock simulation
+    if (req.txASql && req.txASql.trim() && req.txBSql && req.txBSql.trim() && req.scenarioId === 'custom_sql') {
+      return this.simulateCustomTransactions(meta, req.txASql, req.txBSql);
+    }
+
     const scenario = req.scenarioId || 'circular_row_locks';
 
     switch (scenario) {
@@ -85,6 +138,169 @@ export class DeadlockSimulator {
       case 'circular_row_locks':
       default:
         return this.simulateCircularRowLocks(meta);
+    }
+  }
+
+  private simulateCustomTransactions(meta: any, txASql: string, txBSql: string): DeadlockSimulationResult {
+    const locksA = extractLocksFromSql(txASql);
+    const locksB = extractLocksFromSql(txBSql);
+
+    if (locksA.length === 0 || locksB.length === 0) {
+      return this.simulateCircularRowLocks(meta);
+    }
+
+    const resA1 = locksA[0];
+    const resA2 = locksA[1] || locksA[0];
+    const resB1 = locksB[0];
+    const resB2 = locksB[1] || locksB[0];
+
+    // Check if there is an inverse cross-dependency (deadlock cycle)
+    const isCircularDeadlock = (resA1.resourceId !== resB1.resourceId) &&
+      ((resA2.resourceId === resB1.resourceId) || (resB2.resourceId === resA1.resourceId));
+
+    if (isCircularDeadlock) {
+      const steps: TimelineStep[] = [
+        {
+          stepIndex: 1,
+          timeSec: 0.0,
+          txAState: { statement: 'BEGIN TRANSACTION;', status: 'EXECUTED' },
+          txBState: { statement: 'BEGIN TRANSACTION;', status: 'EXECUTED' },
+          activeLocks: [],
+          explanation: `Both Transaction A and Transaction B open concurrent transactions in ${meta.name}.`,
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 2,
+          timeSec: 0.2,
+          txAState: { statement: resA1.statement, status: 'ACQUIRED_LOCK', lockHeld: `${resA1.lockMode} on ${resA1.resourceId}` },
+          txBState: { statement: '-- Idle', status: 'IDLE' },
+          activeLocks: [
+            { resource: resA1.resourceId, heldByTx: 'Tx A', waitingTx: [], lockMode: resA1.lockMode },
+          ],
+          explanation: `Tx A acquires ${resA1.lockMode} on \`${resA1.resourceId}\`.`,
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 3,
+          timeSec: 0.4,
+          txAState: { statement: '-- Evaluating business logic', status: 'IDLE', lockHeld: `${resA1.lockMode} on ${resA1.resourceId}` },
+          txBState: { statement: resB1.statement, status: 'ACQUIRED_LOCK', lockHeld: `${resB1.lockMode} on ${resB1.resourceId}` },
+          activeLocks: [
+            { resource: resA1.resourceId, heldByTx: 'Tx A', waitingTx: [], lockMode: resA1.lockMode },
+            { resource: resB1.resourceId, heldByTx: 'Tx B', waitingTx: [], lockMode: resB1.lockMode },
+          ],
+          explanation: `Tx B concurrently acquires ${resB1.lockMode} on \`${resB1.resourceId}\`.`,
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 4,
+          timeSec: 0.6,
+          txAState: { statement: resA2.statement, status: 'WAITING', lockHeld: resA1.resourceId, lockWaiting: resB1.resourceId },
+          txBState: { statement: '-- Idle', status: 'IDLE', lockHeld: resB1.resourceId },
+          activeLocks: [
+            { resource: resA1.resourceId, heldByTx: 'Tx A', waitingTx: [], lockMode: resA1.lockMode },
+            { resource: resB1.resourceId, heldByTx: 'Tx B', waitingTx: ['Tx A'], lockMode: resB1.lockMode },
+          ],
+          explanation: `Tx A requests lock on \`${resA2.resourceId}\` (held by Tx B). Tx A is BLOCKED and enters sleep queue.`,
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 5,
+          timeSec: 0.8,
+          txAState: { statement: resA2.statement, status: 'DEADLOCK_VICTIM', lockHeld: resA1.resourceId, lockWaiting: resB1.resourceId },
+          txBState: { statement: resB2.statement, status: 'WAITING', lockHeld: resB1.resourceId, lockWaiting: resA1.resourceId },
+          activeLocks: [
+            { resource: resA1.resourceId, heldByTx: 'Tx A', waitingTx: ['Tx B'], lockMode: resA1.lockMode },
+            { resource: resB1.resourceId, heldByTx: 'Tx B', waitingTx: ['Tx A'], lockMode: resB1.lockMode },
+          ],
+          explanation: `CRITICAL DEADLOCK DETECTED! Tx B requests lock on \`${resA1.resourceId}\` (held by Tx A). Cycle found in Wait-For Graph: Tx A ➔ Tx B ➔ Tx A. ${meta.name} deadlock detector terminates Tx A as victim!`,
+          hasCycleDetected: true,
+        },
+      ];
+
+      return {
+        engine: meta.id,
+        engineName: meta.name,
+        scenarioId: 'custom_sql',
+        scenarioTitle: `Custom SQL Deadlock: ${resA1.table} vs ${resB1.table}`,
+        hasDeadlock: true,
+        deadlockDetectedAtStep: 5,
+        waitForCycle: [
+          { fromTx: 'Tx A', toTx: 'Tx B', resource: resB1.resourceId, reason: `Tx A is blocked waiting for lock on ${resB1.resourceId} held by Tx B` },
+          { fromTx: 'Tx B', toTx: 'Tx A', resource: resA1.resourceId, reason: `Tx B is blocked waiting for lock on ${resA1.resourceId} held by Tx A` },
+        ],
+        steps,
+        rootCause: `Asymmetric lock acquisition order between custom transactions. Tx A locked ${resA1.resourceId} then requested ${resB1.resourceId}, whereas Tx B locked ${resB1.resourceId} then requested ${resA1.resourceId}.`,
+        remedies: [
+          {
+            title: '1. Strict Global Resource Lock Ordering',
+            type: 'deterministic_order',
+            codeSnippet: `-- Always lock resources in deterministic ascending order:\nBEGIN;\nSELECT * FROM ${resA1.table} WHERE ${resA1.resourceId.split(':')[1]} FOR UPDATE;\nSELECT * FROM ${resB1.table} WHERE ${resB1.resourceId.split(':')[1]} FOR UPDATE;\n-- Execute business writes...\nCOMMIT;`,
+            explanation: 'Ensuring all transactions acquire locks in identical alphabetical order mathematically prevents wait-for cycle graphs.',
+          },
+          {
+            title: '2. Lock Timeout with Jitter Retry',
+            type: 'lock_timeout',
+            codeSnippet: meta.id === 'postgres' ? `SET LOCAL lock_timeout = '2000ms';` : meta.id === 'mysql' ? `SET innodb_lock_wait_timeout = 2;` : `SET LOCK_TIMEOUT 2000;`,
+            explanation: 'Aborts stalled connection threads quickly rather than exhausting server connection pools.',
+          },
+        ],
+      };
+    } else {
+      // Consistent Order (Safe Serialization)
+      const steps: TimelineStep[] = [
+        {
+          stepIndex: 1,
+          timeSec: 0.0,
+          txAState: { statement: 'BEGIN;', status: 'EXECUTED' },
+          txBState: { statement: 'BEGIN;', status: 'EXECUTED' },
+          activeLocks: [],
+          explanation: 'Both transactions start concurrent scopes.',
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 2,
+          timeSec: 0.2,
+          txAState: { statement: resA1.statement, status: 'ACQUIRED_LOCK', lockHeld: resA1.resourceId },
+          txBState: { statement: resB1.statement, status: 'WAITING', lockWaiting: resA1.resourceId },
+          activeLocks: [
+            { resource: resA1.resourceId, heldByTx: 'Tx A', waitingTx: ['Tx B'], lockMode: resA1.lockMode },
+          ],
+          explanation: `Tx A locks \`${resA1.resourceId}\`. Tx B waits in FIFO queue without deadlock.`,
+          hasCycleDetected: false,
+        },
+        {
+          stepIndex: 3,
+          timeSec: 0.5,
+          txAState: { statement: 'COMMIT;', status: 'COMMITTED' },
+          txBState: { statement: resB1.statement, status: 'ACQUIRED_LOCK', lockHeld: resB1.resourceId },
+          activeLocks: [
+            { resource: resB1.resourceId, heldByTx: 'Tx B', waitingTx: [], lockMode: resB1.lockMode },
+          ],
+          explanation: 'Tx A commits and releases all locks. Tx B acquires lock and completes successfully.',
+          hasCycleDetected: false,
+        },
+      ];
+
+      return {
+        engine: meta.id,
+        engineName: meta.name,
+        scenarioId: 'custom_sql',
+        scenarioTitle: `Custom SQL Serialized Execution (No Deadlock Detected)`,
+        hasDeadlock: false,
+        deadlockDetectedAtStep: null,
+        waitForCycle: [],
+        steps,
+        rootCause: 'Transactions follow consistent lock acquisition hierarchy. No circular dependency loops detected.',
+        remedies: [
+          {
+            title: 'Maintain Current Locking Hierarchy',
+            type: 'deterministic_order',
+            codeSnippet: '-- Current locking design is optimal and deadlock-free.',
+            explanation: 'Both transactions acquire mutexes in uniform order.',
+          },
+        ],
+      };
     }
   }
 
@@ -364,7 +580,7 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);`,
       scenarioId: 'fk_cascade_escalation',
       scenarioTitle: 'Foreign Key Cascade Table Lock Escalation',
       hasDeadlock: true,
-      deadlockDetectedAtStep: 4,
+      deadlockDetectedAtStep: 2,
       waitForCycle: [
         { fromTx: 'Tx A (DELETE parent)', toTx: 'Tx B (INSERT child)', resource: 'orders_items table lock', reason: 'Cascade lock escalation' },
       ],

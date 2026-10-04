@@ -162,8 +162,8 @@ export const queryRewriterSchema = z.object({
 
 export const schemaDiffSchema = z.object({
   engine: z.string().min(1).max(100).default('postgresql'),
-  sourceEnv: z.string().max(50).optional(),
-  targetEnv: z.string().max(50).optional(),
+  sourceEnv: z.string().max(255).optional(),
+  targetEnv: z.string().max(255).optional(),
   sourceDdl: z.string().max(200000).optional(),
   targetDdl: z.string().max(200000).optional(),
 });

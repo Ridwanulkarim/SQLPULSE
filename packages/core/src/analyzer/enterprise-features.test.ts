@@ -269,4 +269,108 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     const mssqlDiff = analyzeSchemaDiff({ engine: 'microsoft_sql_server' });
     expect(mssqlDiff.forwardMigrationScript).toContain('WITH (ONLINE = ON)');
   });
+
+  test('18. analyzeSchemaDiff performs dynamic AST diffing for custom Source & Target DDLs', () => {
+    const srcDdl = `
+      CREATE TABLE accounts (
+        id BIGSERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        phone VARCHAR(20) NULL,
+        is_verified BOOLEAN DEFAULT FALSE
+      );
+      CREATE INDEX idx_accounts_phone ON accounts(phone);
+      CREATE TABLE new_audit_logs (
+        id BIGSERIAL PRIMARY KEY,
+        action VARCHAR(64)
+      );
+    `;
+    const tgtDdl = `
+      CREATE TABLE accounts (
+        id BIGSERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        old_legacy_col INT
+      );
+    `;
+
+    const diff = analyzeSchemaDiff({
+      engine: 'postgresql',
+      sourceDdl: srcDdl,
+      targetDdl: tgtDdl,
+    });
+
+    expect(diff.totalDriftCount).toBeGreaterThanOrEqual(4);
+    const types = diff.changes.map(c => c.type);
+    expect(types).toContain('TABLE_ADDED');
+    expect(types).toContain('COLUMN_ADDED');
+    expect(types).toContain('COLUMN_DROPPED');
+    expect(types).toContain('INDEX_MISSING');
+  });
+
+  test('19. analyzeSchemaDiff returns distinct scenario datasets for presets', () => {
+    const saasDiff = analyzeSchemaDiff({ sourceEnv: 'v2.4-stripe-billing (Staging)' });
+    expect(saasDiff.changes.some(c => c.tableName === 'subscriptions' || c.tableName === 'invoices')).toBe(true);
+
+    const erpDiff = analyzeSchemaDiff({ sourceEnv: 'Release-14-Inventory (Dev)', engine: 'oracle' });
+    expect(erpDiff.changes.some(c => c.tableName === 'inventory_items' || c.tableName === 'general_ledger_entries')).toBe(true);
+
+    const hipaaDiff = analyzeSchemaDiff({ sourceEnv: 'HIPAA-v3.0-Compliance-Branch' });
+    expect(hipaaDiff.changes.some(c => c.tableName === 'patients' || c.tableName === 'hipaa_audit_trail')).toBe(true);
+  });
+
+  test('20. DeadlockSimulator parses custom SQL statements and identifies wait-for cycles', () => {
+    const customDeadlock = deadlockSimulator.simulate({
+      engine: 'postgresql',
+      scenarioId: 'custom_sql',
+      txASql: 'BEGIN; UPDATE inventory SET stock = stock - 1 WHERE id = 10; UPDATE warehouses SET items = items - 1 WHERE id = 99; COMMIT;',
+      txBSql: 'BEGIN; UPDATE warehouses SET items = items - 1 WHERE id = 99; UPDATE inventory SET stock = stock - 1 WHERE id = 10; COMMIT;',
+    });
+    expect(customDeadlock.hasDeadlock).toBe(true);
+    expect(customDeadlock.deadlockDetectedAtStep).toBe(5);
+    expect(customDeadlock.waitForCycle.length).toBe(2);
+
+    const safeSerialization = deadlockSimulator.simulate({
+      engine: 'postgresql',
+      scenarioId: 'custom_sql',
+      txASql: 'BEGIN; UPDATE inventory SET stock = stock - 1 WHERE id = 10; COMMIT;',
+      txBSql: 'BEGIN; UPDATE inventory SET stock = stock - 1 WHERE id = 10; COMMIT;',
+    });
+    expect(safeSerialization.hasDeadlock).toBe(false);
+  });
+
+  test('21. PartitionArchitect generates native DDL for Oracle, SQL Server, Snowflake, and Hive', () => {
+    const oraclePlan = partitionArchitect.plan({
+      engine: 'oracle',
+      tableName: 'telemetry_events',
+      partitionColumn: 'logged_at',
+      strategy: 'range_monthly',
+    });
+    expect(oraclePlan.partitionDdl).toContain('PARTITION BY RANGE');
+    expect(oraclePlan.partitionDdl).toContain('NUMTOYMINTERVAL');
+
+    const mssqlPlan = partitionArchitect.plan({
+      engine: 'microsoft_sql_server',
+      tableName: 'telemetry_events',
+      partitionColumn: 'logged_at',
+      strategy: 'range_monthly',
+    });
+    expect(mssqlPlan.partitionDdl).toContain('CREATE PARTITION FUNCTION');
+    expect(mssqlPlan.partitionDdl).toContain('CREATE PARTITION SCHEME');
+
+    const snowflakePlan = partitionArchitect.plan({
+      engine: 'snowflake',
+      tableName: 'telemetry_events',
+      partitionColumn: 'logged_at',
+      strategy: 'range_monthly',
+    });
+    expect(snowflakePlan.partitionDdl).toContain('CLUSTER BY');
+
+    const hivePlan = partitionArchitect.plan({
+      engine: 'apache_hive',
+      tableName: 'telemetry_events',
+      partitionColumn: 'logged_at',
+      strategy: 'range_monthly',
+    });
+    expect(hivePlan.partitionDdl).toContain('PARTITIONED BY');
+    expect(hivePlan.partitionDdl).toContain('STORED AS ORC');
+  });
 });
