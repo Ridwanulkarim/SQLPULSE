@@ -1,4 +1,13 @@
+export interface ChaosNodeStatus {
+  name: string;
+  role: 'primary' | 'standby' | 'promoted_leader' | 'isolated' | 'crashed' | 'witness';
+  state: 'ONLINE' | 'OFFLINE' | 'VOTING' | 'REPLAYING' | 'FENCED';
+  quorumVote: boolean;
+  latencyMs: number;
+}
+
 export interface ChaosStep {
+  stepIndex: number;
   timeOffsetSec: number;
   phase: string;
   clusterState: 'HEALTHY' | 'DEGRADED' | 'FAILING_OVER' | 'SPLIT_BRAIN' | 'RECOVERED';
@@ -7,6 +16,7 @@ export interface ChaosStep {
   clientImpact: string;
   circuitBreakerStatus: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
   description: string;
+  nodeStates?: ChaosNodeStatus[];
 }
 
 export interface ChaosClusterTopologySummary {
@@ -33,6 +43,138 @@ export interface ChaosSimulationResult {
   clusterTopologySummary: ChaosClusterTopologySummary;
 }
 
+function resolveEngineDetails(rawEngine: string): {
+  family: string;
+  name: string;
+  port: number;
+  process: string;
+  failoverManager: string;
+  consensusProtocol: string;
+  primaryPrefix: string;
+  standbyPrefix: string;
+} {
+  const norm = (rawEngine || 'postgres').toLowerCase().trim();
+
+  if (norm.includes('mysql') || norm.includes('maria') || norm.includes('tidb') || norm.includes('percona')) {
+    return {
+      family: 'mysql',
+      name: 'MySQL / MariaDB',
+      port: 3306,
+      process: 'mysqld',
+      failoverManager: 'Orchestrator + ProxySQL',
+      consensusProtocol: 'Group Replication (Paxos)',
+      primaryPrefix: 'mysql-writer-az1',
+      standbyPrefix: 'mysql-reader-az2',
+    };
+  }
+  if (norm.includes('oracle') || norm.includes('db2')) {
+    return {
+      family: 'oracle',
+      name: 'Oracle Database',
+      port: 1521,
+      process: 'oracle',
+      failoverManager: 'Data Guard Broker (FSFO)',
+      consensusProtocol: 'Observer Quorum',
+      primaryPrefix: 'oracle-prim-az1',
+      standbyPrefix: 'oracle-stby-az2',
+    };
+  }
+  if (norm.includes('sqlserver') || norm.includes('mssql') || norm.includes('azure_sql')) {
+    return {
+      family: 'mssql',
+      name: 'Microsoft SQL Server',
+      port: 1433,
+      process: 'sqlservr',
+      failoverManager: 'AlwaysOn WSFC / Pacemaker',
+      consensusProtocol: 'Majority Node & File Share Witness',
+      primaryPrefix: 'sql-ag-prim-01',
+      standbyPrefix: 'sql-ag-sec-02',
+    };
+  }
+  if (norm.includes('mongo') || norm.includes('document')) {
+    return {
+      family: 'mongodb',
+      name: 'MongoDB',
+      port: 27017,
+      process: 'mongod',
+      failoverManager: 'Replica Set Internal Election',
+      consensusProtocol: 'MongoDB v1 Election (Raft-like)',
+      primaryPrefix: 'mongo-prim-01',
+      standbyPrefix: 'mongo-sec-02',
+    };
+  }
+  if (norm.includes('redis') || norm.includes('keydb') || norm.includes('dragonfly') || norm.includes('valkey')) {
+    return {
+      family: 'redis',
+      name: 'Redis',
+      port: 6379,
+      process: 'redis-server',
+      failoverManager: 'Redis Sentinel / Redis Cluster',
+      consensusProtocol: 'Sentinel Quorum Majority',
+      primaryPrefix: 'redis-master-az1',
+      standbyPrefix: 'redis-replica-az2',
+    };
+  }
+  if (norm.includes('click') || norm.includes('duck') || norm.includes('starrocks') || norm.includes('trino')) {
+    return {
+      family: 'clickhouse',
+      name: 'ClickHouse',
+      port: 8123,
+      process: 'clickhouse-server',
+      failoverManager: 'ClickHouse Keeper / ZooKeeper',
+      consensusProtocol: 'Keeper Raft Quorum',
+      primaryPrefix: 'ch-node1-leader',
+      standbyPrefix: 'ch-node2-replica',
+    };
+  }
+  if (norm.includes('cassandra') || norm.includes('scylla')) {
+    return {
+      family: 'cassandra',
+      name: 'Apache Cassandra / ScyllaDB',
+      port: 9042,
+      process: 'cassandra',
+      failoverManager: 'Gossip Failure Detector (Phi Accrual)',
+      consensusProtocol: 'Paxos LWT / Peer-to-Peer',
+      primaryPrefix: 'cass-node1-rack1',
+      standbyPrefix: 'cass-node2-rack2',
+    };
+  }
+  if (norm.includes('sqlite') || norm.includes('turso') || norm.includes('libsql')) {
+    return {
+      family: 'sqlite',
+      name: 'SQLite / Embedded',
+      port: 8080,
+      process: 'sqlite3',
+      failoverManager: 'WAL Lock Manager / Litestream',
+      consensusProtocol: 'Filesystem Shm Mutex',
+      primaryPrefix: 'sqlite-writer-proc',
+      standbyPrefix: 'sqlite-reader-proc',
+    };
+  }
+  if (norm.includes('snow') || norm.includes('bigquery') || norm.includes('redshift')) {
+    return {
+      family: 'snowflake',
+      name: 'Cloud Data Warehouse (Snowflake)',
+      port: 443,
+      process: 'snowflake-wh',
+      failoverManager: 'Cloud Control Plane Auto-Healing',
+      consensusProtocol: 'Stateless Compute Redundancy',
+      primaryPrefix: 'dw-compute-wh-1',
+      standbyPrefix: 'dw-compute-wh-2',
+    };
+  }
+  return {
+    family: 'postgres',
+    name: 'PostgreSQL',
+    port: 5432,
+    process: 'postgres',
+    failoverManager: 'Patroni + etcd',
+    consensusProtocol: 'Raft Consensus',
+    primaryPrefix: 'pg-primary-node-01',
+    standbyPrefix: 'pg-standby-node-02',
+  };
+}
+
 export function simulateChaosScenario(options: {
   engine?: string;
   scenarioId?: string;
@@ -45,82 +187,43 @@ export function simulateChaosScenario(options: {
   const syncMode = options.syncMode || 'sync';
   const majorityVotes = Math.floor(clusterSize / 2) + 1;
 
-  // Resolve engine family and native high-availability tools
-  let engineFamily = 'postgres';
-  let engineName = 'PostgreSQL';
-  let failoverManager = 'Patroni + etcd';
-  let consensusProtocol = 'Raft Consensus';
-  let primaryPrefix = 'pg-primary-node-01';
-  let standbyPrefix = 'pg-standby-node-02';
+  const eng = resolveEngineDetails(rawEngine);
 
-  if (rawEngine.includes('mysql') || rawEngine.includes('maria') || rawEngine.includes('tidb') || rawEngine.includes('percona')) {
-    engineFamily = 'mysql';
-    engineName = 'MySQL / MariaDB';
-    failoverManager = 'Orchestrator + ProxySQL';
-    consensusProtocol = 'Group Replication (Paxos)';
-    primaryPrefix = 'mysql-writer-az1';
-    standbyPrefix = 'mysql-reader-az2';
-  } else if (rawEngine.includes('oracle') || rawEngine.includes('db2')) {
-    engineFamily = 'oracle';
-    engineName = 'Oracle Database';
-    failoverManager = 'Data Guard Broker (FSFO)';
-    consensusProtocol = 'Observer Quorum';
-    primaryPrefix = 'oracle-prod-prim';
-    standbyPrefix = 'oracle-prod-stby';
-  } else if (rawEngine.includes('sqlserver') || rawEngine.includes('mssql') || rawEngine.includes('azure_sql')) {
-    engineFamily = 'mssql';
-    engineName = 'Microsoft SQL Server';
-    failoverManager = 'AlwaysOn WSFC / Pacemaker';
-    consensusProtocol = 'Majority Node & File Share Quorum';
-    primaryPrefix = 'sql-ag-prim-01';
-    standbyPrefix = 'sql-ag-sec-02';
-  } else if (rawEngine.includes('mongo') || rawEngine.includes('document')) {
-    engineFamily = 'mongodb';
-    engineName = 'MongoDB';
-    failoverManager = 'Replica Set Internal Election';
-    consensusProtocol = 'MongoDB v1 Election (Raft-like)';
-    primaryPrefix = 'mongo-primary-01';
-    standbyPrefix = 'mongo-secondary-02';
-  } else if (rawEngine.includes('redis') || rawEngine.includes('keydb') || rawEngine.includes('dragonfly') || rawEngine.includes('valkey')) {
-    engineFamily = 'redis';
-    engineName = 'Redis';
-    failoverManager = 'Redis Sentinel / Redis Cluster';
-    consensusProtocol = 'Sentinel Quorum Majority';
-    primaryPrefix = 'redis-master-node';
-    standbyPrefix = 'redis-replica-node';
-  } else if (rawEngine.includes('click') || rawEngine.includes('duck') || rawEngine.includes('starrocks') || rawEngine.includes('trino')) {
-    engineFamily = 'clickhouse';
-    engineName = 'ClickHouse';
-    failoverManager = 'ClickHouse Keeper / ZooKeeper';
-    consensusProtocol = 'Keeper Raft Quorum';
-    primaryPrefix = 'ch-shard1-replica1';
-    standbyPrefix = 'ch-shard1-replica2';
-  } else if (rawEngine.includes('cassandra') || rawEngine.includes('scylla')) {
-    engineFamily = 'cassandra';
-    engineName = 'Apache Cassandra / ScyllaDB';
-    failoverManager = 'Gossip Failure Detector (Phi Accrual)';
-    consensusProtocol = 'Paxos LWT / Peer-to-Peer';
-    primaryPrefix = 'cass-node-rack1-01';
-    standbyPrefix = 'cass-node-rack2-02';
-  } else if (rawEngine.includes('sqlite') || rawEngine.includes('turso') || rawEngine.includes('libsql')) {
-    engineFamily = 'sqlite';
-    engineName = 'SQLite / Embedded';
-    failoverManager = 'WAL Lock Manager / Litestream';
-    consensusProtocol = 'Filesystem Shm Mutex';
-    primaryPrefix = 'sqlite-writer-proc';
-    standbyPrefix = 'sqlite-reader-proc';
-  } else if (rawEngine.includes('snow') || rawEngine.includes('bigquery') || rawEngine.includes('redshift')) {
-    engineFamily = 'snowflake';
-    engineName = 'Cloud Data Warehouse (Snowflake / BigQuery)';
-    failoverManager = 'Cloud Control Plane Auto-Healing';
-    consensusProtocol = 'Stateless Compute Redundancy';
-    primaryPrefix = 'dw-warehouse-az1';
-    standbyPrefix = 'dw-warehouse-az2';
-  }
+  // Helper to generate node statuses for a cluster of size N
+  const buildNodes = (overrides: {
+    primaryState?: 'ONLINE' | 'OFFLINE' | 'VOTING' | 'FENCED';
+    primaryRole?: ChaosNodeStatus['role'];
+    standbyStates?: 'ONLINE' | 'OFFLINE' | 'VOTING' | 'REPLAYING' | 'FENCED';
+    promotedIndex?: number;
+    splitPartitionIndex?: number;
+  }): ChaosNodeStatus[] => {
+    const list: ChaosNodeStatus[] = [];
+    // Node 0 is original primary
+    list.push({
+      name: `${eng.primaryPrefix}`,
+      role: overrides.primaryRole || 'primary',
+      state: overrides.primaryState || 'ONLINE',
+      quorumVote: overrides.primaryState === 'ONLINE' || overrides.primaryState === 'VOTING',
+      latencyMs: overrides.primaryState === 'OFFLINE' ? 0 : 2,
+    });
+
+    for (let i = 1; i < clusterSize; i++) {
+      const isPromoted = overrides.promotedIndex === i;
+      const isSplit = overrides.splitPartitionIndex !== undefined && i >= overrides.splitPartitionIndex;
+      list.push({
+        name: i === 1 ? eng.standbyPrefix : `${eng.family}-replica-0${i + 1}`,
+        role: isPromoted ? 'promoted_leader' : isSplit ? 'isolated' : 'standby',
+        state: isPromoted ? 'ONLINE' : (overrides.standbyStates || 'ONLINE'),
+        quorumVote: true,
+        latencyMs: 3 + i * 2,
+      });
+    }
+    return list;
+  };
 
   let scenarioTitle = 'Sudden Primary Crash & Quorum Failover';
   let faultType: ChaosSimulationResult['faultType'] = 'PRIMARY_CRASH';
-  let downtimeSec = syncMode === 'sync' ? 8 : 14;
+  let downtimeSec = syncMode === 'sync' ? 7 : 12;
   let timeline: ChaosStep[] = [];
   let resilienceScore = 92;
   let mitigationRunbook = '';
@@ -130,73 +233,636 @@ export function simulateChaosScenario(options: {
   const dataLossRisk: ChaosSimulationResult['dataLossRisk'] =
     syncMode === 'sync' ? 'ZERO_DATA_LOSS_SYNC' : 'SUB_SECOND_ASYNC';
 
-  // --- Scenario 1: Primary Crash ---
-  if (scenarioId === 'primary_crash') {
-    scenarioTitle = `Sudden ${engineName} Primary Crash & Automatic Failover`;
-    faultType = 'PRIMARY_CRASH';
-    downtimeSec = syncMode === 'sync' ? 7 : 12;
-    resilienceScore = syncMode === 'sync' ? 94 : 85;
+  switch (scenarioId) {
+    case 'network_split': {
+      scenarioTitle = `Split-Brain Network Partition & Quorum Fencing (${eng.name})`;
+      faultType = 'NETWORK_SPLIT';
+      downtimeSec = 9;
+      resilienceScore = 89;
 
-    timeline = [
-      {
-        timeOffsetSec: 0,
-        phase: 'Baseline Cluster Health',
-        clusterState: 'HEALTHY',
-        activePrimary: `${primaryPrefix} (Leader)`,
-        standbyStatus: `${clusterSize - 1}x Standbys in Sync (Heartbeat: 80ms)`,
-        clientImpact: '0% Error Rate, Latency p95: 3.8ms',
-        circuitBreakerStatus: 'CLOSED',
-        description: `${engineName} cluster operating normally with ${clusterSize} nodes under ${failoverManager}.`,
-      },
-      {
-        timeOffsetSec: 2,
-        phase: 'Kernel Panic / Hardware Severed',
-        clusterState: 'DEGRADED',
-        activePrimary: `${primaryPrefix} [OFFLINE / UNRESPONSIVE]`,
-        standbyStatus: `Missed 2x heartbeat pings. Quorum election initiated.`,
-        clientImpact: 'In-flight writes hold TCP sockets; upstream gateway starts queuing requests.',
-        circuitBreakerStatus: 'OPEN',
-        description: `Primary process abruptly terminated without clean flush. ${failoverManager} detects missing lease.`,
-      },
-      {
-        timeOffsetSec: 5,
-        phase: 'Leader Election & Quorum Consensus',
-        clusterState: 'FAILING_OVER',
-        activePrimary: 'ELECTION IN PROGRESS',
-        standbyStatus: `Candidate elected with ${majorityVotes}/${clusterSize} majority votes (${consensusProtocol}).`,
-        clientImpact: 'Client connection pool rejects new write sockets (HTTP 503 circuit trip).',
-        circuitBreakerStatus: 'OPEN',
-        description: `Majority consensus reached. Standby with highest LSN / commit log promoted.`,
-      },
-      {
-        timeOffsetSec: 7,
-        phase: 'Promotion & Virtual IP / DNS Shift',
-        clusterState: 'FAILING_OVER',
-        activePrimary: `${standbyPrefix} (Promoted Primary)`,
-        standbyStatus: 'Replay catch-up completed. Virtual IP shifted to new primary.',
-        clientImpact: 'Connection pools reconnecting to new VIP / listener.',
-        circuitBreakerStatus: 'HALF_OPEN',
-        description: `Read-write mode activated on new leader. Client pooler refreshes target backend.`,
-      },
-      {
-        timeOffsetSec: downtimeSec,
-        phase: 'Cluster Fully Stabilized',
-        clusterState: 'RECOVERED',
-        activePrimary: `${standbyPrefix} (Active Primary)`,
-        standbyStatus: `${clusterSize - 2}x Standbys active; old primary scheduled for automated re-clone.`,
-        clientImpact: 'All read/write queries normal. 0 data loss verified.',
-        circuitBreakerStatus: 'CLOSED',
-        description: `${engineName} cluster operational. Quorum re-established with ${majorityVotes}/${clusterSize} healthy nodes.`,
-      },
-    ];
+      timeline = [
+        {
+          stepIndex: 1,
+          timeOffsetSec: 0,
+          phase: 'Baseline Multi-AZ Mesh',
+          clusterState: 'HEALTHY',
+          activePrimary: `${eng.primaryPrefix} (AZ-East-1a)`,
+          standbyStatus: `${clusterSize - 1}x Standbys across AZ-East-1b/1c in active sync`,
+          clientImpact: '0% Error Rate, Latency p99: 8.4ms',
+          circuitBreakerStatus: 'CLOSED',
+          description: `Healthy multi-AZ replication mesh operating via ${eng.consensusProtocol}.`,
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 2,
+          timeOffsetSec: 3,
+          phase: 'Inter-AZ Network Blackhole',
+          clusterState: 'SPLIT_BRAIN',
+          activePrimary: `${eng.primaryPrefix} (Isolated Partition)`,
+          standbyStatus: `AZ-1b and AZ-1c isolated from old primary. Heartbeat severed.`,
+          clientImpact: 'Clients in AZ-1a attempt writes; clients in AZ-1b receive gateway timeouts.',
+          circuitBreakerStatus: 'OPEN',
+          description: `Network switch failure drops all TCP traffic on port ${eng.port} between AZ-1a and remaining availability zones.`,
+          nodeStates: buildNodes({ primaryRole: 'isolated', primaryState: 'ONLINE', splitPartitionIndex: 1 }),
+        },
+        {
+          stepIndex: 3,
+          timeOffsetSec: 6,
+          phase: 'Quorum Evaluation & STONITH Fencing',
+          clusterState: 'FAILING_OVER',
+          activePrimary: 'Demoting Isolated Leader (No Quorum)',
+          standbyStatus: `AZ-1b and AZ-1c form majority quorum (${majorityVotes}/${clusterSize} votes).`,
+          clientImpact: 'Write requests paused in proxy connection buffer.',
+          circuitBreakerStatus: 'OPEN',
+          description: `Old isolated leader fails quorum lease renewal and executes STONITH self-fencing to avoid split-brain data divergence.`,
+          nodeStates: buildNodes({ primaryRole: 'crashed', primaryState: 'FENCED', standbyStates: 'VOTING' }),
+        },
+        {
+          stepIndex: 4,
+          timeOffsetSec: 9,
+          phase: 'New Primary Leader Promoted',
+          clusterState: 'RECOVERED',
+          activePrimary: `${eng.standbyPrefix} (New Quorum Leader)`,
+          standbyStatus: 'Remaining majority nodes acknowledge new leader lease.',
+          clientImpact: 'Writes resume through updated service mesh routing. Zero data loss.',
+          circuitBreakerStatus: 'CLOSED',
+          description: `Majority partition safely accepts traffic. Split-brain permanently prevented.`,
+          nodeStates: buildNodes({ primaryRole: 'crashed', primaryState: 'OFFLINE', promotedIndex: 1 }),
+        },
+      ];
 
-    chaosInjectionScript = `#!/usr/bin/env bash
+      chaosInjectionScript = `#!/usr/bin/env bash
+# ==========================================================
+# Chaos Fault Injection: Network Partition (Split-Brain)
+# Target: ${eng.name} (Port ${eng.port})
+# ==========================================================
+echo "[CHAOS] Severing network traffic between AZ-1a and other zones using iptables..."
+ssh root@${eng.primaryPrefix} "iptables -A INPUT -p tcp --dport ${eng.port} -j DROP"
+
+# Or via Toxiproxy CLI:
+toxiproxy-cli toxic add ${eng.family}_proxy -t timeout -a timeout=0
+echo "[CHAOS] Network partition active on port ${eng.port}. Monitoring node fencing via ${eng.failoverManager}..."`;
+
+      if (eng.family === 'mysql') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: MySQL Network Partition & Split-Brain Mitigation
+# Stack: ${eng.failoverManager} (${eng.consensusProtocol})
+# ==========================================================
+
+1. [QUORUM PROTECTION] Verify Group Replication / Semi-Sync majority partition:
+   SELECT * FROM performance_schema.replication_group_members;
+   -- Enforce rpl_semi_sync_master_wait_no_slave = 1 to halt rogue master commits.
+   -- Nodes on minority partition automatically transition to ERROR / UNREACHABLE.
+
+2. [STONITH FENCING] Configure automated uncontactable node exit:
+   SET GLOBAL group_replication_unreachable_majority_timeout = 10;
+   SET GLOBAL group_replication_auto_increment_increment = ${clusterSize};
+
+3. [PROXY ROUTING] Re-route client ingress:
+   ProxySQL automatically decouples the minority hostgroup and directs all traffic to the active writer.`;
+
+        recommendedConfigPatch = `# MySQL / MariaDB Split-Brain Fencing (my.cnf)
+[mysqld]
+gtid_mode = ON
+enforce_gtid_consistency = ON
+rpl_semi_sync_master_enabled = 1
+group_replication_unreachable_majority_timeout = 10
+group_replication_single_primary_mode = ON
+group_replication_enforce_update_everywhere_checks = OFF
+loose-group_replication_exit_state_action = READ_ONLY
+`;
+      } else if (eng.family === 'oracle') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Oracle Data Guard Split-Brain Fencing
+# Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [OBSERVER FENCING] Fast-Start Failover (FSFO) evaluates quorum:
+   DGMGRL> SHOW FAST_START FAILOVER;
+   -- Observer confirms primary is isolated from both standby and witness.
+
+2. [ISOLATION] Primary automatically disables redo generation:
+   Isolated database aborts transactions with ORA-16816.
+
+3. [PROMOTION] Standby assumes PRIMARY role without split-brain risk:
+   DGMGRL> SHOW CONFIGURATION;`;
+
+        recommendedConfigPatch = `-- Oracle Data Guard Partition Fencing
+DGMGRL> EDIT CONFIGURATION SET PROPERTY FastStartFailoverThreshold = 10;
+DGMGRL> EDIT DATABASE '${eng.primaryPrefix}' SET PROPERTY NetTimeout = 10;
+`;
+      } else if (eng.family === 'mssql') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: SQL Server AlwaysOn Quorum Fencing
+# Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [QUORUM HEALTH] Inspect cluster vote status:
+   SELECT member_name, member_state_desc, number_of_quorum_votes FROM sys.dm_hadr_cluster_members;
+
+2. [WITNESS LEASE] Majority partition claims Cloud / File Share Witness:
+   Minority partition automatically yields and stops SQL Server engine to prevent split writes.
+
+3. [LISTENER ROUTING] DNS / VNN shifts to new AG primary.`;
+
+        recommendedConfigPatch = `-- SQL Server WSFC Quorum Hardening
+ALTER AVAILABILITY GROUP [AG_PROD] SET (
+    HEALTH_CHECK_TIMEOUT = 10000,
+    DB_FAILOVER = ON,
+    REQUIRED_SYNCHRONIZED_SECONDARIES_TO_COMMIT = 1
+);
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: ${eng.name} Split-Brain Network Partition
+# Stack: ${eng.failoverManager} (${eng.consensusProtocol})
+# ==========================================================
+
+1. [DCS LEASE] Check DCS leader lock acquisition:
+   etcdctl endpoint health
+   -- Minority partition nodes fail to renew etcd/Consul leader key within TTL (10s).
+
+2. [WATCHDOG STONITH] Hardware watchdog trigger:
+   Old isolated primary self-terminates via softdog / Linux watchdog device.
+
+3. [SERVICE MESH] Consul / HAProxy health checks fail on port ${eng.port}, switching VIP to the new quorum leader.`;
+
+        recommendedConfigPatch = `# ${eng.name} Split-Brain Mitigation (patroni.yml)
+dcs:
+  ttl: 15
+  loop_wait: 5
+  retry_timeout: 5
+  synchronous_mode: true
+  synchronous_mode_strict: true
+watchdog:
+  mode: automatic
+  device: /dev/watchdog
+  safety_margin: 5
+`;
+      }
+      break;
+    }
+
+    case 'connection_starvation': {
+      scenarioTitle = `Thundering Herd Storm & Connection Pool Saturation (${eng.name})`;
+      faultType = 'CONNECTION_STARVATION';
+      downtimeSec = 18;
+      resilienceScore = 78;
+
+      timeline = [
+        {
+          stepIndex: 1,
+          timeOffsetSec: 0,
+          phase: 'Nominal Connection Usage',
+          clusterState: 'HEALTHY',
+          activePrimary: `${eng.primaryPrefix} (Active Conns: 120/1000)`,
+          standbyStatus: 'Replicas serving read pool normally',
+          clientImpact: 'p99 Latency: 12ms',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Application services operating well within connection pool thresholds.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 2,
+          timeOffsetSec: 4,
+          phase: 'Lock Pileup & Connection Wave',
+          clusterState: 'DEGRADED',
+          activePrimary: `${eng.primaryPrefix} (Active Conns: 940/1000 - Spiking)`,
+          standbyStatus: 'Standbys unaffected',
+          clientImpact: 'p99 Latency spikes to 3,400ms; Gateway HTTP 504 timeouts.',
+          circuitBreakerStatus: 'OPEN',
+          description: `An unindexed heavy transaction holds exclusive locks on port ${eng.port}, queueing 800+ backend worker threads.`,
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 3,
+          timeOffsetSec: 9,
+          phase: 'CPU Kernel Context Thrashing',
+          clusterState: 'DEGRADED',
+          activePrimary: 'CPU 100% (Kernel Spinlock Thrashing)',
+          standbyStatus: 'Replicas absorbing read queries',
+          clientImpact: 'Total API write stall. New client connections rejected.',
+          circuitBreakerStatus: 'OPEN',
+          description: 'Database server spends 92% of CPU time switching thread memory contexts rather than executing SQL.',
+          nodeStates: buildNodes({ primaryState: 'VOTING' }),
+        },
+        {
+          stepIndex: 4,
+          timeOffsetSec: 15,
+          phase: 'Circuit Breaker & Pooler Rate Limiting',
+          clusterState: 'FAILING_OVER',
+          activePrimary: 'Active Conns shedding excess clients (Pooler Throttling)',
+          standbyStatus: 'Read queries rerouted to replicas',
+          clientImpact: 'Excess requests rejected fast with 429 Retry-After, relieving engine.',
+          circuitBreakerStatus: 'HALF_OPEN',
+          description: 'Connection pooler circuit breaker trips, terminating idle-in-transaction connections and shedding excess load.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 5,
+          timeOffsetSec: 18,
+          phase: 'Cluster Stabilization',
+          clusterState: 'RECOVERED',
+          activePrimary: `${eng.primaryPrefix} (Active Conns: 150/1000)`,
+          standbyStatus: 'Normal operation restored',
+          clientImpact: 'p99 Latency normalized to 14ms.',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Connection flood cleared. Normal query processing resumes.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+      ];
+
+      chaosInjectionScript = `#!/usr/bin/env bash
+# ==========================================================
+# Chaos Fault Injection: Connection Storm on Port ${eng.port}
+# Target: ${eng.name}
+# ==========================================================
+echo "[CHAOS] Spawning 1,200 simultaneous connection sockets on port ${eng.port}..."
+for i in {1..1200}; do
+  (nc -w 300 localhost ${eng.port} < /dev/zero > /dev/null 2>&1) &
+done
+echo "[CHAOS] 1,200 socket descriptors opened. Inspecting thread saturation and pooler backpressure..."`;
+
+      if (eng.family === 'redis') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Redis Client Flooding & Connection Saturation
+# Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [MAXCLIENTS REJECTION] Enforce hard socket caps and client eviction:
+   CONFIG SET maxclients 10000
+   CONFIG SET timeout 30
+
+2. [ZERO DATA LOSS] Enforce minimum replicas to accept writes:
+   CONFIG SET min-replicas-to-write 1
+   CONFIG SET min-replicas-max-lag 5
+
+3. [PIPELINING & POOLING] Migrate client drivers to command pipelining and pooled connections.`;
+
+        recommendedConfigPatch = `# Redis Sentinel & Connection Protection (redis.conf)
+maxclients 10000
+timeout 30
+min-replicas-to-write 1
+min-replicas-max-lag 5
+tcp-keepalive 60
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Thundering Herd & Connection Storm Mitigation
+# Target Engine: ${eng.name} (Port ${eng.port})
+# ==========================================================
+
+1. [CIRCUIT BREAKING] Immediately reject runaway non-critical traffic:
+   Configure gateway / Envoy circuit breaker: max_connections: 500, max_pending_requests: 100.
+
+2. [TERMINATE IDLE SESSIONS] Kill blocking queries holding row locks:
+   ${eng.family === 'postgres' 
+     ? "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle in transaction' AND state_change < now() - INTERVAL '30 seconds';" 
+     : eng.family === 'mysql' 
+     ? "KILL CONNECTION (SELECT id FROM information_schema.processlist WHERE time > 30 AND command = 'Sleep');" 
+     : "ALTER SYSTEM DISCONNECT SESSION 'sid,serial#' IMMEDIATE;"}
+
+3. [CONNECTION POOLING] Enforce transaction-level connection pooling (e.g. PgBouncer / ProxySQL / HikariCP).`;
+
+        recommendedConfigPatch = `# ${eng.name} Connection Starvation Protection
+${eng.family === 'postgres' ? `max_connections = 300
+idle_in_transaction_session_timeout = '10000ms'
+statement_timeout = '30000ms'
+tcp_keepalives_idle = 60
+tcp_keepalives_interval = 10
+tcp_keepalives_count = 5` : eng.family === 'mysql' ? `max_connections = 500
+wait_timeout = 60
+interactive_timeout = 60
+max_execution_time = 30000
+thread_pool_size = 16
+thread_pool_max_unused_threads = 100` : `max_connections = 400
+query_timeout_seconds = 30
+idle_session_timeout_seconds = 15`}
+`;
+      }
+      break;
+    }
+
+    case 'replica_lag_spike': {
+      scenarioTitle = `Replication Lag Avalanche & Read-After-Write Hazard (${eng.name})`;
+      faultType = 'REPLICA_LAG_SPIKE';
+      downtimeSec = 11;
+      resilienceScore = 84;
+
+      timeline = [
+        {
+          stepIndex: 1,
+          timeOffsetSec: 0,
+          phase: 'Nominal Replication Stream',
+          clusterState: 'HEALTHY',
+          activePrimary: `${eng.primaryPrefix} (Master)`,
+          standbyStatus: `${eng.standbyPrefix} (Replication Lag: 1.2ms)`,
+          clientImpact: 'Read-your-own-writes consistent across all nodes',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Replication apply workers keeping pace with write throughput.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 2,
+          timeOffsetSec: 3,
+          phase: 'Bulk Ingestion & Replica IO Saturation',
+          clusterState: 'DEGRADED',
+          activePrimary: `${eng.primaryPrefix} (High Ingestion Rate)`,
+          standbyStatus: `${eng.standbyPrefix} (Replication Lag: 4,800ms and rising)`,
+          clientImpact: 'Users reading stale records immediately after saving updates.',
+          circuitBreakerStatus: 'OPEN',
+          description: 'Massive batch UPDATE saturates single-threaded replica log apply worker.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE', standbyStates: 'REPLAYING' }),
+        },
+        {
+          stepIndex: 3,
+          timeOffsetSec: 7,
+          phase: 'Read-Routing Failover to Primary',
+          clusterState: 'FAILING_OVER',
+          activePrimary: `${eng.primaryPrefix} (Accepting critical reads)`,
+          standbyStatus: `${eng.standbyPrefix} (Replication Lag: 12,500ms - Ejected from read pool)`,
+          clientImpact: 'Stale reads blocked. Critical queries routed to primary leader.',
+          circuitBreakerStatus: 'HALF_OPEN',
+          description: 'Load balancer ejects lagging replica from read pool once lag exceeds 5,000ms SLA.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE', standbyStates: 'FENCED' }),
+        },
+        {
+          stepIndex: 4,
+          timeOffsetSec: 11,
+          phase: 'Replica Catch-up & Re-admission',
+          clusterState: 'RECOVERED',
+          activePrimary: `${eng.primaryPrefix} (Healthy)`,
+          standbyStatus: `${eng.standbyPrefix} (Replication Lag: 8ms - Re-admitted to pool)`,
+          clientImpact: 'Full read load-balancing restored across all replicas.',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Multi-threaded apply workers clear backlog. Read traffic redistributed.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+      ];
+
+      chaosInjectionScript = `#!/usr/bin/env bash
+# ==========================================================
+# Chaos Fault Injection: Replica I/O Throttling & Lag Spike
+# Target: ${eng.name} (${eng.standbyPrefix})
+# ==========================================================
+echo "[CHAOS] Injecting 400ms latency on replica network interface..."
+ssh root@${eng.standbyPrefix} "tc qdisc add dev eth0 root netem delay 400ms 50ms"
+echo "[CHAOS] Replica latency injected. Monitoring read-pool auto-ejection threshold..."`;
+
+      if (eng.family === 'mongodb') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: MongoDB Replica Set Lag Avalanche Mitigation
+# Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [WRITE CONCERN ENFORCEMENT] Reject stale reads and throttle commits:
+   db.adminCommand({ setDefaultRWConcern: 1, defaultWriteConcern: { w: "majority", wtimeout: 5000 } });
+
+2. [SECONDARY READ AUTO-EJECTION] Configure Driver Read Preference:
+   readPreference=secondaryPreferred&maxStalenessSeconds=30
+
+3. [FLOW CONTROL] Enable MongoDB Flow Control to bound secondary replication lag:
+   db.adminCommand({ setParameter: 1, enableFlowControl: true, flowControlTargetLagSeconds: 10 });`;
+
+        recommendedConfigPatch = `# MongoDB mongod.conf Replication Tuning
+replication:
+  replSetName: "rs0"
+  enableMajorityReadConcern: true
+setParameter:
+  enableFlowControl: true
+  flowControlTargetLagSeconds: 10
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Replication Lag Avalanche Mitigation
+# Target Engine: ${eng.name}
+# ==========================================================
+
+1. [READ POOL AUTO-EJECTION] Configure ProxySQL / PgBouncer health check:
+   Eject any replica exceeding lag > 5000ms to preserve session read consistency.
+
+2. [PARALLEL REPLICATION] Enable multi-threaded replication apply:
+   ${eng.family === 'mysql' 
+     ? 'SET GLOBAL replica_parallel_workers = 8; SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";' 
+     : eng.family === 'postgres' 
+     ? "ALTER SYSTEM SET max_parallel_apply_workers_per_subscription = 4;" 
+     : "Tune parallel redo apply processes on standby instance."}
+
+3. [BATCH THROTTLING] Throttle large bulk UPDATE/DELETE operations into batches of 1,000 rows.`;
+
+        recommendedConfigPatch = `# ${eng.name} Parallel Replication Tuning
+${eng.family === 'mysql' ? `replica_parallel_workers = 8
+replica_parallel_type = LOGICAL_CLOCK
+replica_preserve_commit_order = ON
+max_relay_log_size = 536870912` : eng.family === 'postgres' ? `max_parallel_apply_workers_per_subscription = 4
+max_standby_streaming_delay = 15s
+wal_receiver_timeout = 10s
+hot_standby_feedback = on` : `parallel_apply_workers = 8
+replication_timeout_ms = 10000`}
+`;
+      }
+      break;
+    }
+
+    case 'disk_out_of_space': {
+      scenarioTitle = `WAL / Transaction Log Storage Exhaustion (${eng.name})`;
+      faultType = 'DISK_OUT_OF_SPACE';
+      downtimeSec = 16;
+      resilienceScore = 81;
+
+      timeline = [
+        {
+          stepIndex: 1,
+          timeOffsetSec: 0,
+          phase: 'Normal Storage Utilization',
+          clusterState: 'HEALTHY',
+          activePrimary: `${eng.primaryPrefix} (Disk Usage: 62%)`,
+          standbyStatus: 'Standbys healthy',
+          clientImpact: '0% Error Rate',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Operating normally with 150GB free on log volume.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 2,
+          timeOffsetSec: 4,
+          phase: 'Storage Threshold Breach (95%)',
+          clusterState: 'DEGRADED',
+          activePrimary: `${eng.primaryPrefix} (Disk Usage: 96% - Warning Alert)`,
+          standbyStatus: 'Replicas healthy',
+          clientImpact: 'Elevated disk flush latency; disk I/O queues stall.',
+          circuitBreakerStatus: 'OPEN',
+          description: 'Unchecked transaction log accumulation triggers critical low-disk threshold.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 3,
+          timeOffsetSec: 9,
+          phase: 'Emergency Read-Only Lockdown (PANIC Guard)',
+          clusterState: 'DEGRADED',
+          activePrimary: `${eng.primaryPrefix} (Read-Only Mode Enforced)`,
+          standbyStatus: 'Replicas serving reads',
+          clientImpact: 'Write transactions rejected with DISK_FULL / READ_ONLY_TRANSACTION.',
+          circuitBreakerStatus: 'OPEN',
+          description: 'Database daemon automatically switches to read-only to prevent catastrophic storage corruption.',
+          nodeStates: buildNodes({ primaryState: 'VOTING' }),
+        },
+        {
+          stepIndex: 4,
+          timeOffsetSec: 16,
+          phase: 'Automated Archive Purge & Recovery',
+          clusterState: 'RECOVERED',
+          activePrimary: `${eng.primaryPrefix} (Disk Usage: 45% - Read-Write Resumed)`,
+          standbyStatus: 'Replication re-synchronized',
+          clientImpact: 'Full read-write traffic operational.',
+          circuitBreakerStatus: 'CLOSED',
+          description: 'Automated WAL cleanup daemon ships archived segments to cloud storage and frees disk space.',
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+      ];
+
+      chaosInjectionScript = `#!/usr/bin/env bash
+# ==========================================================
+# Chaos Fault Injection: Rapid Disk Fill on Log Directory
+# Target: ${eng.name}
+# ==========================================================
+echo "[CHAOS] Filling /var/log/db with 50GB file to simulate disk exhaustion..."
+fallocate -l 50G /tmp/chaos_disk_fill.dat
+echo "[CHAOS] Disk threshold exceeded. Checking emergency read-only enforcement in ${eng.name}..."`;
+
+      if (eng.family === 'clickhouse') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: ClickHouse Disk Out of Space & Parts Explosion
+# Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [FREE DISK EMERGENCY] Drop old detached parts and temporary files:
+   ALTER TABLE events DROP DETACHED PART '...';
+   ALTER TABLE events FREEZE;
+
+2. [STORAGE TIERING POLICY] Move cold historical partitions to S3 Object Storage:
+   ALTER TABLE events MOVE PARTITION 202601 TO VOLUME 's3_cold';
+
+3. [TTL ENFORCEMENT] Enforce automated column and table TTLs for automatic deletion.`;
+
+        recommendedConfigPatch = `<!-- /etc/clickhouse-server/config.d/keeper.xml -->
+<clickhouse>
+    <zookeeper>
+        <node index="1"><host>keeper-1</host><port>9181</port></node>
+        <node index="2"><host>keeper-2</host><port>9181</port></node>
+        <node index="3"><host>keeper-3</host><port>9181</port></node>
+        <session_timeout_ms>10000</session_timeout_ms>
+    </zookeeper>
+</clickhouse>
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Disk Out of Space & WAL Exhaustion Mitigation
+# Target Engine: ${eng.name}
+# ==========================================================
+
+1. [EMERGENCY DISK RECLAIM] Free space on log mount:
+   ${eng.family === 'postgres' 
+     ? 'pg_archivecleanup /var/lib/postgresql/wal $(ls -t /var/lib/postgresql/wal | head -n 5 | tail -n 1)' 
+     : eng.family === 'mysql' 
+     ? 'PURGE BINARY LOGS BEFORE NOW() - INTERVAL 1 DAY;' 
+     : 'RMAN> CROSSCHECK ARCHIVELOG ALL; DELETE EXPIRED ARCHIVELOG ALL;'}
+
+2. [DROP UNUSED REPLICATION SLOTS] Prevent WAL retention runaway:
+   ${eng.family === 'postgres' ? 'SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE active = false;' : 'Inspect inactive replication handles.'}
+
+3. [STORAGE AUTOSCALING] Enable AWS EBS / Cloud Volume storage autoscaling (Scale up by 25% at 85% utilization).`;
+
+        recommendedConfigPatch = `# ${eng.name} Disk Space Quota & Auto-Pruning
+${eng.family === 'postgres' ? `wal_keep_size = 2048MB
+max_slot_wal_keep_size = 4096MB
+archive_cleanup_command = 'pg_archivecleanup /var/lib/postgresql/wal %r'
+wal_compression = zstd` : eng.family === 'mysql' ? `binlog_expire_logs_seconds = 259200 # 3 Days
+max_binlog_size = 1073741824 # 1GB
+innodb_undo_log_truncate = ON` : `retention_days = 3
+auto_purge_logs = true`}
+`;
+      }
+      break;
+    }
+
+    case 'primary_crash':
+    default: {
+      scenarioTitle = `Sudden ${eng.name} Primary Crash & Automatic Failover`;
+      faultType = 'PRIMARY_CRASH';
+      downtimeSec = syncMode === 'sync' ? 7 : 12;
+      resilienceScore = syncMode === 'sync' ? 94 : 85;
+
+      timeline = [
+        {
+          stepIndex: 1,
+          timeOffsetSec: 0,
+          phase: 'Baseline Cluster Health',
+          clusterState: 'HEALTHY',
+          activePrimary: `${eng.primaryPrefix} (Leader)`,
+          standbyStatus: `${clusterSize - 1}x Standbys in Sync (Heartbeat: 80ms)`,
+          clientImpact: '0% Error Rate, Latency p95: 3.8ms',
+          circuitBreakerStatus: 'CLOSED',
+          description: `${eng.name} cluster operating normally with ${clusterSize} nodes under ${eng.failoverManager}.`,
+          nodeStates: buildNodes({ primaryState: 'ONLINE' }),
+        },
+        {
+          stepIndex: 2,
+          timeOffsetSec: 2,
+          phase: 'Kernel Panic / Hardware Severed',
+          clusterState: 'DEGRADED',
+          activePrimary: `${eng.primaryPrefix} [OFFLINE / UNRESPONSIVE]`,
+          standbyStatus: `Missed 2x heartbeat pings on port ${eng.port}. Quorum election initiated.`,
+          clientImpact: 'In-flight writes hold TCP sockets; upstream gateway starts queuing requests.',
+          circuitBreakerStatus: 'OPEN',
+          description: `Primary process abruptly terminated without clean flush. ${eng.failoverManager} detects missing lease.`,
+          nodeStates: buildNodes({ primaryRole: 'crashed', primaryState: 'OFFLINE' }),
+        },
+        {
+          stepIndex: 3,
+          timeOffsetSec: 5,
+          phase: 'Leader Election & Quorum Consensus',
+          clusterState: 'FAILING_OVER',
+          activePrimary: 'ELECTION IN PROGRESS',
+          standbyStatus: `Candidate elected with ${majorityVotes}/${clusterSize} majority votes (${eng.consensusProtocol}).`,
+          clientImpact: 'Client connection pool rejects new write sockets (HTTP 503 circuit trip).',
+          circuitBreakerStatus: 'OPEN',
+          description: `Majority consensus reached. Standby with highest commit LSN promoted.`,
+          nodeStates: buildNodes({ primaryRole: 'crashed', primaryState: 'OFFLINE', standbyStates: 'VOTING' }),
+        },
+        {
+          stepIndex: 4,
+          timeOffsetSec: 7,
+          phase: 'Promotion & Virtual IP / DNS Shift',
+          clusterState: 'FAILING_OVER',
+          activePrimary: `${eng.standbyPrefix} (Promoted Primary)`,
+          standbyStatus: 'Replay catch-up completed. Virtual IP shifted to new primary.',
+          clientImpact: 'Connection pools reconnecting to new VIP / listener.',
+          circuitBreakerStatus: 'HALF_OPEN',
+          description: `Read-write mode activated on new leader. Client pooler refreshes target backend.`,
+          nodeStates: buildNodes({ primaryRole: 'crashed', primaryState: 'OFFLINE', promotedIndex: 1 }),
+        },
+        {
+          stepIndex: 5,
+          timeOffsetSec: downtimeSec,
+          phase: 'Cluster Fully Stabilized',
+          clusterState: 'RECOVERED',
+          activePrimary: `${eng.standbyPrefix} (Active Primary)`,
+          standbyStatus: `${clusterSize - 2}x Standbys active; old primary scheduled for automated re-clone.`,
+          clientImpact: 'All read/write queries normal. 0 data loss verified.',
+          circuitBreakerStatus: 'CLOSED',
+          description: `${eng.name} cluster operational. Quorum re-established with ${majorityVotes}/${clusterSize} healthy nodes.`,
+          nodeStates: buildNodes({ primaryRole: 'standby', primaryState: 'ONLINE', promotedIndex: 1 }),
+        },
+      ];
+
+      chaosInjectionScript = `#!/usr/bin/env bash
 # ==========================================================
 # Chaos Fault Injection: Immediate Primary Hardware Crash
-# Target: ${engineName} (${primaryPrefix})
+# Target: ${eng.name} (${eng.primaryPrefix})
 # ==========================================================
-echo "[CHAOS] Injecting SIGKILL on ${engineName} primary daemon..."
-ssh root@${primaryPrefix} "pkill -9 -f ${engineFamily === 'postgres' ? 'postgres' : engineFamily === 'mysql' ? 'mysqld' : engineFamily === 'mongo' ? 'mongod' : 'redis-server'}"
+echo "[CHAOS] Injecting SIGKILL on ${eng.name} primary daemon (${eng.process})..."
+ssh root@${eng.primaryPrefix} "pkill -9 -f ${eng.process}"
 
 # Or via Chaos Mesh Kubernetes CRD:
 cat << 'EOF' | kubectl apply -f -
@@ -213,511 +879,113 @@ spec:
       - database
     labels:
       role: primary
-      engine: ${engineFamily}
+      engine: ${eng.family}
 EOF
-echo "[CHAOS] Primary killed! Monitoring automated failover via ${failoverManager}..."`;
+echo "[CHAOS] Primary daemon killed! Monitoring automated failover via ${eng.failoverManager}..."`;
 
-  // --- Scenario 2: Network Split-Brain ---
-  } else if (scenarioId === 'network_split') {
-    scenarioTitle = `Split-Brain Network Partition & Quorum Fencing (${engineName})`;
-    faultType = 'NETWORK_SPLIT';
-    downtimeSec = 9;
-    resilienceScore = 89;
-
-    timeline = [
-      {
-        timeOffsetSec: 0,
-        phase: 'Baseline Multi-AZ Mesh',
-        clusterState: 'HEALTHY',
-        activePrimary: `${primaryPrefix} (AZ-East-1a)`,
-        standbyStatus: `${clusterSize - 1}x Standbys across AZ-East-1b and AZ-East-1c`,
-        clientImpact: '0% Error Rate, Latency p99: 8.4ms',
-        circuitBreakerStatus: 'CLOSED',
-        description: `Healthy multi-AZ replication mesh connected with ${consensusProtocol}.`,
-      },
-      {
-        timeOffsetSec: 3,
-        phase: 'Inter-AZ Network Blackhole',
-        clusterState: 'SPLIT_BRAIN',
-        activePrimary: `${primaryPrefix} (Isolated Partition)`,
-        standbyStatus: `AZ-1b and AZ-1c isolated from old primary. Heartbeat severed.`,
-        clientImpact: 'Clients in AZ-1a attempt writes; clients in AZ-1b failover to read-only.',
-        circuitBreakerStatus: 'OPEN',
-        description: `Network switch failure drops packets between AZ-1a and other zones.`,
-      },
-      {
-        timeOffsetSec: 6,
-        phase: 'Quorum Evaluation & STONITH Fencing',
-        clusterState: 'FAILING_OVER',
-        activePrimary: 'Demoting Isolated Leader',
-        standbyStatus: `AZ-1b and AZ-1c form majority quorum (${majorityVotes}/${clusterSize} votes).`,
-        clientImpact: 'Write requests paused in connection proxy buffer.',
-        circuitBreakerStatus: 'OPEN',
-        description: `Old isolated primary fails quorum renewal and self-fences (STONITH) to eliminate dual-master split-brain.`,
-      },
-      {
-        timeOffsetSec: 9,
-        phase: 'New Primary Leader Promoted',
-        clusterState: 'RECOVERED',
-        activePrimary: `${standbyPrefix} (New Quorum Leader)`,
-        standbyStatus: 'Remaining nodes acknowledge new leader lease.',
-        clientImpact: 'Writes resume through updated service mesh routing.',
-        circuitBreakerStatus: 'CLOSED',
-        description: `Majority partition safely accepts traffic. Split-brain prevented.`,
-      },
-    ];
-
-    chaosInjectionScript = `#!/usr/bin/env bash
-# ==========================================================
-# Chaos Fault Injection: Network Partition (Split-Brain)
-# Target: ${engineName}
-# ==========================================================
-echo "[CHAOS] Severing network traffic between AZ-1a and AZ-1b/c using iptables..."
-ssh root@${primaryPrefix} "iptables -A INPUT -p tcp --dport 5432 -j DROP"
-
-# Or via Toxiproxy CLI:
-toxiproxy-cli toxic add ${engineFamily}_proxy -t timeout -a timeout=0
-echo "[CHAOS] Network partition active. Verifying STONITH node fencing..."`;
-
-  // --- Scenario 3: Connection Starvation & Storm ---
-  } else if (scenarioId === 'connection_starvation') {
-    scenarioTitle = `Thundering Herd Storm & Connection Pool Saturation (${engineName})`;
-    faultType = 'CONNECTION_STARVATION';
-    downtimeSec = 18;
-    resilienceScore = 78;
-
-    timeline = [
-      {
-        timeOffsetSec: 0,
-        phase: 'Nominal Traffic Flow',
-        clusterState: 'HEALTHY',
-        activePrimary: `${primaryPrefix} (Active Conns: 120/1000)`,
-        standbyStatus: 'Replicas serving analytical read pool',
-        clientImpact: 'p99 Latency: 12ms',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Application services operating well within connection pooling thresholds.',
-      },
-      {
-        timeOffsetSec: 4,
-        phase: 'Lock Pileup & Connection Wave',
-        clusterState: 'DEGRADED',
-        activePrimary: `${primaryPrefix} (Active Conns: 940/1000)`,
-        standbyStatus: 'Standbys unaffected',
-        clientImpact: 'p99 Latency spikes to 3,400ms; Gateway HTTP 504 timeouts.',
-        circuitBreakerStatus: 'OPEN',
-        description: 'An unindexed heavy query holds an exclusive row lock, queueing 800+ backend worker threads.',
-      },
-      {
-        timeOffsetSec: 9,
-        phase: 'CPU Kernel Context Thrashing',
-        clusterState: 'DEGRADED',
-        activePrimary: 'CPU 100% (Kernel Spinlock Thrashing)',
-        standbyStatus: 'Serving read-only traffic',
-        clientImpact: 'Total API write stall. New client connections rejected.',
-        circuitBreakerStatus: 'OPEN',
-        description: 'Database server spends 92% of CPU time switching thread memory contexts rather than executing SQL.',
-      },
-      {
-        timeOffsetSec: 15,
-        phase: 'Circuit Breaker & Pooler Rate Limiting',
-        clusterState: 'FAILING_OVER',
-        activePrimary: 'Active Conns shedding excess clients (Pooler Throttling)',
-        standbyStatus: 'Read queries rerouted to replicas',
-        clientImpact: 'Excess requests rejected fast with 429 Retry-After, relieving engine.',
-        circuitBreakerStatus: 'HALF_OPEN',
-        description: 'Pooler circuit breaker trips, terminating idle-in-transaction connections and shedding excess load.',
-      },
-      {
-        timeOffsetSec: 18,
-        phase: 'Cluster Stabilization',
-        clusterState: 'RECOVERED',
-        activePrimary: `${primaryPrefix} (Active Conns: 150/1000)`,
-        standbyStatus: 'Normal operation restored',
-        clientImpact: 'p99 Latency normalized to 14ms.',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Connection flood cleared. Normal query processing resumes.',
-      },
-    ];
-
-    chaosInjectionScript = `#!/usr/bin/env bash
-# ==========================================================
-# Chaos Fault Injection: Connection Exhaustion & Lock Contention
-# Target: ${engineName}
-# ==========================================================
-echo "[CHAOS] Spawning 1,200 simultaneous connection threads..."
-for i in {1..1200}; do
-  (nc -w 300 localhost 5432 < /dev/zero > /dev/null 2>&1) &
-done
-echo "[CHAOS] 1,200 socket descriptors opened. Inspecting connection pooler exhaustion..."`;
-
-  // --- Scenario 4: Replica Lag Spike ---
-  } else if (scenarioId === 'replica_lag_spike') {
-    scenarioTitle = `Replication Lag Avalanche & Read-After-Write Hazard (${engineName})`;
-    faultType = 'REPLICA_LAG_SPIKE';
-    downtimeSec = 11;
-    resilienceScore = 84;
-
-    timeline = [
-      {
-        timeOffsetSec: 0,
-        phase: 'Nominal Replication Stream',
-        clusterState: 'HEALTHY',
-        activePrimary: `${primaryPrefix} (Master)`,
-        standbyStatus: `${standbyPrefix} (Replication Lag: 1.2ms)`,
-        clientImpact: 'Read-your-own-writes consistent across all nodes',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Replication catch-up keeping pace with write throughput.',
-      },
-      {
-        timeOffsetSec: 3,
-        phase: 'Bulk ETL Ingestion & Replica IO Saturation',
-        clusterState: 'DEGRADED',
-        activePrimary: `${primaryPrefix} (High Ingestion Rate)`,
-        standbyStatus: `${standbyPrefix} (Replication Lag: 4,800ms and rising)`,
-        clientImpact: 'Users reading stale records immediately after saving profile / checkout updates.',
-        circuitBreakerStatus: 'OPEN',
-        description: 'Massive batch UPDATE saturates single-threaded replica log apply worker.',
-      },
-      {
-        timeOffsetSec: 7,
-        phase: 'Read-Routing Failover to Primary',
-        clusterState: 'FAILING_OVER',
-        activePrimary: `${primaryPrefix} (Accepting critical reads)`,
-        standbyStatus: `${standbyPrefix} (Replication Lag: 12,500ms - Ejected from read pool)`,
-        clientImpact: 'Stale reads blocked. Critical queries routed to primary.',
-        circuitBreakerStatus: 'HALF_OPEN',
-        description: 'Load balancer ejects lagging replica from read pool once lag exceeds 5,000ms SLA.',
-      },
-      {
-        timeOffsetSec: 11,
-        phase: 'Replica Catch-up & Re-admission',
-        clusterState: 'RECOVERED',
-        activePrimary: `${primaryPrefix} (Healthy)`,
-        standbyStatus: `${standbyPrefix} (Replication Lag: 8ms - Re-admitted to pool)`,
-        clientImpact: 'Full read load-balancing restored across all replicas.',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Replica apply worker clears backlog. Read traffic redistributed.',
-      },
-    ];
-
-    chaosInjectionScript = `#!/usr/bin/env bash
-# ==========================================================
-# Chaos Fault Injection: Replica I/O Throttling & Lag Spike
-# Target: ${engineName} (${standbyPrefix})
-# ==========================================================
-echo "[CHAOS] Injecting 90% disk I/O latency throttle on replica..."
-ssh root@${standbyPrefix} "tc qdisc add dev eth0 root netem delay 400ms 50ms"
-echo "[CHAOS] Replica network and disk latency delayed. Monitoring read pool auto-ejection..."`;
-
-  // --- Scenario 5: Disk Out of Space ---
-  } else {
-    scenarioTitle = `WAL / Transaction Log Storage Exhaustion (${engineName})`;
-    faultType = 'DISK_OUT_OF_SPACE';
-    downtimeSec = 16;
-    resilienceScore = 81;
-
-    timeline = [
-      {
-        timeOffsetSec: 0,
-        phase: 'Normal Storage Utilization',
-        clusterState: 'HEALTHY',
-        activePrimary: `${primaryPrefix} (Disk Usage: 62%)`,
-        standbyStatus: 'Standbys healthy',
-        clientImpact: '0% Error Rate',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Operating normally with 150GB free on WAL / transaction log mount.',
-      },
-      {
-        timeOffsetSec: 4,
-        phase: 'Storage Threshold Breach (95%)',
-        clusterState: 'DEGRADED',
-        activePrimary: `${primaryPrefix} (Disk Usage: 96% - Warning Alert)`,
-        standbyStatus: 'Replicas healthy',
-        clientImpact: 'Elevated disk flush latency',
-        circuitBreakerStatus: 'OPEN',
-        description: 'Unchecked transaction log accumulation triggers critical low-disk threshold.',
-      },
-      {
-        timeOffsetSec: 9,
-        phase: 'Emergency Read-Only Lockdown (PANIC Guard)',
-        clusterState: 'DEGRADED',
-        activePrimary: `${primaryPrefix} (Read-Only Mode Enforced)`,
-        standbyStatus: 'Replicas serving reads',
-        clientImpact: 'Write transactions rejected with DISK_FULL / READ_ONLY_TRANSACTION.',
-        circuitBreakerStatus: 'OPEN',
-        description: 'Database daemon automatically switches to read-only to prevent catastrophic page corruption.',
-      },
-      {
-        timeOffsetSec: 16,
-        phase: 'Automated Archive Purge & Recovery',
-        clusterState: 'RECOVERED',
-        activePrimary: `${primaryPrefix} (Disk Usage: 45% - Read-Write Resumed)`,
-        standbyStatus: 'Replication re-synchronized',
-        clientImpact: 'Full read-write traffic operational.',
-        circuitBreakerStatus: 'CLOSED',
-        description: 'Automated WAL cleanup daemon ships archived segments to object storage and frees disk space.',
-      },
-    ];
-
-    chaosInjectionScript = `#!/usr/bin/env bash
-# ==========================================================
-# Chaos Fault Injection: Rapid Disk Fill on Log Directory
-# Target: ${engineName}
-# ==========================================================
-echo "[CHAOS] Filling /var/log/db with 50GB sparse file..."
-fallocate -l 50G /tmp/chaos_disk_fill.dat
-echo "[CHAOS] Disk threshold exceeded. Checking emergency read-only enforcement..."`;
-  }
-
-  // --- Architecture-Specific Runbooks & Config Patches ---
-  if (engineFamily === 'mysql') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
+      if (eng.family === 'mysql') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: MySQL Sudden Primary Crash & Failover
+# High Availability Stack: ${eng.failoverManager}
 # ==========================================================
 
-1. [AUTOMATIC] Enforce Semi-Synchronous Replication:
-   SET GLOBAL rpl_semi_sync_master_enabled = 1;
-   SET GLOBAL rpl_semi_sync_master_wait_no_slave = 0;
-   SET GLOBAL rpl_semi_sync_master_timeout = 1000;
+1. [LEADER ELECTION] Orchestrator validates primary failure:
+   orchestrator-client -c topology -i 10.0.1.10:3306
 
-2. [ORCHESTRATOR] Configure Automated Leader Promotion:
-   In orchestrator.conf.json:
-   "RecoveryPeriodBlockSeconds": 30,
-   "FailMasterPromotionIfSQLThreadNotUpToDate": true,
-   "ApplyMySQLPromotionAfterMasterFailover": true
+2. [PROMOTION] Lowest GTID-lag standby assumes primary role:
+   SET GLOBAL read_only = OFF;
+   SET GLOBAL super_read_only = OFF;
 
-3. [CLIENT LAYER] Deploy ProxySQL Connection Multiplexing:
-   - Configure split on port 6033 with fast backend health checks (every 500ms).
-   - Route writes to hostgroup 10 (writer), reads to hostgroup 20 (readers).
-`;
-    recommendedConfigPatch = `# MySQL / MariaDB High-Availability Hardening (my.cnf)
+3. [PROXY ROUTING] ProxySQL shifts port 6033 write hostgroup to new primary.
+
+4. [AUTO RE-ATTACH] Former primary re-attaches via MySQL Clone Plugin upon recovery.`;
+
+        recommendedConfigPatch = `# MySQL High-Availability Failover (my.cnf)
 [mysqld]
+gtid_mode = ON
+enforce_gtid_consistency = ON
 rpl_semi_sync_master_enabled = 1
 rpl_semi_sync_slave_enabled = 1
 rpl_semi_sync_master_timeout = 1000
 innodb_flush_log_at_trx_commit = 1
 sync_binlog = 1
-binlog_format = ROW
-gtid_mode = ON
-enforce_gtid_consistency = ON
 `;
-
-  } else if (engineFamily === 'oracle') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
+      } else if (eng.family === 'oracle') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: Oracle Database Fast-Start Failover (FSFO)
+# High Availability Stack: ${eng.failoverManager}
 # ==========================================================
 
-1. [AUTOMATIC] Enable Oracle Data Guard Fast-Start Failover (FSFO):
+1. [OBSERVER TRIGGER] Observer detects primary heartbeat loss:
    DGMGRL> ENABLE FAST_START FAILOVER;
-   DGMGRL> SET FAST_START FAILOVER THRESHOLD 15;
-   DGMGRL> START OBSERVER;
 
-2. [CLIENT REDIRECTION] Configure Fast Application Notification (FAN) & ONS:
-   Ensure JDBC connection pools subscribe to Fast Connection Failover (FCF):
-   (DESCRIPTION=(CONNECT_TIMEOUT=5)(RETRY_COUNT=3)(ADDRESS_LIST=...)(CONNECT_DATA=(SERVICE_NAME=app_rw)))
+2. [AUTOMATIC FAILOVER] Standby assumes PRIMARY role:
+   Data Guard Broker executes failover within 3 seconds.
 
-3. [STORAGE] Enforce Maximum Availability Mode:
-   DGMGRL> EDIT DATABASE primary SET PROPERTY LogXptMode='SYNC';
+3. [FLASHBACK REINSTATEMENT] When old primary reboots, Broker runs Flashback Database:
+   DGMGRL> REINSTATE DATABASE 'old_primary';`;
+
+        recommendedConfigPatch = `-- Oracle Data Guard High-Availability Tuning
+DGMGRL> EDIT CONFIGURATION SET PROTECTION MODE AS MAXAVAILABILITY;
+DGMGRL> ENABLE FAST_START FAILOVER;
+DGMGRL> SET FAST_START FAILOVER THRESHOLD 15;
 `;
-    recommendedConfigPatch = `-- Oracle Data Guard High Availability Configuration
-DG_BROKER_START = TRUE
-FAST_START_FAILOVER_TARGET = 'standby_db'
-FAST_START_FAILOVER_THRESHOLD = 15
-LOG_ARCHIVE_DEST_2 = 'SERVICE=standby_db SYNC AFFIRM VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=standby_db'
-`;
-
-  } else if (engineFamily === 'mssql') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
+      } else if (eng.family === 'mssql') {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: SQL Server AlwaysOn Automatic Failover
+# High Availability Stack: ${eng.failoverManager}
 # ==========================================================
 
-1. [AUTOMATIC] Enforce Synchronous-Commit AlwaysOn Availability Group:
-   ALTER AVAILABILITY GROUP [AG_PROD] 
-   MODIFY REPLICA ON N'NODE_2' WITH (AVAILABILITY_MODE = SYNCHRONOUS_COMMIT, FAILOVER_MODE = AUTOMATIC);
+1. [CLUSTER HEALTH] WSFC detects lease loss on primary replica:
+   Secondary replica in SYNCHRONOUS_COMMIT transitions to PRIMARY.
 
-2. [LISTENER] Connect via MultiSubnetFailover Listener:
-   Server=tcp:ag-listener.corp.internal,1433;MultiSubnetFailover=True;Connection Timeout=15;
+2. [LISTENER] AG Virtual Network Name listener re-binds IP to new primary.
 
-3. [HEALTH] Configure Health Check Thresholds:
-   ALTER AVAILABILITY GROUP [AG_PROD] SET (HEALTH_CHECK_TIMEOUT = 15000);
-`;
-    recommendedConfigPatch = `-- SQL Server AlwaysOn Availability Group Quorum Tuning
+3. [AUTO-SEEDING] Former primary rejoins as secondary upon OS reboot.`;
+
+        recommendedConfigPatch = `-- SQL Server AlwaysOn Automatic Failover Tuning
 ALTER AVAILABILITY GROUP [AG_PROD]
-SET (HEALTH_CHECK_TIMEOUT = 15000, FAILURE_CONDITION_LEVEL = 3, AUTOMATED_BACKUP_PREFERENCE = SECONDARY);
+MODIFY REPLICA ON N'NODE_2' WITH (
+    AVAILABILITY_MODE = SYNCHRONOUS_COMMIT,
+    FAILOVER_MODE = AUTOMATIC
+);
 `;
-
-  } else if (engineFamily === 'mongodb') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
-# ==========================================================
-
-1. [QUORUM] Enforce w: "majority" Write Concern across all operations:
-   db.collection.insertOne(doc, { writeConcern: { w: "majority", wtimeout: 5000 } });
-
-2. [ELECTION] Configure Replica Set Election Priority:
-   rs.reconfig({
-     _id: "rs0",
-     members: [
-       { _id: 0, host: "mongo-1:27017", priority: 2 },
-       { _id: 1, host: "mongo-2:27017", priority: 1 },
-       { _id: 2, host: "mongo-3:27017", priority: 1 }
-     ]
-   });
-
-3. [DRIVER] Enable Retryable Writes in Connection String:
-   mongodb://mongo-1,mongo-2,mongo-3/?replicaSet=rs0&retryWrites=true&w=majority
-`;
-    recommendedConfigPatch = `# MongoDB mongod.conf Replication Hardening
-replication:
-  replSetName: "rs0"
-  enableMajorityReadConcern: true
-setParameter:
-  electionTimeoutMillis: 5000
-  heartbeatIntervalMillis: 1000
-`;
-
-  } else if (engineFamily === 'redis') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
-# ==========================================================
-
-1. [SENTINEL] Configure Quorum and Down-After-Milliseconds:
-   sentinel monitor mymaster redis-master 6379 2
-   sentinel down-after-milliseconds mymaster 3000
-   sentinel failover-timeout mymaster 10000
-
-2. [ZERO DATA LOSS] Enforce Minimum Replicas for Writes:
-   CONFIG SET min-replicas-to-write 1
-   CONFIG SET min-replicas-max-lag 5
-
-3. [CLIENT] Enable Automatic Topology Refresh in Lettuce / Jedis client.
-`;
-    recommendedConfigPatch = `# Redis Sentinel & Master Hardening (redis.conf)
-min-replicas-to-write 1
-min-replicas-max-lag 5
-appendonly yes
-appendfsync everysec
-cluster-node-timeout 5000
-`;
-
-  } else if (engineFamily === 'clickhouse') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
-# ==========================================================
-
-1. [KEEPER] Configure ClickHouse Keeper 3-Node Raft Quorum:
-   Ensure raft_configuration defines 3 distinct voter servers.
-
-2. [TABLES] Use ReplicatedMergeTree for all production engines:
-   ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/events', '{replica}')
-
-3. [ROUTING] Deploy chproxy or Envoy with active TCP health probes on port 9000/8123.
-`;
-    recommendedConfigPatch = `<!-- /etc/clickhouse-server/config.d/keeper.xml -->
-<clickhouse>
-    <zookeeper>
-        <node index="1"><host>keeper-1</host><port>9181</port></node>
-        <node index="2"><host>keeper-2</host><port>9181</port></node>
-        <node index="3"><host>keeper-3</host><port>9181</port></node>
-        <session_timeout_ms>10000</session_timeout_ms>
-    </zookeeper>
-</clickhouse>
-`;
-
-  } else if (engineFamily === 'cassandra') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
-# ==========================================================
-
-1. [CONSISTENCY] Enforce LOCAL_QUORUM on all writes and reads:
-   R + W > N (e.g. Replication Factor 3: Write to 2, Read from 2 = Strong Consistency).
-
-2. [FAILURE DETECTOR] Tune Phi Accrual Conviction Threshold in cassandra.yaml:
-   phi_convict_threshold: 12
-
-3. [SNITCH] Configure GossipingPropertyFileSnitch across multiple racks and AZs.
-`;
-    recommendedConfigPatch = `# Cassandra Resilience Hardening (cassandra.yaml)
-endpoint_snitch: GossipingPropertyFileSnitch
-phi_convict_threshold: 12
-dynamic_snitch_badness_threshold: 0.1
-hinted_handoff_enabled: true
-max_hint_window_in_ms: 10800000 # 3 hours
-`;
-
-  } else if (engineFamily === 'sqlite') {
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Recovery Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# ==========================================================
-
-1. [LOCKING] Configure Busy Timeout to eliminate immediate SQLITE_BUSY crashes:
-   PRAGMA busy_timeout = 5000;
-
-2. [JOURNAL] Enforce WAL (Write-Ahead Logging) Mode:
-   PRAGMA journal_mode = WAL;
-   PRAGMA synchronous = NORMAL;
-
-3. [REPLICATION] Deploy Litestream for continuous streaming replication to S3.
-`;
-    recommendedConfigPatch = `-- SQLite Production Robustness PRAGMAs
-PRAGMA journal_mode = WAL;
-PRAGMA busy_timeout = 5000;
-PRAGMA synchronous = NORMAL;
-PRAGMA wal_autocheckpoint = 1000;
-`;
-
-  } else {
-    // Default: PostgreSQL
-    mitigationRunbook = `# ==========================================================
-# SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle} (${engineName})
-# High Availability Stack: ${failoverManager}
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: ${eng.name} Primary Crash & Patroni Failover
+# High Availability Stack: ${eng.failoverManager}
 # ==========================================================
 
 1. [AUTOMATIC] Enforce Synchronous Replication Quorum:
    SET synchronous_commit = 'on';
-   SET synchronous_standby_names = 'FIRST 1 (${standbyPrefix}, standby_3)';
+   SET synchronous_standby_names = 'FIRST 1 (${eng.standbyPrefix}, standby_3)';
 
-2. [PATRONI DCS] Configure Raft/etcd TTL & Lease Thresholds:
-   In patroni.yml:
-   ttl: 15
-   loop_wait: 5
-   retry_timeout: 5
-   maximum_lag_on_failover: 1048576 # 1MB max replication lag
+2. [DCS ELECTION] Patroni / etcd detects lost primary lease within loop_wait (10s):
+   Standby with highest LSN position claims leader lock key in etcd.
 
-3. [CLIENT RETRY] Configure Connection Pooler (PgBouncer) & Exponential Jitter:
-   pool_mode = transaction
-   server_idle_timeout = 30
-   query_wait_timeout = 10
-`;
-    recommendedConfigPatch = `# PostgreSQL High-Availability Hardening (postgresql.conf)
+3. [PROMOTION] Patroni executes promotion command:
+   Standby switches from read-only to read-write mode.
+
+4. [VIP REWIRE] HAProxy / Keepalived health check (port 8008) rewires write traffic.
+
+5. [PG_REWIND] When old primary recovers, pg_rewind reconciles divergence and rejoins as standby.`;
+
+        recommendedConfigPatch = `# PostgreSQL High-Availability Hardening (postgresql.conf)
 synchronous_commit = on
 synchronous_standby_names = 'ANY 1 (standby_1, standby_2)'
 wal_keep_size = 4096MB
 hot_standby_feedback = on
 max_standby_streaming_delay = 30s
-restart_after_crash = off # Prevent crashed primary from restarting without DCS clearance
+restart_after_crash = off
 `;
+      }
+      break;
+    }
   }
 
   return {
     engine: rawEngine,
-    engineName,
+    engineName: eng.name,
     scenarioId,
     scenarioTitle,
     faultType,
@@ -730,9 +998,9 @@ restart_after_crash = off # Prevent crashed primary from restarting without DCS 
     chaosInjectionScript,
     clusterTopologySummary: {
       clusterSize,
-      quorumRequirement: `${majorityVotes}/${clusterSize} Nodes (${consensusProtocol})`,
-      failoverManager,
-      consensusProtocol,
+      quorumRequirement: `${majorityVotes}/${clusterSize} Nodes (${eng.consensusProtocol})`,
+      failoverManager: eng.failoverManager,
+      consensusProtocol: eng.consensusProtocol,
       syncMode,
     },
   };
