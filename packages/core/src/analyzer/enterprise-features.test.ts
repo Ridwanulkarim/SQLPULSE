@@ -446,5 +446,80 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(hardened.failedChecksCount).toBe(0);
     expect(hardened.checks.every(c => c.status === 'PASSED')).toBe(true);
   });
+
+  test('25. BloatAnalyzer generates authentic vacuum metrics and commands across 10 engine architectures', () => {
+    // 1. PostgreSQL with vacuum metrics
+    const pg = bloatAnalyzer.analyze({
+      engine: 'postgres',
+      tableName: 'invoices',
+      totalTableSizeGb: 200,
+      deadTuplePercentage: 35,
+      avgDailyUpdates: 750000,
+      targetIoSpeedMbSec: 100,
+    });
+    expect(pg.vacuumMetrics.estimatedDiskFreedGb).toBeGreaterThan(60);
+    expect(pg.vacuumMetrics.postVacuumTableSizeGb).toBeLessThan(150);
+    expect(pg.vacuumMetrics.estimatedDurationMinutes).toBeGreaterThan(10);
+    expect(pg.vacuumMetrics.dailyBloatGrowthMb).toBeGreaterThan(100);
+    expect(pg.repackScript).toContain('REINDEX TABLE CONCURRENTLY invoices');
+
+    // 2. Oracle Database High Water Mark & SHRINK SPACE
+    const oracle = bloatAnalyzer.analyze({
+      engine: 'oracle',
+      tableName: 'gl_transactions',
+      totalTableSizeGb: 500,
+      deadTuplePercentage: 45,
+    });
+    expect(oracle.engineName).toContain('Oracle');
+    expect(oracle.repackScript).toContain('SHRINK SPACE CASCADE');
+    expect(oracle.repackScript).toContain('ENABLE ROW MOVEMENT');
+    expect(oracle.hygieneCheckQuery).toContain('chain_cnt');
+
+    // 3. Microsoft SQL Server Index Rebuild / Reorganize
+    const mssql = bloatAnalyzer.analyze({
+      engine: 'mssql',
+      tableName: 'audit_events',
+      totalTableSizeGb: 300,
+      deadTuplePercentage: 40,
+    });
+    expect(mssql.engineName).toBe('Microsoft SQL Server');
+    expect(mssql.repackScript).toContain('REBUILD WITH (');
+    expect(mssql.repackScript).toContain('ONLINE = ON');
+    expect(mssql.hygieneCheckQuery).toContain('sys.dm_db_index_physical_stats');
+
+    // 4. SQLite VACUUM INTO & Incremental Vacuum
+    const sqlite = bloatAnalyzer.analyze({
+      engine: 'sqlite',
+      tableName: 'local_cache',
+      totalTableSizeGb: 10,
+      deadTuplePercentage: 30,
+    });
+    expect(sqlite.engineName).toBe('SQLite');
+    expect(sqlite.repackScript).toContain('VACUUM INTO');
+    expect(sqlite.autovacuumTuningDdl).toContain('PRAGMA incremental_vacuum');
+    expect(sqlite.hygieneCheckQuery).toContain('freelist_count');
+
+    // 5. Cassandra nodetool garbagecollect & tombstone thresholds
+    const cassandra = bloatAnalyzer.analyze({
+      engine: 'cassandra',
+      tableName: 'user_timelines',
+      totalTableSizeGb: 400,
+      deadTuplePercentage: 50,
+    });
+    expect(cassandra.engineName).toBe('Apache Cassandra');
+    expect(cassandra.repackScript).toContain('nodetool garbagecollect');
+    expect(cassandra.autovacuumTuningDdl).toContain('LeveledCompactionStrategy');
+
+    // 6. Redis active defragmentation
+    const redis = bloatAnalyzer.analyze({
+      engine: 'redis',
+      tableName: 'session_keys',
+      totalTableSizeGb: 64,
+      deadTuplePercentage: 35,
+    });
+    expect(redis.engineName).toBe('Redis');
+    expect(redis.repackScript).toContain('activedefrag yes');
+    expect(redis.hygieneCheckQuery).toContain('mem_fragmentation_ratio');
+  });
 });
 

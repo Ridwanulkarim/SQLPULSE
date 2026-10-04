@@ -290,6 +290,7 @@ export const analyzeTableBloat = async (params: {
   totalTableSizeGb?: number;
   deadTuplePercentage?: number;
   avgDailyUpdates?: number;
+  targetIoSpeedMbSec?: number;
 }): Promise<BloatAnalyzeResult> => {
   return safeRequest(
     `${API_BASE}/analyze/bloat`,

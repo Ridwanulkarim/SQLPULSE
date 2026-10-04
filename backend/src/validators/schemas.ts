@@ -100,6 +100,7 @@ export const bloatSchema = z.object({
   totalTableSizeGb: z.number().min(0.01).max(1000000).optional(),
   deadTuplePercentage: z.number().min(0).max(100).optional(),
   avgDailyUpdates: z.number().min(0).max(1000000000).optional(),
+  targetIoSpeedMbSec: z.number().min(1).max(10000).optional(),
 });
 
 export const replicationSchema = z.object({
