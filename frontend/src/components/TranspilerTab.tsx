@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowRightLeft,
   Copy,
@@ -7,18 +7,256 @@ import {
   Info,
   ShieldAlert,
   Code2,
-  Table2
+  Table2,
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { DbBrandLogo } from './DbBrandLogo';
 import { transpileSql } from '../services/api';
-import { TranspileResult, DATABASE_CATALOG } from '../types';
-
-import { DatabaseEngine } from '../types';
+import { TranspileResult, DATABASE_CATALOG, DatabaseEngine } from '../types';
 
 interface TranspilerTabProps {
   selectedEngine?: DatabaseEngine | string;
   onSelectEngine?: (engine: DatabaseEngine) => void;
+}
+
+export function getDefaultSampleForEngine(engineId: string): string {
+  const norm = (engineId || '').toLowerCase().trim();
+
+  if (norm === 'mysql' || norm === 'mariadb' || norm === 'tidb' || norm === 'percona' || norm === 'planetscale') {
+    return `-- MySQL DDL & Query Sample
+CREATE TABLE \`customer_orders\` (
+    \`order_id\` INT AUTO_INCREMENT PRIMARY KEY,
+    \`customer_name\` VARCHAR(255) NOT NULL,
+    \`order_total\` DECIMAL(12, 2),
+    \`order_date\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    \`order_notes\` LONGTEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SELECT 
+    \`customer_name\`, 
+    IFNULL(\`order_total\`, 0) AS total_amount,
+    NOW() AS extracted_at
+FROM \`customer_orders\`
+LIMIT 10;`;
+  }
+
+  if (norm === 'oracle' || norm === 'db2') {
+    return `-- Oracle DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id NUMBER(10) PRIMARY KEY,
+    customer_name VARCHAR2(255) NOT NULL,
+    order_total NUMBER(12, 2),
+    order_date DATE DEFAULT SYSDATE,
+    order_notes CLOB
+);
+
+SELECT 
+    customer_name, 
+    NVL(order_total, 0) AS total_amount,
+    SYSDATE AS extracted_at
+FROM customer_orders
+WHERE ROWNUM <= 10;`;
+  }
+
+  if (norm === 'microsoft_sql_server' || norm === 'mssql' || norm === 'sqlserver' || norm === 'azure_sql') {
+    return `-- Microsoft SQL Server (T-SQL) DDL & Query Sample
+CREATE TABLE [dbo].[customer_orders] (
+    [order_id] INT IDENTITY(1,1) PRIMARY KEY,
+    [customer_name] NVARCHAR(255) NOT NULL,
+    [order_total] DECIMAL(12, 2),
+    [order_date] DATETIME2 DEFAULT GETDATE(),
+    [order_notes] NVARCHAR(MAX)
+);
+
+SELECT TOP 10 
+    [customer_name], 
+    ISNULL([order_total], 0) AS total_amount, 
+    GETDATE() AS extracted_at
+FROM [dbo].[customer_orders];`;
+  }
+
+  if (norm === 'clickhouse') {
+    return `-- ClickHouse Columnar DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id UInt64,
+    customer_name String,
+    order_total Decimal(12, 2),
+    order_date DateTime DEFAULT now(),
+    order_notes String
+)
+ENGINE = ReplacingMergeTree()
+ORDER BY (order_id);
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    now() AS extracted_at
+FROM customer_orders
+LIMIT 10;`;
+  }
+
+  if (norm.includes('hive') || norm.includes('spark') || norm.includes('databricks')) {
+    return `-- Apache Hive DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id BIGINT,
+    customer_name STRING,
+    order_total DECIMAL(12, 2),
+    order_date TIMESTAMP,
+    order_notes STRING
+)
+STORED AS ORC
+TBLPROPERTIES ("transactional"="true");
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    CURRENT_TIMESTAMP() AS extracted_at
+FROM customer_orders
+LIMIT 10;`;
+  }
+
+  if (norm === 'snowflake') {
+    return `-- Snowflake Data Warehouse DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id NUMBER AUTOINCREMENT START 1 INCREMENT 1 PRIMARY KEY,
+    customer_name VARCHAR(255) NOT NULL,
+    order_total NUMBER(12, 2),
+    order_date TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    metadata VARIANT,
+    order_notes VARCHAR
+);
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    CURRENT_TIMESTAMP() AS extracted_at
+FROM customer_orders
+LIMIT 10;`;
+  }
+
+  if (norm.includes('mongo') || norm.includes('document')) {
+    return `// MongoDB MQL Query Sample
+db.customer_orders.aggregate([
+  {
+    $match: {
+      status: "active",
+      order_total: { $gte: 100 }
+    }
+  },
+  {
+    $sort: { order_date: -1 }
+  },
+  {
+    $limit: 10
+  },
+  {
+    $project: {
+      _id: 1,
+      customer_name: 1,
+      order_total: 1,
+      order_date: 1
+    }
+  }
+]);`;
+  }
+
+  if (norm === 'redis' || norm === 'dragonfly' || norm === 'keydb') {
+    return `// RediSearch & RedisJSON Query Sample
+FT.SEARCH idx:customer_orders "@status:{active}"
+  RETURN 3 customer_name order_total order_date
+  SORTBY order_date DESC
+  LIMIT 0 10;`;
+  }
+
+  if (norm.includes('cassandra') || norm.includes('scylla')) {
+    return `-- Cassandra CQL DDL & Query Sample
+CREATE KEYSPACE IF NOT EXISTS retail_store
+WITH replication = {'class': 'NetworkTopologyStrategy', 'us-east-1': 3};
+
+CREATE TABLE retail_store.customer_orders (
+  customer_id uuid,
+  order_date timestamp,
+  order_id uuid,
+  customer_name text,
+  order_total decimal,
+  PRIMARY KEY ((customer_id), order_date, order_id)
+) WITH CLUSTERING ORDER BY (order_date DESC, order_id ASC);
+
+SELECT customer_name, order_total, order_date
+FROM retail_store.customer_orders
+WHERE customer_id = 550e8400-e29b-41d4-a716-446655440000
+LIMIT 10;`;
+  }
+
+  if (norm.includes('neo4j') || norm.includes('graph')) {
+    return `// Neo4j Cypher Graph Sample
+MATCH (u:User)-[r:PLACED]->(o:customer_orders)
+WHERE o.status = 'active'
+RETURN u.name AS customer_name, count(o) AS order_count, sum(o.order_total) AS total_amount
+ORDER BY total_amount DESC
+LIMIT 10;`;
+  }
+
+  if (norm.includes('influx') || norm.includes('quest')) {
+    return `// InfluxDB Flux Time-Series Sample
+from(bucket: "customer_orders")
+  |> range(start: -7d)
+  |> filter(fn: (r) => r._measurement == "orders" and r.status == "active")
+  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+  |> yield(name: "hourly_order_volume");`;
+  }
+
+  // Default: PostgreSQL
+  return `-- PostgreSQL DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id BIGSERIAL PRIMARY KEY,
+    customer_name VARCHAR(255) NOT NULL,
+    order_total NUMERIC(12, 2),
+    order_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB,
+    order_notes TEXT
+);
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    CURRENT_TIMESTAMP AS extracted_at
+FROM customer_orders
+LIMIT 10;`;
+}
+
+export function detectDialectFromCode(code: string): string | null {
+  if (!code || code.length < 10) return null;
+  if (/\bVARCHAR2\b|\bNUMBER\s*\(|\bCLOB\b|\bROWNUM\b|\bNVL\s*\(|\bSYSDATE\b|FROM\s+DUAL/i.test(code)) {
+    return 'oracle';
+  }
+  if (/AUTO_INCREMENT|\bTINYINT\s*\(\s*1\s*\)|ENGINE\s*=\s*InnoDB|`[a-zA-Z0-9_]+`/i.test(code)) {
+    return 'mysql';
+  }
+  if (/IDENTITY\s*\(|\bDATETIME2\b|\bUNIQUEIDENTIFIER\b|\[dbo\]|\[[a-zA-Z0-9_]+\]|SELECT\s+TOP\b|\bGETDATE\(\)/i.test(code)) {
+    return 'microsoft_sql_server';
+  }
+  if (/\bBIGSERIAL\b|\bJSONB\b|\bTIMESTAMPTZ\b|::text|::jsonb|\bILIKE\b/i.test(code)) {
+    return 'postgresql';
+  }
+  if (/ReplacingMergeTree|\bUInt32\b|\bUInt64\b|\bDateTime64\b/i.test(code)) {
+    return 'clickhouse';
+  }
+  if (/STORED\s+AS\s+ORC|STORED\s+AS\s+PARQUET|TBLPROPERTIES/i.test(code)) {
+    return 'apache_hive';
+  }
+  if (/\bdb\.[a-zA-Z0-9_]+\.find|\bdb\.[a-zA-Z0-9_]+\.aggregate/i.test(code)) {
+    return 'mongodb';
+  }
+  if (/FT\.CREATE|FT\.SEARCH|\bHGETALL\b/i.test(code)) {
+    return 'redis';
+  }
+  if (/MATCH\s*\(.*-\[.*\]->/i.test(code)) {
+    return 'neo4j';
+  }
+  return null;
 }
 
 export const TranspilerTab: React.FC<TranspilerTabProps> = ({
@@ -35,24 +273,8 @@ export const TranspilerTab: React.FC<TranspilerTabProps> = ({
       setTargetEngine(propEngine);
     }
   }, [propEngine]);
-  const [sourceCode, setSourceCode] = useState<string>(
-    `-- Oracle DDL & Query Sample
-CREATE TABLE customer_orders (
-    order_id NUMBER(10) PRIMARY KEY,
-    customer_name VARCHAR2(255) NOT NULL,
-    order_total NUMBER(12, 2),
-    order_date DATE DEFAULT SYSDATE,
-    order_notes CLOB
-);
 
-SELECT 
-    customer_name, 
-    NVL(order_total, 0) AS total_amount,
-    SYSDATE AS extracted_at
-FROM customer_orders
-WHERE ROWNUM <= 10;`
-  );
-
+  const [sourceCode, setSourceCode] = useState<string>(() => getDefaultSampleForEngine('oracle'));
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<TranspileResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -62,20 +284,7 @@ WHERE ROWNUM <= 10;`
       label: 'Oracle ➔ Apache Hive',
       src: 'oracle',
       tgt: 'apache_hive',
-      code: `CREATE TABLE customer_orders (
-    order_id NUMBER(10) PRIMARY KEY,
-    customer_name VARCHAR2(255) NOT NULL,
-    order_total NUMBER(12, 2),
-    order_date DATE DEFAULT SYSDATE,
-    order_notes CLOB
-);
-
-SELECT 
-    customer_name, 
-    NVL(order_total, 0) AS total_amount,
-    SYSDATE AS extracted_at
-FROM customer_orders
-WHERE ROWNUM <= 10;`,
+      code: getDefaultSampleForEngine('oracle'),
     },
     {
       label: 'Oracle ➔ PostgreSQL',
@@ -100,36 +309,13 @@ WHERE ROWNUM <= 25;`,
       label: 'MySQL ➔ PostgreSQL',
       src: 'mysql',
       tgt: 'postgresql',
-      code: `CREATE TABLE user_accounts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(80) NOT NULL,
-    metadata JSON,
-    is_active TINYINT(1) DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-SELECT \`id\`, \`username\`, IFNULL(metadata->>'$.tier', 'free') AS tier
-FROM \`user_accounts\`
-WHERE \`is_active\` = 1
-LIMIT 50;`,
+      code: getDefaultSampleForEngine('mysql'),
     },
     {
       label: 'SQL Server ➔ PostgreSQL',
       src: 'microsoft_sql_server',
       tgt: 'postgresql',
-      code: `CREATE TABLE [dbo].[Subscriptions] (
-    [SubId] UNIQUEIDENTIFIER PRIMARY KEY,
-    [PlanName] NVARCHAR(100) NOT NULL,
-    [MonthlyRate] MONEY,
-    [IsActive] BIT DEFAULT 1,
-    [RenewalDate] DATETIME2
-);
-
-SELECT TOP 10 
-    [PlanName], 
-    ISNULL([MonthlyRate], 0) AS Price, 
-    GETDATE() AS CurrentTs
-FROM [dbo].[Subscriptions];`,
+      code: getDefaultSampleForEngine('microsoft_sql_server'),
     },
     {
       label: 'PostgreSQL ➔ ClickHouse (OLAP)',
@@ -169,10 +355,7 @@ LIMIT 50;`,
       label: 'MongoDB ➔ PostgreSQL JSONB',
       src: 'mongodb',
       tgt: 'postgresql',
-      code: `db.orders.find({
-    status: "completed",
-    total_amount: { $gte: 150.00 }
-}).sort({ createdAt: -1 }).limit(20);`,
+      code: getDefaultSampleForEngine('mongodb'),
     },
   ];
 
@@ -192,6 +375,25 @@ LIMIT 50;`,
   useEffect(() => {
     handleTranspile(sourceEngine, targetEngine, sourceCode);
   }, [sourceEngine, targetEngine]);
+
+  const handleSourceEngineChange = (newEngine: string) => {
+    const prevDefault = getDefaultSampleForEngine(sourceEngine).trim();
+    setSourceEngine(newEngine);
+    // If the code currently matches the previous engine's default sample, load the new engine's default sample
+    if (sourceCode.trim() === prevDefault || !sourceCode.trim()) {
+      const newCode = getDefaultSampleForEngine(newEngine);
+      setSourceCode(newCode);
+      handleTranspile(newEngine, targetEngine, newCode);
+    } else {
+      handleTranspile(newEngine, targetEngine, sourceCode);
+    }
+  };
+
+  const handleResetSample = () => {
+    const freshSample = getDefaultSampleForEngine(sourceEngine);
+    setSourceCode(freshSample);
+    handleTranspile(sourceEngine, targetEngine, freshSample);
+  };
 
   const handleCopy = () => {
     if (!result) return;
@@ -220,6 +422,11 @@ LIMIT 50;`,
 
   const srcMeta = DATABASE_CATALOG.find(db => db.id === sourceEngine) || { id: sourceEngine, name: sourceEngine, icon: '🗄️' };
   const tgtMeta = DATABASE_CATALOG.find(db => db.id === targetEngine) || { id: targetEngine, name: targetEngine, icon: '🐘' };
+
+  // Detect mismatch between selected source dialect and actual code syntax
+  const detectedDialect = useMemo(() => detectDialectFromCode(sourceCode), [sourceCode]);
+  const detectedMeta = detectedDialect ? (DATABASE_CATALOG.find(db => db.id === detectedDialect) || { id: detectedDialect, name: detectedDialect }) : null;
+  const isDialectMismatch = detectedDialect && detectedDialect !== sourceEngine && detectedMeta && !sourceEngine.includes(detectedDialect);
 
   return (
     <div className="space-y-6">
@@ -267,7 +474,7 @@ LIMIT 50;`,
             </label>
             <UniversalDbSelector
               selectedEngine={sourceEngine}
-              onSelectEngine={setSourceEngine}
+              onSelectEngine={handleSourceEngineChange}
             />
           </div>
 
@@ -304,15 +511,45 @@ LIMIT 50;`,
                 Source: {srcMeta.name} Code
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => handleTranspile(sourceEngine, targetEngine, sourceCode)}
-              disabled={isLoading}
-              className="px-3 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-sm transition disabled:opacity-50"
-            >
-              {isLoading ? 'Transpiling...' : 'Transpile ➔'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetSample}
+                title={`Load authentic ${srcMeta.name} sample code`}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 bg-white border border-purple-200 hover:bg-purple-100 transition"
+              >
+                <RotateCcw className="w-3 h-3 text-purple-600" />
+                <span>Reset Sample</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTranspile(sourceEngine, targetEngine, sourceCode)}
+                disabled={isLoading}
+                className="px-3 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-sm transition disabled:opacity-50"
+              >
+                {isLoading ? 'Transpiling...' : 'Transpile ➔'}
+              </button>
+            </div>
           </div>
+
+          {isDialectMismatch && (
+            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-900">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>
+                  Code contains <strong>{detectedMeta?.name}</strong> syntax.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSourceEngineChange(detectedDialect!)}
+                className="font-bold underline text-amber-800 hover:text-amber-950 transition"
+              >
+                Switch Source to {detectedMeta?.name}
+              </button>
+            </div>
+          )}
+
           <textarea
             value={sourceCode}
             onChange={(e) => setSourceCode(e.target.value)}
@@ -359,20 +596,20 @@ LIMIT 50;`,
                 <p className="text-xs text-slate-500 italic">No complex datatype conversions required.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-purple-50 text-slate-700 border-b border-purple-100">
-                      <tr>
-                        <th className="py-2 px-3">Source Type</th>
-                        <th className="py-2 px-3">Target Type</th>
-                        <th className="py-2 px-3">Notes</th>
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-purple-100 text-slate-500 font-semibold">
+                        <th className="py-2 px-2">Source Type ({result.sourceEngineName})</th>
+                        <th className="py-2 px-2">Target Type ({result.targetEngineName})</th>
+                        <th className="py-2 px-2">Architectural Notes</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-purple-100">
+                    <tbody className="divide-y divide-slate-100 font-mono">
                       {result.dataTypeMappings.map((m, idx) => (
-                        <tr key={idx} className="hover:bg-purple-50/40">
-                          <td className="py-2 px-3 font-mono font-bold text-slate-800">{m.sourceType}</td>
-                          <td className="py-2 px-3 font-mono font-bold text-emerald-700">{m.targetType}</td>
-                          <td className="py-2 px-3 text-slate-600">{m.notes}</td>
+                        <tr key={idx} className="hover:bg-purple-50/50">
+                          <td className="py-2 px-2 text-rose-700 font-medium">{m.sourceType}</td>
+                          <td className="py-2 px-2 text-emerald-700 font-medium">{m.targetType}</td>
+                          <td className="py-2 px-2 text-slate-600 font-sans">{m.notes}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -384,67 +621,74 @@ LIMIT 50;`,
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-purple-200 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <Code2 className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-sm font-bold text-slate-900">Function &amp; Operator Translations</h3>
+                <h3 className="text-sm font-bold text-slate-900">Function &amp; Clause Mappings</h3>
               </div>
               {result.functionMappings.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No function replacements were triggered.</p>
+                <p className="text-xs text-slate-500 italic">Standard syntax preserved without function rewriting.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-indigo-50 text-slate-700 border-b border-indigo-100">
-                      <tr>
-                        <th className="py-2 px-3">Source Function</th>
-                        <th className="py-2 px-3">Target Function</th>
-                        <th className="py-2 px-3">Explanation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-indigo-100">
-                      {result.functionMappings.map((f, idx) => (
-                        <tr key={idx} className="hover:bg-indigo-50/40">
-                          <td className="py-2 px-3 font-mono font-bold text-slate-800">{f.sourceFunc}</td>
-                          <td className="py-2 px-3 font-mono font-bold text-indigo-700">{f.targetFunc}</td>
-                          <td className="py-2 px-3 text-slate-600">{f.explanation}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-2">
+                  {result.functionMappings.map((f, idx) => (
+                    <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <div className="flex items-center gap-2 font-mono">
+                        <span className="text-rose-700 line-through">{f.sourceFunc}</span>
+                        <span className="text-slate-400">➔</span>
+                        <span className="text-emerald-700 font-bold">{f.targetFunc}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">{f.explanation}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
           {result.caveats.length > 0 && (
-            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/80 border border-amber-300/80 shadow-sm">
+            <div className="p-4 sm:p-5 rounded-2xl bg-white border border-amber-200/80 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
-                <h3 className="text-sm font-extrabold text-amber-950">
-                  Critical Migration Gotchas &amp; Quirks ({result.sourceEngineName} ➔ {result.targetEngineName})
-                </h3>
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-900">Migration Gotchas &amp; Dialect Caveats</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {result.caveats.map((c, idx) => (
                   <div
                     key={idx}
-                    className={`p-3 rounded-xl border ${
+                    className={`p-3 rounded-xl border text-xs ${
                       c.severity === 'critical'
-                        ? 'bg-rose-50 border-rose-200 text-rose-950'
+                        ? 'bg-rose-50/70 border-rose-200 text-rose-950'
                         : c.severity === 'warning'
-                        ? 'bg-amber-50/90 border-amber-200 text-amber-950'
-                        : 'bg-blue-50 border-blue-200 text-blue-950'
+                        ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                        : 'bg-purple-50/50 border-purple-200 text-purple-950'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 mb-1 font-bold text-xs uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 font-bold mb-1">
                       {c.severity === 'critical' ? (
                         <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
                       ) : (
-                        <Info className="w-3.5 h-3.5 text-amber-600" />
+                        <Info className="w-3.5 h-3.5 text-purple-600" />
                       )}
                       <span>{c.title}</span>
                     </div>
-                    <p className="text-xs leading-relaxed opacity-90">{c.description}</p>
+                    <p className="text-[11px] leading-relaxed opacity-90">{c.description}</p>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {result.optimizationsApplied.length > 0 && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-white border border-emerald-200/80 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-900">Optimizations &amp; Dialect Normalizations Applied</h3>
+              </div>
+              <ul className="space-y-1.5 text-xs text-emerald-900 font-medium">
+                {result.optimizationsApplied.map((opt, idx) => (
+                  <li key={idx} className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{opt}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
