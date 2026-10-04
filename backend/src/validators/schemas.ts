@@ -178,6 +178,7 @@ export const readinessSchema = z.object({
   engine: z.string().min(1).max(100).default('postgres'),
   environmentType: z.string().max(50).optional(),
   estimatedQps: z.number().min(1).max(10000000).optional(),
+  applyTuningPatch: z.boolean().optional(),
 });
 
 export const chaosSchema = z.object({

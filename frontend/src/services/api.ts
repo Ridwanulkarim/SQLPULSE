@@ -468,6 +468,7 @@ export const auditReadiness = async (params: {
   engine: string;
   environmentType?: string;
   estimatedQps?: number;
+  applyTuningPatch?: boolean;
 }): Promise<ProductionReadinessResult> => {
   return safeRequest(
     `${API_BASE}/analyze/production-readiness`,

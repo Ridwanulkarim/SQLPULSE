@@ -15,6 +15,7 @@ import { IndexDoctorAnalyzer } from './index-doctor';
 import { PiiSanitizerAnalyzer } from './pii-sanitizer';
 import { QueryRewriterAnalyzer } from './query-rewriter';
 import { analyzeSchemaDiff } from './schema-diff';
+import { auditProductionReadiness } from './production-readiness';
 
 describe('Enterprise Multi-Engine Database Features Test Suite', () => {
   const transpiler = new SqlTranspiler();
@@ -373,4 +374,77 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(hivePlan.partitionDdl).toContain('PARTITIONED BY');
     expect(hivePlan.partitionDdl).toContain('STORED AS ORC');
   });
+
+  test('22. auditProductionReadiness returns dedicated, authentic engine checks across architectures', () => {
+    const pg = auditProductionReadiness({ engine: 'postgres', estimatedQps: 5000 });
+    expect(pg.engineName).toBe('PostgreSQL');
+    expect(pg.checks.some(c => c.title.includes('Statement') && c.title.includes('Timeouts'))).toBe(true);
+    expect(pg.checks.some(c => c.title.includes('Connection Floor vs Pooler'))).toBe(true);
+    expect(pg.remediationScript).toContain('statement_timeout');
+
+    const clickhouse = auditProductionReadiness({ engine: 'clickhouse', estimatedQps: 25000 });
+    expect(clickhouse.engineName).toContain('ClickHouse');
+    expect(clickhouse.checks.some(c => c.title.includes('Max Execution Time'))).toBe(true);
+    expect(clickhouse.checks.some(c => c.title.includes('Parts to Throw Insert'))).toBe(true);
+    expect(clickhouse.remediationScript).toContain('max_memory_usage');
+
+    const redis = auditProductionReadiness({ engine: 'redis', estimatedQps: 50000 });
+    expect(redis.engineName).toContain('Redis');
+    expect(redis.checks.some(c => c.title.includes('MaxMemory Ceiling'))).toBe(true);
+    expect(redis.checks.some(c => c.title.includes('Dangerous Commands'))).toBe(true);
+    expect(redis.remediationScript).toContain('CONFIG SET maxmemory');
+
+    const sqlite = auditProductionReadiness({ engine: 'sqlite', estimatedQps: 1000 });
+    expect(sqlite.engineName).toContain('SQLite');
+    expect(sqlite.checks.some(c => c.title.includes('Write-Ahead Logging'))).toBe(true);
+    expect(sqlite.checks.some(c => c.title.includes('Busy Timeout'))).toBe(true);
+    expect(sqlite.remediationScript).toContain('journal_mode = WAL');
+
+    const oracle = auditProductionReadiness({ engine: 'oracle', estimatedQps: 10000 });
+    expect(oracle.engineName).toBe('Oracle Database');
+    expect(oracle.checks.some(c => c.title.includes('Resource Consumer Group'))).toBe(true);
+    expect(oracle.checks.some(c => c.title.includes('DRCP'))).toBe(true);
+    expect(oracle.remediationScript).toContain('DBMS_RESOURCE_MANAGER');
+
+    const mongo = auditProductionReadiness({ engine: 'mongodb', estimatedQps: 5000 });
+    expect(mongo.engineName).toBe('MongoDB');
+    expect(mongo.checks.some(c => c.title.includes('maxTimeMS'))).toBe(true);
+    expect(mongo.checks.some(c => c.title.includes('WiredTiger'))).toBe(true);
+    expect(mongo.remediationScript).toContain('notablescan');
+  });
+
+  test('23. auditProductionReadiness dynamically scales score and concurrency metrics with QPS', () => {
+    const lowTraffic = auditProductionReadiness({ engine: 'postgres', estimatedQps: 1000 });
+    const extremeTraffic = auditProductionReadiness({ engine: 'postgres', estimatedQps: 100000 });
+
+    // Score at 1,000 QPS is higher than at 100,000 QPS where unpooled/untimeout connections are lethal
+    expect(lowTraffic.overallScore).toBeGreaterThan(extremeTraffic.overallScore);
+    expect(extremeTraffic.letterGrade).toBe('F');
+    expect(extremeTraffic.riskLevel).toBe('CRITICAL');
+
+    // Concurrency metrics scale with traffic
+    expect(extremeTraffic.concurrencyMetrics.estimatedConcurrentConnections)
+      .toBeGreaterThan(lowTraffic.concurrencyMetrics.estimatedConcurrentConnections);
+    expect(extremeTraffic.concurrencyMetrics.recommendedPoolerConnections)
+      .toBeGreaterThan(lowTraffic.concurrencyMetrics.recommendedPoolerConnections);
+    expect(extremeTraffic.concurrencyMetrics.estimatedBandwidthMbSec)
+      .toBeGreaterThan(lowTraffic.concurrencyMetrics.estimatedBandwidthMbSec);
+    expect(extremeTraffic.concurrencyMetrics.estimatedIopsDemand)
+      .toBeGreaterThan(lowTraffic.concurrencyMetrics.estimatedIopsDemand);
+  });
+
+  test('24. auditProductionReadiness flips to hardened state with applyTuningPatch', () => {
+    const baseline = auditProductionReadiness({ engine: 'postgres', estimatedQps: 25000, applyTuningPatch: false });
+    const hardened = auditProductionReadiness({ engine: 'postgres', estimatedQps: 25000, applyTuningPatch: true });
+
+    expect(baseline.appliedTuningPatch).toBe(false);
+    expect(hardened.appliedTuningPatch).toBe(true);
+
+    expect(hardened.overallScore).toBeGreaterThanOrEqual(96);
+    expect(hardened.letterGrade).toBe('A+');
+    expect(hardened.riskLevel).toBe('LOW');
+    expect(hardened.failedChecksCount).toBe(0);
+    expect(hardened.checks.every(c => c.status === 'PASSED')).toBe(true);
+  });
 });
+
