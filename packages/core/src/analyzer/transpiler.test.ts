@@ -241,4 +241,43 @@ describe('SqlTranspiler Engine & Dialect Conversion Tests', () => {
       expect(cypherRes.transpiledCode).toContain('RETURN');
     });
   });
+
+  describe('6. Oracle to Apache Hive & Analytics Warehouse Transformations', () => {
+    test('transpiles Oracle DDL and query with ROWNUM and SYSDATE to Apache Hive', () => {
+      const oracleCode = `
+        -- Oracle DDL & Query Sample
+        CREATE TABLE customer_orders (
+          order_id NUMBER(10) PRIMARY KEY,
+          customer_name VARCHAR2(255) NOT NULL,
+          order_total NUMBER(12, 2),
+          order_date DATE DEFAULT SYSDATE,
+          order_notes CLOB
+        );
+
+        SELECT 
+          customer_name, 
+          NVL(order_total, 0) AS total_amount,
+          SYSDATE AS extracted_at
+        FROM customer_orders
+        WHERE ROWNUM <= 10;
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'mysql', // Even if user accidentally selected MySQL as source
+        targetEngine: 'apache_hive',
+        sourceCode: oracleCode,
+      });
+
+      expect(res.transpiledCode).toContain('order_id BIGINT');
+      expect(res.transpiledCode).toContain('customer_name STRING');
+      expect(res.transpiledCode).toContain('order_total DECIMAL(12, 2)');
+      expect(res.transpiledCode).toContain('order_date TIMESTAMP');
+      expect(res.transpiledCode).toContain('order_notes STRING');
+      expect(res.transpiledCode).toContain('STORED AS ORC');
+      expect(res.transpiledCode).toContain('COALESCE(');
+      expect(res.transpiledCode).toContain('CURRENT_TIMESTAMP()');
+      expect(res.transpiledCode).toContain('LIMIT 10');
+      expect(res.transpiledCode).not.toContain('ROWNUM');
+    });
+  });
 });

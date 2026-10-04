@@ -59,6 +59,25 @@ WHERE ROWNUM <= 10;`
 
   const presets = [
     {
+      label: 'Oracle ➔ Apache Hive',
+      src: 'oracle',
+      tgt: 'apache_hive',
+      code: `CREATE TABLE customer_orders (
+    order_id NUMBER(10) PRIMARY KEY,
+    customer_name VARCHAR2(255) NOT NULL,
+    order_total NUMBER(12, 2),
+    order_date DATE DEFAULT SYSDATE,
+    order_notes CLOB
+);
+
+SELECT 
+    customer_name, 
+    NVL(order_total, 0) AS total_amount,
+    SYSDATE AS extracted_at
+FROM customer_orders
+WHERE ROWNUM <= 10;`,
+    },
+    {
       label: 'Oracle ➔ PostgreSQL',
       src: 'oracle',
       tgt: 'postgresql',
@@ -128,6 +147,23 @@ FROM web_events
 WHERE event_timestamp >= NOW() - INTERVAL '7 days'
 GROUP BY event_name
 LIMIT 10;`,
+    },
+    {
+      label: 'PostgreSQL ➔ Snowflake',
+      src: 'postgres',
+      tgt: 'snowflake',
+      code: `CREATE TABLE event_store (
+    id BIGSERIAL PRIMARY KEY,
+    payload JSONB,
+    binary_data BYTEA,
+    recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+SELECT payload:user_id::STRING, COUNT(*)
+FROM event_store
+WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+GROUP BY 1
+LIMIT 50;`,
     },
     {
       label: 'MongoDB ➔ PostgreSQL JSONB',
