@@ -4,11 +4,7 @@ import { Play, Zap, Clock, Layers, Database, CheckCircle2, Cpu, Info } from 'luc
 import { DatabaseEngine } from '../types';
 
 interface MockRow {
-  id: number;
-  customer_id: number;
-  status: 'completed' | 'pending' | 'shipped' | 'cancelled';
-  total_amount: number;
-  created_at: string;
+  [key: string]: any;
 }
 
 interface LiveSqlSandboxTabProps {
@@ -33,6 +29,8 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
     memoryHits: number;
     diskReads: number;
     sampleRows: MockRow[];
+    columns: string[];
+    tableName: string;
   } | null>(null);
 
   const runLiveQuery = (withIndex = hasIndex, size = datasetSize, queryToRun = sqlQuery) => {
@@ -46,8 +44,28 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
       let diskReads = 0;
 
       // Extract limit if present
-      const limitMatch = queryToRun.match(/LIMIT\s+(\d+)/i);
+      const limitMatch = queryToRun.match(/LIMIT\s+(\d+)/i) || queryToRun.match(/TOP\s+(\d+)/i) || queryToRun.match(/ROWNUM\s*(?:<=|<)\s*(\d+)/i);
       const limitNum = limitMatch ? Math.min(100, parseInt(limitMatch[1], 10)) : 14;
+
+      // Extract table name
+      const tableMatch = queryToRun.match(/FROM\s+[`"\[]?([a-zA-Z0-9_]+)[`"\]]?/i);
+      const tableName = tableMatch ? tableMatch[1] : 'orders';
+
+      // Extract selected columns
+      const selectMatch = queryToRun.match(/SELECT\s+(?:TOP\s+\d+\s+)?([\s\S]+?)\s+FROM/i);
+      let columns: string[] = ['id', 'customer_id', 'total_amount', 'status', 'created_at'];
+      if (selectMatch) {
+        const rawCols = selectMatch[1]
+          .split(',')
+          .map(c => c.trim().replace(/[`"\[\]]/g, '').replace(/AS\s+[a-zA-Z0-9_]+/i, '').trim())
+          .filter(c => c && !c.includes('*'));
+        if (rawCols.length > 0) {
+          columns = rawCols.map(c => {
+            const parts = c.split('.');
+            return parts[parts.length - 1];
+          });
+        }
+      }
 
       if (!withIndex) {
         latencyMs = parseFloat((35 + Math.random() * 25 + (size / 100000) * 45).toFixed(2));
@@ -65,15 +83,35 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
         diskReads = 0;
       }
 
+      const sampleNames = ['Alex Chen', 'Sarah Jenkins', 'David Patel', 'Elena Rostova', 'Marcus Vance', 'Amina Yusuf'];
+      const sampleStatuses = ['completed', 'active', 'pending', 'verified', 'processing'];
+      const sampleDepartments = ['Engineering', 'Finance', 'Growth', 'Operations', 'Security'];
+
       const sampleRows: MockRow[] = [];
       for (let i = 0; i < Math.min(6, limitNum); i++) {
-        sampleRows.push({
-          id: 100000 + i * 347,
-          customer_id: 4821,
-          status: 'completed',
-          total_amount: parseFloat((45.5 + i * 18.25).toFixed(2)),
-          created_at: `2026-0${(i % 9) + 1}-1${(i % 8) + 1} 14:22:00 UTC`,
-        });
+        const row: MockRow = {};
+        for (const col of columns) {
+          const lCol = col.toLowerCase();
+          if (lCol === 'id' || lCol.endsWith('_id')) {
+            row[col] = lCol === 'id' ? 100000 + i * 347 : 4820 + (i % 5);
+          } else if (lCol.includes('name') || lCol.includes('user')) {
+            row[col] = sampleNames[i % sampleNames.length];
+          } else if (lCol.includes('email')) {
+            const sanitized = (sampleNames[i % sampleNames.length]).toLowerCase().replace(' ', '.');
+            row[col] = `${sanitized}@company.org`;
+          } else if (lCol.includes('amount') || lCol.includes('total') || lCol.includes('price') || lCol.includes('salary') || lCol.includes('cost')) {
+            row[col] = parseFloat((45.5 + i * 18.25 + (lCol.includes('salary') ? 75000 : 0)).toFixed(2));
+          } else if (lCol.includes('status') || lCol.includes('state')) {
+            row[col] = sampleStatuses[i % sampleStatuses.length];
+          } else if (lCol.includes('dept') || lCol.includes('department') || lCol.includes('team')) {
+            row[col] = sampleDepartments[i % sampleDepartments.length];
+          } else if (lCol.includes('date') || lCol.includes('time') || lCol.endsWith('_at')) {
+            row[col] = `2026-0${(i % 9) + 1}-1${(i % 8) + 1} 14:22:00 UTC`;
+          } else {
+            row[col] = `val_${col}_${i + 1}`;
+          }
+        }
+        sampleRows.push(row);
       }
 
       setExecutionResult({
@@ -84,6 +122,8 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
         memoryHits,
         diskReads,
         sampleRows,
+        columns,
+        tableName,
       });
       setIsRunning(false);
     }, 300);
@@ -259,8 +299,10 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
               <div className="text-sm font-bold text-indigo-950 font-mono truncate">
                 {executionResult.scanType}
               </div>
-              <span className="text-[10px] text-slate-500">
-                {hasIndex ? 'Index Scan using idx_orders_customer' : 'Seq Scan on orders'}
+              <span className="text-[10px] text-slate-500 truncate block">
+                {hasIndex
+                  ? `Index Scan using idx_${executionResult.tableName}_${executionResult.columns[0] || 'id'}`
+                  : `Seq Scan on ${executionResult.tableName}`}
               </span>
             </div>
 
@@ -276,37 +318,46 @@ export const LiveSqlSandboxTab: React.FC<LiveSqlSandboxTabProps> = ({
           </div>
 
           <div className="glass-card-light rounded-2xl p-5 shadow-lg space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-xs font-bold text-slate-900 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Simulated Result Rows ({executionResult.rowsReturned} matching records returned)
+                Simulated Result Rows ({executionResult.rowsReturned} matching records returned from <span className="font-mono text-purple-700 font-bold">{executionResult.tableName}</span>)
               </h3>
-              <span className="text-[10px] font-mono text-slate-400">ORDER BY created_at DESC LIMIT 20</span>
+              <span className="text-[10px] font-mono text-slate-400">SELECT {executionResult.columns.join(', ')}</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-purple-200/70 text-slate-500 font-semibold bg-purple-50/50">
-                    <th className="py-2 px-3">Order ID</th>
-                    <th className="py-2 px-3">Customer ID</th>
-                    <th className="py-2 px-3">Total Amount</th>
-                    <th className="py-2 px-3">Status</th>
-                    <th className="py-2 px-3">Created At</th>
+                    {executionResult.columns.map((col) => (
+                      <th key={col} className="py-2 px-3 capitalize">
+                        {col.replace(/_/g, ' ')}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-purple-100 font-mono text-[11px]">
-                  {executionResult.sampleRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-purple-50/40 transition">
-                      <td className="py-2 px-3 font-bold text-purple-950">#{row.id}</td>
-                      <td className="py-2 px-3 text-slate-700">{row.customer_id}</td>
-                      <td className="py-2 px-3 text-emerald-700 font-bold">${row.total_amount}</td>
-                      <td className="py-2 px-3 font-sans">
-                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-slate-500">{row.created_at}</td>
+                  {executionResult.sampleRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-purple-50/40 transition">
+                      {executionResult.columns.map((col) => {
+                        const val = row[col];
+                        const isNum = typeof val === 'number' || (typeof val === 'string' && /^\$?\d+(\.\d+)?$/.test(val));
+                        const isStatus = col.toLowerCase().includes('status') || col.toLowerCase().includes('state');
+                        return (
+                          <td key={col} className={`py-2 px-3 ${col.toLowerCase().includes('id') ? 'font-bold text-purple-950' : isNum ? 'text-emerald-700 font-bold' : 'text-slate-700'}`}>
+                            {isStatus ? (
+                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold font-sans">
+                                {String(val)}
+                              </span>
+                            ) : isNum && col.toLowerCase().includes('amount') ? (
+                              `$${val}`
+                            ) : (
+                              String(val ?? '-')
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>

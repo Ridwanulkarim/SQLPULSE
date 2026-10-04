@@ -208,6 +208,59 @@ from(bucket: "customer_orders")
   |> yield(name: "hourly_order_volume");`;
   }
 
+  if (norm === 'sqlite' || norm === 'turso' || norm === 'cloudflared1') {
+    return `-- SQLite DDL & Query Sample
+CREATE TABLE customer_orders (
+    order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name TEXT NOT NULL,
+    order_total REAL,
+    order_date TEXT DEFAULT (datetime('now')),
+    order_notes TEXT
+);
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    datetime('now') AS extracted_at
+FROM customer_orders
+LIMIT 10;`;
+  }
+
+  if (norm === 'bigquery' || norm === 'google_cloud_bigquery') {
+    return `-- Google BigQuery SQL Sample
+CREATE TABLE \`my_project.my_dataset.customer_orders\` (
+    order_id INT64,
+    customer_name STRING NOT NULL,
+    order_total NUMERIC,
+    order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    order_notes STRING
+);
+
+SELECT 
+    customer_name, 
+    COALESCE(order_total, 0) AS total_amount, 
+    CURRENT_TIMESTAMP() AS extracted_at
+FROM \`my_project.my_dataset.customer_orders\`
+LIMIT 10;`;
+  }
+
+  if (norm.includes('elastic') || norm.includes('opensearch')) {
+    return `// Elasticsearch / OpenSearch Search DSL
+GET /customer_orders/_search
+{
+  "query": {
+    "match": {
+      "status": "active"
+    }
+  },
+  "_source": ["customer_name", "order_total", "order_date"],
+  "size": 10,
+  "sort": [
+    { "order_date": { "order": "desc" } }
+  ]
+};`;
+  }
+
   // Default: PostgreSQL
   return `-- PostgreSQL DDL & Query Sample
 CREATE TABLE customer_orders (
@@ -281,29 +334,34 @@ export const TranspilerTab: React.FC<TranspilerTabProps> = ({
 
   const presets = [
     {
+      label: 'MySQL ➔ Oracle',
+      src: 'mysql',
+      tgt: 'oracle',
+      code: getDefaultSampleForEngine('mysql'),
+    },
+    {
+      label: 'Oracle ➔ MySQL',
+      src: 'oracle',
+      tgt: 'mysql',
+      code: getDefaultSampleForEngine('oracle'),
+    },
+    {
       label: 'Oracle ➔ Apache Hive',
       src: 'oracle',
       tgt: 'apache_hive',
       code: getDefaultSampleForEngine('oracle'),
     },
     {
-      label: 'Oracle ➔ PostgreSQL',
-      src: 'oracle',
-      tgt: 'postgresql',
-      code: `CREATE TABLE employees (
-    emp_id NUMBER(8) PRIMARY KEY,
-    full_name VARCHAR2(100) NOT NULL,
-    salary NUMBER(10,2),
-    hire_date DATE DEFAULT SYSDATE,
-    bio CLOB
-);
-
-SELECT 
-    full_name, 
-    NVL(salary, 0) AS gross_salary, 
-    SYSDATE AS query_time
-FROM employees 
-WHERE ROWNUM <= 25;`,
+      label: 'PostgreSQL ➔ Oracle',
+      src: 'postgresql',
+      tgt: 'oracle',
+      code: getDefaultSampleForEngine('postgresql'),
+    },
+    {
+      label: 'PostgreSQL ➔ SQL Server',
+      src: 'postgresql',
+      tgt: 'microsoft_sql_server',
+      code: getDefaultSampleForEngine('postgresql'),
     },
     {
       label: 'MySQL ➔ PostgreSQL',
@@ -352,6 +410,18 @@ GROUP BY 1
 LIMIT 50;`,
     },
     {
+      label: 'Cassandra CQL ➔ PostgreSQL',
+      src: 'cassandra',
+      tgt: 'postgresql',
+      code: getDefaultSampleForEngine('cassandra'),
+    },
+    {
+      label: 'Redis ➔ PostgreSQL',
+      src: 'redis',
+      tgt: 'postgresql',
+      code: getDefaultSampleForEngine('redis'),
+    },
+    {
       label: 'MongoDB ➔ PostgreSQL JSONB',
       src: 'mongodb',
       tgt: 'postgresql',
@@ -377,16 +447,10 @@ LIMIT 50;`,
   }, [sourceEngine, targetEngine]);
 
   const handleSourceEngineChange = (newEngine: string) => {
-    const prevDefault = getDefaultSampleForEngine(sourceEngine).trim();
     setSourceEngine(newEngine);
-    // If the code currently matches the previous engine's default sample, load the new engine's default sample
-    if (sourceCode.trim() === prevDefault || !sourceCode.trim()) {
-      const newCode = getDefaultSampleForEngine(newEngine);
-      setSourceCode(newCode);
-      handleTranspile(newEngine, targetEngine, newCode);
-    } else {
-      handleTranspile(newEngine, targetEngine, sourceCode);
-    }
+    const newCode = getDefaultSampleForEngine(newEngine);
+    setSourceCode(newCode);
+    handleTranspile(newEngine, targetEngine, newCode);
   };
 
   const handleResetSample = () => {
@@ -516,10 +580,10 @@ LIMIT 50;`,
                 type="button"
                 onClick={handleResetSample}
                 title={`Load authentic ${srcMeta.name} sample code`}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 bg-white border border-purple-200 hover:bg-purple-100 transition"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-purple-700 bg-white border border-purple-300 hover:bg-purple-100 shadow-sm transition active:scale-95"
               >
-                <RotateCcw className="w-3 h-3 text-purple-600" />
-                <span>Reset Sample</span>
+                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                <span>Load {srcMeta.name} Sample</span>
               </button>
               <button
                 type="button"
@@ -533,20 +597,30 @@ LIMIT 50;`,
           </div>
 
           {isDialectMismatch && (
-            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-900">
+            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-900 flex-wrap gap-2">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span>
-                  Code contains <strong>{detectedMeta?.name}</strong> syntax.
+                  Code appears to be <strong>{detectedMeta?.name}</strong>, but source engine is <strong>{srcMeta.name}</strong>.
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => handleSourceEngineChange(detectedDialect!)}
-                className="font-bold underline text-amber-800 hover:text-amber-950 transition"
-              >
-                Switch Source to {detectedMeta?.name}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSourceEngineChange(detectedDialect!)}
+                  className="font-bold underline text-amber-800 hover:text-amber-950 transition"
+                >
+                  Switch Source to {detectedMeta?.name}
+                </button>
+                <span className="text-amber-400">|</span>
+                <button
+                  type="button"
+                  onClick={handleResetSample}
+                  className="font-bold underline text-purple-800 hover:text-purple-950 transition"
+                >
+                  Load {srcMeta.name} Code
+                </button>
+              </div>
             </div>
           )}
 

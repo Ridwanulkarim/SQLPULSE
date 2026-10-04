@@ -176,9 +176,92 @@ export function simulateChaosScenario(options: {
 
   const resilienceScore = scenarioId === 'primary_crash' ? 92 : scenarioId === 'network_split' ? 88 : 79;
 
-  const mitigationRunbook = `# ==========================================================
+  let mitigationRunbook = '';
+  let recommendedConfigPatch = '';
+
+  if (engine.includes('mysql') || engine.includes('maria')) {
+    mitigationRunbook = `# ==========================================================
 # SQLPulse Chaos Mitigation & Automatic Failover Runbook
-# Scenario: ${scenarioTitle}
+# Scenario: ${scenarioTitle} (${engine.toUpperCase()})
+# ==========================================================
+
+1. [AUTOMATIC] Enforce Semi-Synchronous Replication:
+   SET GLOBAL rpl_semi_sync_master_enabled = 1;
+   SET GLOBAL rpl_semi_sync_master_wait_no_slave = 0;
+   SET GLOBAL rpl_semi_sync_master_timeout = 1000;
+
+2. [CLIENT] Deploy ProxySQL / MySQL Router Layer:
+   Configure automatic read/write split with health checks on port 6033.
+
+3. [STORAGE] Enforce ACID Zero-Data-Loss Durability:
+   SET GLOBAL innodb_flush_log_at_trx_commit = 1;
+   SET GLOBAL sync_binlog = 1;
+`;
+    recommendedConfigPatch = `rpl_semi_sync_master_enabled = 1
+rpl_semi_sync_slave_enabled = 1
+rpl_semi_sync_master_timeout = 1000
+innodb_flush_log_at_trx_commit = 1
+sync_binlog = 1
+binlog_format = ROW
+binlog_row_image = MINIMAL
+`;
+  } else if (engine.includes('oracle')) {
+    mitigationRunbook = `# ==========================================================
+# SQLPulse Chaos Mitigation & Automatic Failover Runbook
+# Scenario: ${scenarioTitle} (${engine.toUpperCase()})
+# ==========================================================
+
+1. [AUTOMATIC] Enable Oracle Data Guard Fast-Start Failover (FSFO):
+   DGMGRL> ENABLE FAST_START FAILOVER;
+   DGMGRL> SET FAST_START FAILOVER THRESHOLD 30;
+
+2. [CLIENT] Configure Oracle Fast Application Notification (FAN) & ONS:
+   Ensure JDBC connection pool subscribes to Fast Connection Failover (FCF).
+
+3. [DATA GUARD] Enforce Maximum Availability Mode:
+   DGMGRL> EDIT DATABASE primary SET PROPERTY LogXptMode='SYNC';
+`;
+    recommendedConfigPatch = `DG_BROKER_START = TRUE
+FAST_START_FAILOVER_TARGET = 'standby_db'
+LOG_ARCHIVE_DEST_2 = 'SERVICE=standby_db SYNC AFFIRM VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=standby_db'
+`;
+  } else if (engine.includes('sqlserver') || engine.includes('mssql')) {
+    mitigationRunbook = `# ==========================================================
+# SQLPulse Chaos Mitigation & Automatic Failover Runbook
+# Scenario: ${scenarioTitle} (${engine.toUpperCase()})
+# ==========================================================
+
+1. [AUTOMATIC] Enforce Synchronous-Commit AlwaysOn Availability Group:
+   ALTER AVAILABILITY GROUP [AG_PROD] 
+   MODIFY REPLICA ON N'NODE_2' WITH (AVAILABILITY_MODE = SYNCHRONOUS_COMMIT, FAILOVER_MODE = AUTOMATIC);
+
+2. [CLIENT] Connect via MultiSubnetFailover Listener:
+   Server=tcp:ag-listener.corp.internal,1433;MultiSubnetFailover=True;
+`;
+    recommendedConfigPatch = `ALTER AVAILABILITY GROUP [AG_PROD]
+SET (HEALTH_CHECK_TIMEOUT = 30000, AUTOMATED_BACKUP_PREFERENCE = SECONDARY);
+`;
+  } else if (engine.includes('mongo')) {
+    mitigationRunbook = `# ==========================================================
+# SQLPulse Chaos Mitigation & Automatic Failover Runbook
+# Scenario: ${scenarioTitle} (${engine.toUpperCase()})
+# ==========================================================
+
+1. [QUORUM] Enforce w: "majority" Write Concern:
+   db.collection.insertOne(doc, { writeConcern: { w: "majority", wtimeout: 5000 } });
+
+2. [ELECTION] Configure Replica Set Priority Hierarchy:
+   rs.reconfig({ members: [{ _id: 0, host: "primary:27017", priority: 2 }, { _id: 1, host: "secondary:27017", priority: 1 }] });
+`;
+    recommendedConfigPatch = `replication:
+  replSetName: "rs0"
+  enableMajorityReadConcern: true
+`;
+  } else {
+    // Default: PostgreSQL
+    mitigationRunbook = `# ==========================================================
+# SQLPulse Chaos Mitigation & Automatic Failover Runbook
+# Scenario: ${scenarioTitle} (${engine.toUpperCase()})
 # ==========================================================
 
 1. [AUTOMATIC] Enforce Synchronous Replication Quorum:
@@ -194,13 +277,13 @@ export function simulateChaosScenario(options: {
    reserve_pool_size = 10
    server_idle_timeout = 60
 `;
-
-  const recommendedConfigPatch = `synchronous_commit = on
+    recommendedConfigPatch = `synchronous_commit = on
 synchronous_standby_names = 'ANY 1 (node_2, node_3)'
 wal_keep_size = 4096MB
 hot_standby_feedback = on
 max_standby_streaming_delay = 30s
 `;
+  }
 
   return {
     engine,

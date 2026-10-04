@@ -33,17 +33,22 @@ export function profileOrmQuery(options: {
   batchSize?: number;
 }): OrmProfilerResult {
   const framework = (options.framework || 'prisma').toLowerCase();
+  const batchSize = Math.max(10, options.batchSize || 1000);
+
+  const nPlusOnePenaltyMs = Math.round(batchSize * 1.45);
+  const baselineLatency = Math.round(batchSize * 1.65);
+  const optimizedLatency = Math.max(15, Math.round(batchSize * 0.19));
 
   const issues: OrmIssue[] = [
     {
       id: 'orm-1',
       category: 'N_PLUS_ONE',
-      title: 'Severe N+1 Query Cascade Detected in Relation Loop',
+      title: `Severe N+1 Query Cascade in Relation Loop (${batchSize.toLocaleString()} Iterations)`,
       severity: 'CRITICAL',
-      description: 'Fetching 1,000 parent records triggers 1,000 individual SELECT queries across the network.',
+      description: `Fetching ${batchSize.toLocaleString()} parent records triggers ${batchSize.toLocaleString()} individual SELECT queries across the network.`,
       detectedPattern: `const users = await prisma.user.findMany();\nfor (const user of users) {\n  const orders = await prisma.order.findMany({ where: { userId: user.id } });\n}`,
-      estimatedExtraRoundtrips: 1000,
-      latencyPenaltyMs: 1450,
+      estimatedExtraRoundtrips: batchSize,
+      latencyPenaltyMs: nPlusOnePenaltyMs,
       ormFixCode: framework === 'typeorm'
         ? `const users = await userRepository.find({\n  relations: { orders: true }\n});`
         : framework === 'hibernate'
@@ -56,7 +61,7 @@ export function profileOrmQuery(options: {
         ? `const users = await db.query.users.findMany({\n  with: { orders: true }\n});`
         : `const users = await prisma.user.findMany({\n  include: {\n    orders: {\n      select: { id: true, status: true, totalAmount: true }\n    }\n  }\n});`,
       rawSqlFixCode: `SELECT \n    u.id AS user_id,\n    u.email,\n    COALESCE(json_agg(o.*) FILTER (WHERE o.id IS NOT NULL), '[]') AS orders\nFROM users u\nLEFT JOIN orders o ON o.user_id = u.id\nGROUP BY u.id, u.email;`,
-      explanation: 'Consolidating N+1 queries into a single batched query reduces TCP roundtrips from 1,001 to 1, delivering a ~95% latency reduction.',
+      explanation: `Consolidating N+1 queries into a single batched query reduces TCP roundtrips from ${(batchSize + 1).toLocaleString()} to 1, delivering a ~${Math.round((1 - optimizedLatency / baselineLatency) * 100)}% latency reduction.`,
     },
     {
       id: 'orm-2',
@@ -107,11 +112,11 @@ export function profileOrmQuery(options: {
   return {
     ormFramework: framework,
     detectedIssues: issues,
-    estimatedTotalRoundtrips: 1001,
-    estimatedLatencySavingPercent: 88.5,
+    estimatedTotalRoundtrips: batchSize + 1,
+    estimatedLatencySavingPercent: Math.round((1 - optimizedLatency / baselineLatency) * 100),
     benchmarkSummary: {
-      baselineLatencyMs: 1650,
-      optimizedLatencyMs: 190,
+      baselineLatencyMs: baselineLatency,
+      optimizedLatencyMs: optimizedLatency,
       networkPayloadReductionPercent: 78,
     },
     recommendedOrmCode: issues[0].ormFixCode,

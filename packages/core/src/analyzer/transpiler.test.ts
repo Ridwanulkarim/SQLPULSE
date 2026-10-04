@@ -356,4 +356,156 @@ describe('SqlTranspiler Engine & Dialect Conversion Tests', () => {
       expect(res.transpiledCode).toContain('EMIT CHANGES');
     });
   });
+
+  describe('8. Bidirectional Multi-Dialect Reverse Transformations', () => {
+    test('transpiles MySQL DDL & Query to Oracle with IDENTITY, VARCHAR2, CLOB, NVL, and FETCH FIRST', () => {
+      const mysqlCode = `
+        CREATE TABLE \`customer_orders\` (
+          \`order_id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`customer_name\` VARCHAR(255) NOT NULL,
+          \`order_total\` DECIMAL(12, 2),
+          \`order_date\` DATETIME DEFAULT CURRENT_TIMESTAMP,
+          \`order_notes\` LONGTEXT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        SELECT 
+          \`customer_name\`, 
+          IFNULL(\`order_total\`, 0) AS total_amount,
+          NOW() AS extracted_at
+        FROM \`customer_orders\`
+        LIMIT 10;
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'mysql',
+        targetEngine: 'oracle',
+        sourceCode: mysqlCode,
+      });
+
+      expect(res.transpiledCode).toContain('NUMBER(10) GENERATED ALWAYS AS IDENTITY');
+      expect(res.transpiledCode).toContain('VARCHAR2(255)');
+      expect(res.transpiledCode).toContain('NUMBER(12, 2)');
+      expect(res.transpiledCode).toContain('TIMESTAMP(0)');
+      expect(res.transpiledCode).toContain('CLOB');
+      expect(res.transpiledCode).not.toContain('ENGINE=InnoDB');
+      expect(res.transpiledCode).toContain('NVL(');
+      expect(res.transpiledCode).toContain('SYSDATE');
+      expect(res.transpiledCode).toContain('FETCH FIRST 10 ROWS ONLY;');
+      expect(res.transpiledCode).not.toContain('LIMIT 10');
+    });
+
+    test('transpiles PostgreSQL to Oracle with NUMBER(19) IDENTITY, TIMESTAMP WITH TIME ZONE, and CLOB', () => {
+      const pgCode = `
+        CREATE TABLE customer_orders (
+          order_id BIGSERIAL PRIMARY KEY,
+          customer_name VARCHAR(255) NOT NULL,
+          order_notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        SELECT customer_name FROM customer_orders LIMIT 20;
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'oracle',
+        sourceCode: pgCode,
+      });
+
+      expect(res.transpiledCode).toContain('NUMBER(19) GENERATED ALWAYS AS IDENTITY');
+      expect(res.transpiledCode).toContain('VARCHAR2(255)');
+      expect(res.transpiledCode).toContain('CLOB');
+      expect(res.transpiledCode).toContain('TIMESTAMP WITH TIME ZONE');
+      expect(res.transpiledCode).toContain('FETCH FIRST 20 ROWS ONLY;');
+    });
+
+    test('transpiles PostgreSQL to Microsoft SQL Server with TOP, IDENTITY, and NVARCHAR(MAX)', () => {
+      const pgCode = `
+        CREATE TABLE customer_orders (
+          order_id BIGSERIAL PRIMARY KEY,
+          customer_name VARCHAR(255) NOT NULL,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        SELECT customer_name, CURRENT_TIMESTAMP FROM customer_orders LIMIT 15;
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'microsoft_sql_server',
+        sourceCode: pgCode,
+      });
+
+      expect(res.transpiledCode).toContain('BIGINT IDENTITY(1,1)');
+      expect(res.transpiledCode).toContain('NVARCHAR(255)');
+      expect(res.transpiledCode).toContain('NVARCHAR(MAX)');
+      expect(res.transpiledCode).toContain('DATETIMEOFFSET DEFAULT GETDATE()');
+      expect(res.transpiledCode).toContain('SELECT TOP 15');
+      expect(res.transpiledCode).not.toContain('LIMIT 15');
+    });
+
+    test('transpiles SQL Server to PostgreSQL stripping dbo and converting brackets and types', () => {
+      const mssqlCode = `
+        CREATE TABLE [dbo].[customer_orders] (
+          [order_id] INT IDENTITY(1,1) PRIMARY KEY,
+          [customer_name] NVARCHAR(255) NOT NULL,
+          [order_notes] NVARCHAR(MAX)
+        );
+
+        SELECT TOP 10 [customer_name], GETDATE() AS now_time
+        FROM [dbo].[customer_orders];
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'microsoft_sql_server',
+        targetEngine: 'postgres',
+        sourceCode: mssqlCode,
+      });
+
+      expect(res.transpiledCode).toContain('"customer_orders"');
+      expect(res.transpiledCode).not.toContain('"dbo"');
+      expect(res.transpiledCode).toContain('"order_id" SERIAL PRIMARY KEY');
+      expect(res.transpiledCode).toContain('"customer_name" VARCHAR(255)');
+      expect(res.transpiledCode).toContain('"order_notes" TEXT');
+      expect(res.transpiledCode).toContain('NOW()');
+      expect(res.transpiledCode).toContain('LIMIT 10');
+      expect(res.transpiledCode).not.toContain('TOP 10');
+    });
+
+    test('transpiles Cassandra wide-column CQL into Relational SQL', () => {
+      const cql = `
+        CREATE TABLE store.customer_orders (
+          order_id uuid,
+          customer_name text,
+          order_total decimal,
+          PRIMARY KEY (order_id)
+        );
+      `;
+
+      const res = transpiler.transpile({
+        sourceEngine: 'cassandra',
+        targetEngine: 'postgres',
+        sourceCode: cql,
+      });
+
+      expect(res.transpiledCode).toContain('CREATE TABLE customer_orders');
+      expect(res.transpiledCode).toContain('PRIMARY KEY');
+      expect(res.dataTypeMappings.length).toBeGreaterThan(0);
+    });
+
+    test('transpiles Redis key-value FT.SEARCH into Relational SQL', () => {
+      const redisCmd = 'FT.SEARCH idx:customer_orders "@status:{active}" RETURN 2 customer_name order_total LIMIT 0 10;';
+
+      const res = transpiler.transpile({
+        sourceEngine: 'redis',
+        targetEngine: 'postgres',
+        sourceCode: redisCmd,
+      });
+
+      expect(res.transpiledCode).toContain('SELECT customer_name, order_total');
+      expect(res.transpiledCode).toContain('FROM customer_orders');
+      expect(res.transpiledCode).toContain("status = 'active'");
+    });
+  });
 });

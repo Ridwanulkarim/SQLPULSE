@@ -19,7 +19,7 @@ export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
   const [framework, setFramework] = useState<string>('prisma');
   const [activeTab, setActiveTab] = useState<'orm' | 'sql'>('orm');
   const [copied, setCopied] = useState<boolean>(false);
-  const [batchSize] = useState<number>(1000);
+  const [batchSize, setBatchSize] = useState<number>(1000);
   const [result, setResult] = useState<OrmProfilerResult | null>(null);
 
   const ormFrameworks = [
@@ -45,7 +45,7 @@ export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
 
   useEffect(() => {
     handleProfile();
-  }, [framework]);
+  }, [framework, batchSize]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -76,25 +76,43 @@ export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-          <Layers className="w-3.5 h-3.5 text-emerald-600" /> ORM Dialects:
-        </span>
-        {ormFrameworks.map((fw) => (
-          <button
-            key={fw.id}
-            type="button"
-            onClick={() => setFramework(fw.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
-              framework === fw.id
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-bold'
-                : 'bg-white border border-emerald-200 text-slate-700 hover:bg-emerald-50'
-            }`}
-          >
-            <span>{fw.icon}</span>
-            <span>{fw.name}</span>
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white/80 p-3 rounded-2xl border border-emerald-200/70 shadow-sm backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+            <Layers className="w-3.5 h-3.5 text-emerald-600" /> ORM Dialects:
+          </span>
+          {ormFrameworks.map((fw) => (
+            <button
+              key={fw.id}
+              type="button"
+              onClick={() => setFramework(fw.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                framework === fw.id
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-bold'
+                  : 'bg-white border border-emerald-200 text-slate-700 hover:bg-emerald-50'
+              }`}
+            >
+              <span>{fw.icon}</span>
+              <span>{fw.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+          <span className="text-slate-500 px-2 text-[11px]">Batch Size:</span>
+          {[100, 500, 1000, 5000, 10000].map((sz) => (
+            <button
+              key={sz}
+              type="button"
+              onClick={() => setBatchSize(sz)}
+              className={`px-2 py-1 rounded-lg transition text-[11px] font-bold ${
+                batchSize === sz ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {sz >= 1000 ? `${sz / 1000}K` : sz}
+            </button>
+          ))}
+        </div>
       </div>
 
       {result && (

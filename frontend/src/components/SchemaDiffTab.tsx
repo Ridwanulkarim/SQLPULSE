@@ -327,8 +327,8 @@ CREATE TABLE ledger_entries (
     engine = selectedEngine,
     src = sourceEnv,
     tgt = targetEnv,
-    srcD = mode === 'custom' ? sourceDdl : undefined,
-    tgtD = mode === 'custom' ? targetDdl : undefined
+    srcD = sourceDdl,
+    tgtD = targetDdl
   ) => {
     setIsLoading(true);
     try {
@@ -352,10 +352,10 @@ CREATE TABLE ledger_entries (
       selectedEngine,
       sourceEnv,
       targetEnv,
-      mode === 'custom' ? sourceDdl : undefined,
-      mode === 'custom' ? targetDdl : undefined
+      sourceDdl,
+      targetDdl
     );
-  }, [selectedEngine, sourceEnv, targetEnv, mode]);
+  }, [selectedEngine, sourceEnv, targetEnv, sourceDdl, targetDdl]);
 
   const handleApplyPreset = (p: typeof presets[0]) => {
     setSelectedEngine(p.engine);
@@ -480,7 +480,7 @@ CREATE TABLE ledger_entries (
               />
               <button
                 type="button"
-                onClick={() => handleDiff(selectedEngine, sourceEnv, targetEnv, mode === 'custom' ? sourceDdl : undefined, mode === 'custom' ? targetDdl : undefined)}
+                onClick={() => handleDiff(selectedEngine, sourceEnv, targetEnv, sourceDdl, targetDdl)}
                 disabled={isLoading}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition active:scale-95 shrink-0 flex items-center gap-1"
               >

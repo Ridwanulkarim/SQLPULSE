@@ -49,13 +49,16 @@ export const ConnectHubTab: React.FC<ConnectHubTabProps> = ({
 
   useEffect(() => {
     const norm = selectedEngine.toLowerCase();
-    if (norm === 'mysql' || norm === 'mariadb') setPort(3306);
+    if (norm === 'mysql' || norm === 'mariadb' || norm === 'tidb') setPort(3306);
+    else if (norm === 'oracle' || norm.includes('oracle')) setPort(1521);
+    else if (norm.includes('mssql') || norm.includes('sqlserver') || norm.includes('sql_server')) setPort(1433);
     else if (norm === 'clickhouse') setPort(8123);
-    else if (norm === 'redis' || norm === 'keydb') setPort(6379);
-    else if (norm === 'mongodb') setPort(27017);
+    else if (norm === 'redis' || norm === 'keydb' || norm === 'dragonfly') setPort(6379);
+    else if (norm === 'mongodb' || norm.includes('mongo')) setPort(27017);
     else if (norm === 'cassandra' || norm === 'scylladb') setPort(9042);
-    else if (norm === 'neo4j') setPort(7687);
+    else if (norm === 'neo4j' || norm.includes('neo4j')) setPort(7687);
     else if (norm === 'elasticsearch' || norm === 'opensearch') setPort(9200);
+    else if (norm === 'snowflake') setPort(443);
     else setPort(5432);
   }, [selectedEngine]);
 
