@@ -16,6 +16,7 @@ import { PiiSanitizerAnalyzer } from './pii-sanitizer';
 import { QueryRewriterAnalyzer } from './query-rewriter';
 import { analyzeSchemaDiff } from './schema-diff';
 import { auditProductionReadiness } from './production-readiness';
+import { simulateChaosScenario } from './chaos-simulator';
 
 describe('Enterprise Multi-Engine Database Features Test Suite', () => {
   const transpiler = new SqlTranspiler();
@@ -521,5 +522,74 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(redis.repackScript).toContain('activedefrag yes');
     expect(redis.hygieneCheckQuery).toContain('mem_fragmentation_ratio');
   });
+
+  test('26. simulateChaosScenario models authentic failover, quorum consensus, and chaos scripts across engines', () => {
+    // 1. PostgreSQL primary crash with sync quorum
+    const pg = simulateChaosScenario({
+      engine: 'postgres',
+      scenarioId: 'primary_crash',
+      clusterSize: 5,
+      syncMode: 'sync',
+    });
+    expect(pg.engineName).toBe('PostgreSQL');
+    expect(pg.dataLossRisk).toBe('ZERO_DATA_LOSS_SYNC');
+    expect(pg.clusterTopologySummary.quorumRequirement).toContain('3/5 Nodes');
+    expect(pg.clusterTopologySummary.failoverManager).toContain('Patroni');
+    expect(pg.mitigationRunbook).toContain('synchronous_commit');
+    expect(pg.chaosInjectionScript).toContain('PodChaos');
+
+    // 2. MySQL network split (split-brain) with Paxos
+    const mysql = simulateChaosScenario({
+      engine: 'mysql',
+      scenarioId: 'network_split',
+      clusterSize: 3,
+    });
+    expect(mysql.engineName).toContain('MySQL');
+    expect(mysql.faultType).toBe('NETWORK_SPLIT');
+    expect(mysql.clusterTopologySummary.quorumRequirement).toContain('2/3 Nodes');
+    expect(mysql.clusterTopologySummary.consensusProtocol).toContain('Paxos');
+    expect(mysql.mitigationRunbook).toContain('rpl_semi_sync');
+    expect(mysql.recommendedConfigPatch).toContain('gtid_mode');
+
+    // 3. Oracle Data Guard Fast-Start Failover
+    const oracle = simulateChaosScenario({
+      engine: 'oracle',
+      scenarioId: 'primary_crash',
+      clusterSize: 3,
+    });
+    expect(oracle.engineName).toContain('Oracle');
+    expect(oracle.clusterTopologySummary.failoverManager).toContain('Data Guard');
+    expect(oracle.mitigationRunbook).toContain('FAST_START FAILOVER');
+
+    // 4. MongoDB Replica Set election and write concern
+    const mongo = simulateChaosScenario({
+      engine: 'mongodb',
+      scenarioId: 'replica_lag_spike',
+    });
+    expect(mongo.engineName).toBe('MongoDB');
+    expect(mongo.faultType).toBe('REPLICA_LAG_SPIKE');
+    expect(mongo.mitigationRunbook).toContain('w: "majority"');
+    expect(mongo.timeline.length).toBeGreaterThanOrEqual(4);
+
+    // 5. Redis Sentinel failover & active defrag
+    const redis = simulateChaosScenario({
+      engine: 'redis',
+      scenarioId: 'connection_starvation',
+    });
+    expect(redis.engineName).toBe('Redis');
+    expect(redis.clusterTopologySummary.failoverManager).toContain('Sentinel');
+    expect(redis.mitigationRunbook).toContain('min-replicas-to-write');
+
+    // 6. ClickHouse Keeper Raft quorum
+    const clickhouse = simulateChaosScenario({
+      engine: 'clickhouse',
+      scenarioId: 'disk_out_of_space',
+    });
+    expect(clickhouse.engineName).toBe('ClickHouse');
+    expect(clickhouse.faultType).toBe('DISK_OUT_OF_SPACE');
+    expect(clickhouse.clusterTopologySummary.failoverManager).toContain('Keeper');
+    expect(clickhouse.recommendedConfigPatch).toContain('keeper.xml');
+  });
 });
+
 
