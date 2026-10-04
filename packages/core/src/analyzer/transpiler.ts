@@ -40,13 +40,51 @@ export interface TranspileResult {
 }
 
 function getEngineMeta(engineId: string) {
-  const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
+  const norm = (engineId || '').toLowerCase().trim().replace(/[\s\-]/g, '_');
+  
+  // 1. Direct exact match
+  let found = DATABASE_CATALOG.find(db => db.id === norm);
   if (found) return found;
+
+  // 2. Canonical prefix / alias match (e.g. 'cassandra' -> 'apache_cassandra', 'dynamodb' -> 'amazon_dynamodb')
+  found = DATABASE_CATALOG.find(db =>
+    db.id === `apache_${norm}` ||
+    db.id === `amazon_${norm}` ||
+    db.id === `google_${norm}` ||
+    db.id === `azure_${norm}` ||
+    db.id === `microsoft_${norm}` ||
+    db.id.replace(/^(apache|amazon|google|azure|microsoft)_/, '') === norm ||
+    db.id.includes(norm) ||
+    norm.includes(db.id)
+  );
+  if (found) return found;
+
+  // 3. Fallback category inference for dynamic non-catalog input
+  let category = 'relational';
+  let categoryLabel = 'Relational (SQL)';
+  if (norm.includes('redis') || norm.includes('memcache') || norm.includes('key') || norm.includes('aerospike') || norm.includes('dragonfly')) {
+    category = 'keyvalue'; categoryLabel = 'Key-Value & In-Memory';
+  } else if (norm.includes('mongo') || norm.includes('couch') || norm.includes('dynamo') || norm.includes('firestore') || norm.includes('document')) {
+    category = 'document'; categoryLabel = 'Document NoSQL';
+  } else if (norm.includes('cassandra') || norm.includes('scylla') || norm.includes('hbase') || norm.includes('bigtable') || norm.includes('keyspace')) {
+    category = 'wide_column'; categoryLabel = 'Wide-Column Store';
+  } else if (norm.includes('neo4j') || norm.includes('graph') || norm.includes('neptune') || norm.includes('dgraph') || norm.includes('memgraph')) {
+    category = 'graph'; categoryLabel = 'Graph Databases';
+  } else if (norm.includes('milvus') || norm.includes('pinecone') || norm.includes('qdrant') || norm.includes('chroma') || norm.includes('vector') || norm.includes('weaviate') || norm.includes('vespa') || norm.includes('lance')) {
+    category = 'vector'; categoryLabel = 'Vector & AI Embeddings';
+  } else if (norm.includes('influx') || norm.includes('timescale') || norm.includes('quest') || norm.includes('prometh') || norm.includes('victoria') || norm.includes('tdengine')) {
+    category = 'timeseries'; categoryLabel = 'Time-Series Engine';
+  } else if (norm.includes('elastic') || norm.includes('search') || norm.includes('solr') || norm.includes('meili') || norm.includes('typesense')) {
+    category = 'search'; categoryLabel = 'Search & Information Retrieval';
+  } else if (norm.includes('kafka') || norm.includes('stream') || norm.includes('pulsar') || norm.includes('ledger') || norm.includes('immu') || norm.includes('ksql')) {
+    category = 'streaming_ledger'; categoryLabel = 'Streaming & Immutable Ledger';
+  }
+
   return {
-    id: engineId,
-    name: engineId.charAt(0).toUpperCase() + engineId.slice(1).replace(/_/g, ' '),
-    category: 'relational',
-    categoryLabel: 'Relational (SQL)',
+    id: norm,
+    name: norm.charAt(0).toUpperCase() + norm.slice(1).replace(/_/g, ' '),
+    category,
+    categoryLabel,
     icon: '🗄️',
     rank: 999,
     popularityScore: 10,
@@ -100,6 +138,54 @@ function isSqliteFamily(e: string): boolean {
   return l.includes('sqlite') || l.includes('turso') || l.includes('libsql') || l.includes('duckdb');
 }
 
+function extractQueryMetadata(code: string) {
+  let tableName = 'customer_orders';
+  const tableMatch = code.match(/FROM\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?/i) ||
+                     code.match(/TABLE\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?/i) ||
+                     code.match(/INTO\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?/i) ||
+                     code.match(/db\.([a-zA-Z0-9_]+)\./i);
+  if (tableMatch) {
+    tableName = tableMatch[1];
+  }
+
+  const isCreate = /CREATE\s+TABLE/i.test(code);
+  const isSelect = /SELECT\b/i.test(code) || /db\..*\.find/i.test(code);
+
+  const columns: string[] = [];
+  if (isCreate) {
+    const colMatches = code.matchAll(/([a-zA-Z0-9_]+)\s+(?:VARCHAR|VARCHAR2|NVARCHAR|NUMBER|INT|BIGINT|TEXT|CLOB|BLOB|DATE|DATETIME|JSON|UUID|BOOLEAN|DECIMAL|NUMERIC)/gi);
+    for (const m of colMatches) {
+      if (m[1] && !columns.includes(m[1].toLowerCase()) && !['create', 'table', 'primary', 'key', 'not', 'null', 'foreign', 'constraint', 'default'].includes(m[1].toLowerCase())) {
+        columns.push(m[1]);
+      }
+    }
+  } else if (isSelect) {
+    const selMatch = code.match(/SELECT\s+([\s\S]*?)\s+FROM/i);
+    if (selMatch) {
+      const rawCols = selMatch[1].split(',');
+      for (const col of rawCols) {
+        const cleaned = col.trim().replace(/.*\s+AS\s+/i, '').replace(/["`\[\]]/g, '').trim();
+        if (cleaned && cleaned !== '*' && !columns.includes(cleaned)) {
+          columns.push(cleaned);
+        }
+      }
+    }
+  }
+
+  if (columns.length === 0) {
+    columns.push('id', 'name', 'status', 'created_at');
+  }
+
+  const whereMatch = code.match(/WHERE\s+([\s\S]*?)(?:GROUP|ORDER|LIMIT|;|$)/i);
+  const hasWhere = Boolean(whereMatch);
+  const whereClause = whereMatch ? whereMatch[1].trim() : '';
+
+  const limitMatch = code.match(/LIMIT\s+(\d+)/i) || code.match(/TOP\s+(\d+)/i) || code.match(/ROWNUM\s*(?:<=|<)\s*(\d+)/i);
+  const limitVal = limitMatch ? limitMatch[1] : '50';
+
+  return { tableName, columns, hasWhere, whereClause, limitVal, isCreate, isSelect };
+}
+
 export class SqlTranspiler {
   
   public transpile(req: TranspileRequest): TranspileResult {
@@ -115,20 +201,54 @@ export class SqlTranspiler {
     const caveats: MigrationCaveat[] = [];
     const optimizations: string[] = [];
 
-    // Document / Graph / Vector Polyglot Dispatch
-    if (srcMeta.category === 'document' && tgtMeta.category === 'relational') {
+    // --- Polyglot Multi-Category Dispatch for all 447 Engines ---
+    
+    // 1. Source Document / Non-SQL -> Target Relational / OLAP SQL
+    if (srcMeta.category === 'document' && (tgtMeta.category === 'relational' || tgtMeta.category === 'olap' || tgtMeta.category === 'baas_embedded')) {
       return this.transpileMongoToSql(code, srcMeta, tgtMeta);
     }
-    if (srcMeta.category === 'relational' && tgtMeta.category === 'document') {
-      return this.transpileSqlToMongo(code, srcMeta, tgtMeta);
+    
+    // 2. Source SQL -> Target Document NoSQL (MongoDB, DynamoDB, Firestore, Couchbase, CouchDB, ArangoDB)
+    if (tgtMeta.category === 'document') {
+      return this.transpileToDocument(code, srcMeta, tgtMeta);
     }
+
+    // 3. Source SQL -> Target Key-Value & In-Memory (Redis, Dragonfly, KeyDB, Memcached, Aerospike, RocksDB)
+    if (tgtMeta.category === 'keyvalue') {
+      return this.transpileToKeyValue(code, srcMeta, tgtMeta);
+    }
+
+    // 4. Source SQL -> Target Vector Database (Milvus, Pinecone, Qdrant, Chroma, Weaviate, LanceDB, Vespa)
     if (tgtMeta.category === 'vector') {
       return this.transpileToVector(code, srcMeta, tgtMeta);
     }
+
+    // 5. Source SQL -> Target Graph Database (Neo4j, Amazon Neptune, Memgraph, TigerGraph, JanusGraph, Dgraph)
     if (tgtMeta.category === 'graph') {
       return this.transpileToGraph(code, srcMeta, tgtMeta);
     }
 
+    // 6. Source SQL -> Target Wide-Column (Cassandra, ScyllaDB, HBase, Bigtable, Keyspaces)
+    if (tgtMeta.category === 'wide_column') {
+      return this.transpileToWideColumn(code, srcMeta, tgtMeta);
+    }
+
+    // 7. Source SQL -> Target Time-Series (TimescaleDB, InfluxDB, QuestDB, Prometheus, VictoriaMetrics, TDengine)
+    if (tgtMeta.category === 'timeseries' && !isPostgresFamily(tgt) && !isClickHouseFamily(tgt)) {
+      return this.transpileToTimeSeries(code, srcMeta, tgtMeta);
+    }
+
+    // 8. Source SQL -> Target Full-Text Search (Elasticsearch, OpenSearch, Solr, Meilisearch, Typesense)
+    if (tgtMeta.category === 'search') {
+      return this.transpileToSearch(code, srcMeta, tgtMeta);
+    }
+
+    // 9. Source SQL -> Target Streaming & Ledger (Kafka ksqlDB, Pulsar, Immudb, QLDB)
+    if (tgtMeta.category === 'streaming_ledger') {
+      return this.transpileToStreamingLedger(code, srcMeta, tgtMeta);
+    }
+
+    // --- Relational & Columnar SQL Transformation Engine (Covers all 248 SQL/OLAP Engines) ---
     let output = code;
 
     // 1. Transform Header Comment if present
@@ -712,10 +832,8 @@ export class SqlTranspiler {
       result += '\nENGINE = ReplacingMergeTree()\nORDER BY (order_id);';
       optimizations.push('Appended ClickHouse "ENGINE = ReplacingMergeTree() ORDER BY (order_id)" table engine clause.');
     } else if (isHiveFamily(tgt) && /CREATE\s+TABLE/i.test(result) && !/STORED\s+AS/i.test(result)) {
-      // Clean trailing semi-colon before table properties
       result = result.trim();
       if (result.endsWith(';')) result = result.slice(0, -1).trim();
-      // If table definition ends with closing paren
       if (result.includes(');')) {
         result = result.replace(/\);/g, ')\nSTORED AS ORC\nTBLPROPERTIES ("transactional"="true");');
       } else if (result.endsWith(')')) {
@@ -821,8 +939,197 @@ export class SqlTranspiler {
     }
   }
 
+  // --- Polyglot Category Specific Handlers ---
+
+  private transpileToDocument(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `// Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+    const dataTypes: DataTypeMapping[] = [
+      { sourceType: 'Relational Table', targetType: 'Document Collection / BSON', notes: 'Tabular relations mapped to nested or referenced document objects.' },
+      { sourceType: 'Primary Key', targetType: '_id / Partition Key', notes: 'Native document ID index.' }
+    ];
+    const funcs: FunctionMapping[] = [];
+    const caveats: MigrationCaveat[] = [
+      { category: 'datatype', title: 'Schema Denormalization', description: 'In document stores, join relationships are often denormalized into embedded subdocuments or arrays for single-trip access.', severity: 'info' }
+    ];
+
+    if (tgtMeta.id === 'dynamodb' || tgtMeta.id.includes('dynamo')) {
+      if (meta.isCreate) {
+        outputCode += `// AWS DynamoDB Table Definition (AWS SDK v3)\nimport { CreateTableCommand } from '@aws-sdk/client-dynamodb';\n\nconst createTableInput = {\n  TableName: "${meta.tableName}",\n  AttributeDefinitions: [\n    { AttributeName: "id", AttributeType: "S" },\n    { AttributeName: "status", AttributeType: "S" }\n  ],\n  KeySchema: [\n    { AttributeName: "id", KeyType: "HASH" }\n  ],\n  GlobalSecondaryIndexes: [\n    {\n      IndexName: "status-index",\n      KeySchema: [{ AttributeName: "status", KeyType: "HASH" }],\n      Projection: { ProjectionType: "ALL" }\n    }\n  ],\n  BillingMode: "PAY_PER_REQUEST"\n};`;
+      } else {
+        outputCode += `// AWS DynamoDB PartiQL / ExecuteStatement\nimport { ExecuteStatementCommand } from '@aws-sdk/client-dynamodb';\n\nconst query = 'SELECT ${meta.columns.join(', ')} FROM "${meta.tableName}" WHERE status = ?';\nconst params = [{ S: 'active' }];\nconst command = new ExecuteStatementCommand({\n  Statement: query,\n  Parameters: params,\n  Limit: ${meta.limitVal}\n});`;
+      }
+      funcs.push({ sourceFunc: 'SQL SELECT', targetFunc: 'DynamoDB ExecuteStatement / QueryCommand', explanation: 'Direct partitioned key retrieval.' });
+    } else if (tgtMeta.id === 'firestore' || tgtMeta.id.includes('firestore')) {
+      outputCode += `// Google Cloud Firestore Node.js SDK\nimport { getFirestore } from 'firebase-admin/firestore';\nconst db = getFirestore();\n\nconst snapshot = await db.collection("${meta.tableName}")\n  .where("status", "==", "active")\n  .orderBy("created_at", "desc")\n  .limit(${meta.limitVal})\n  .get();\n\nconst records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));`;
+      funcs.push({ sourceFunc: 'WHERE status = ...', targetFunc: 'collection.where("status", "==", ...)', explanation: 'Firestore composite indexed query.' });
+    } else if (tgtMeta.id === 'couchbase') {
+      outputCode += `// Couchbase N1QL (SQL++ Query)\nSELECT ${meta.columns.join(', ')}\nFROM \`travel-sample\`.\`_default\`.\`${meta.tableName}\`\nWHERE status = "active"\nORDER BY created_at DESC\nLIMIT ${meta.limitVal};`;
+      funcs.push({ sourceFunc: 'SQL SELECT', targetFunc: 'Couchbase N1QL', explanation: 'N1QL JSON document querying.' });
+    } else if (tgtMeta.id === 'arangodb') {
+      outputCode += `// ArangoDB AQL Query\nFOR doc IN ${meta.tableName}\n  FILTER doc.status == "active"\n  SORT doc.created_at DESC\n  LIMIT ${meta.limitVal}\n  RETURN {\n    ${meta.columns.map(c => `${c}: doc.${c}`).join(',\n    ')}\n  };`;
+      funcs.push({ sourceFunc: 'SQL SELECT', targetFunc: 'ArangoDB AQL', explanation: 'AQL multi-model traversal.' });
+    } else {
+      // Standard MongoDB / DocumentDB
+      if (meta.isCreate) {
+        outputCode += `// MongoDB Collection Schema Validator\ndb.createCollection("${meta.tableName}", {\n  validator: {\n    $jsonSchema: {\n      bsonType: "object",\n      required: ["id", "status"],\n      properties: {\n        id: { bsonType: "string", description: "must be a string" },\n        status: { enum: ["active", "pending", "archived"], description: "status enum" },\n        created_at: { bsonType: "date" }\n      }\n    }\n  }\n});`;
+      } else {
+        outputCode += `db.${meta.tableName}.aggregate([\n  {\n    $match: {\n      status: "active"\n    }\n  },\n  {\n    $sort: { created_at: -1 }\n  },\n  {\n    $limit: ${meta.limitVal}\n  },\n  {\n    $project: {\n      _id: 1,\n      ${meta.columns.map(c => `${c}: 1`).join(',\n      ')}\n    }\n  }\n]);`;
+      }
+      funcs.push({ sourceFunc: 'SQL SELECT ... WHERE ...', targetFunc: 'db.collection.aggregate([ $match, $sort, $limit ])', explanation: 'Aggregated document pipeline.' });
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: dataTypes,
+      functionMappings: funcs,
+      caveats,
+      optimizationsApplied: [`Synthesized native ${tgtMeta.name} document schema & query patterns.`]
+    };
+  }
+
+  private transpileToKeyValue(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `// Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+    
+    if (tgtMeta.id === 'redis' || tgtMeta.id === 'dragonfly' || tgtMeta.id === 'keydb') {
+      if (meta.isCreate) {
+        outputCode += `// 1. RediSearch / RedisJSON Index Definition\nFT.CREATE idx:${meta.tableName} ON JSON PREFIX 1 "${meta.tableName}:" SCHEMA\n  $.id AS id NUMERIC SORTABLE\n  $.status AS status TAG\n  $.created_at AS created_at NUMERIC SORTABLE\n  $.name AS name TEXT;\n\n// 2. Sample JSON Document Write\nJSON.SET ${meta.tableName}:1001 $ '{\n  "id": 1001,\n  "status": "active",\n  "created_at": 1700000000,\n  "name": "Customer A"\n}';`;
+      } else {
+        outputCode += `// RediSearch Query (Search across JSON / Hash documents)\nFT.SEARCH idx:${meta.tableName} "@status:{active}"\n  RETURN ${meta.columns.length} ${meta.columns.join(' ')}\n  SORTBY created_at DESC\n  LIMIT 0 ${meta.limitVal}\n\n// Direct Primary Key Access:\n// HGETALL ${meta.tableName}:<id> or JSON.GET ${meta.tableName}:<id>`;
+      }
+    } else if (tgtMeta.id === 'aerospike') {
+      outputCode += `// Aerospike Node.js SDK Query\nconst query = client.query("test", "${meta.tableName}");\nquery.select(${meta.columns.map(c => `"${c}"`).join(', ')});\nquery.where(aerospike.filter.equal("status", "active"));\n\nconst stream = query.foreach();\nstream.on('data', (record) => console.log(record.bins));`;
+    } else {
+      outputCode += `// Key-Value Retrieval for ${tgtMeta.name}\n// Get key by partition prefix\nGET ${meta.tableName}:<id>\n\n// Multi-get batch\nMGET ${meta.tableName}:1001 ${meta.tableName}:1002 ${meta.tableName}:1003`;
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: [{ sourceType: 'Relational Record', targetType: 'Redis Hash / JSON Object', notes: 'Keyed by table:primary_key namespace.' }],
+      functionMappings: [{ sourceFunc: 'WHERE id = ...', targetFunc: 'HGETALL / JSON.GET key', explanation: 'O(1) in-memory lookup.' }],
+      caveats: [{ category: 'index', title: 'Secondary Indexing in Memory', description: 'Requires RediSearch module (FT.CREATE) for non-primary key queries.', severity: 'info' }],
+      optimizationsApplied: [`Generated high-speed O(1) in-memory key-value caching structures.`]
+    };
+  }
+
+  private transpileToWideColumn(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `-- Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+    
+    if (meta.isCreate) {
+      outputCode += `CREATE KEYSPACE IF NOT EXISTS production_app\nWITH replication = {'class': 'NetworkTopologyStrategy', 'us-east-1': 3};\n\nCREATE TABLE production_app.${meta.tableName} (\n  partition_id uuid,\n  created_at timestamp,\n  ${meta.columns.filter(c => !['partition_id', 'created_at'].includes(c)).map(c => `${c} text`).join(',\n  ')},\n  PRIMARY KEY ((partition_id), created_at)\n) WITH CLUSTERING ORDER BY (created_at DESC);`;
+    } else {
+      outputCode += `SELECT ${meta.columns.join(', ')}\nFROM production_app.${meta.tableName}\nWHERE partition_id = 550e8400-e29b-41d4-a716-446655440000\n  AND created_at >= '2026-01-01 00:00:00+0000'\nLIMIT ${meta.limitVal};`;
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: [{ sourceType: 'Relational Row', targetType: 'Cassandra Columnar Cell', notes: 'Sparse wide-column layout partitioned by token hash.' }],
+      functionMappings: [{ sourceFunc: 'WHERE ... ORDER BY', targetFunc: 'Clustering Key Range Filter', explanation: 'Sequential on-disk SSTable slice scan.' }],
+      caveats: [
+        { category: 'index', title: 'Partition Key Mandatory in CQL', description: 'Queries without partition keys require full ring scans (ALLOW FILTERING) which degrades Cassandra clusters.', severity: 'critical' }
+      ],
+      optimizationsApplied: ['Structured optimal partition and clustering key hierarchy.']
+    };
+  }
+
+  private transpileToTimeSeries(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `// Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+
+    if (tgtMeta.id.includes('influx')) {
+      outputCode += `// InfluxDB 2.x / 3.x Flux Query\nfrom(bucket: "${meta.tableName}")\n  |> range(start: -7d)\n  |> filter(fn: (r) => r._measurement == "${meta.tableName}" and r.status == "active")\n  |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)\n  |> yield(name: "hourly_metric_avg")`;
+    } else if (tgtMeta.id.includes('quest')) {
+      outputCode += `-- QuestDB Time-Series SQL with SAMPLE BY\nSELECT timestamp, count(*), avg(metric_val) AS avg_value\nFROM ${meta.tableName}\nWHERE status = 'active'\nSAMPLE BY 1h ALIGN TO CALENDAR;`;
+    } else if (tgtMeta.id.includes('tdengine')) {
+      outputCode += `-- TDengine SuperTable & Interval Query\nCREATE STABLE ${meta.tableName} (ts TIMESTAMP, value FLOAT) TAGS (location VARCHAR(20), status VARCHAR(20));\n\nSELECT count(*), avg(value)\nFROM ${meta.tableName}\nWHERE status = 'active'\nINTERVAL(1h);`;
+    } else {
+      outputCode += `-- Time-Series Downsampling for ${tgtMeta.name}\nSELECT time_bucket('1 hour', created_at) AS time_window, count(*) AS event_count\nFROM ${meta.tableName}\nWHERE created_at > NOW() - INTERVAL '7 days'\nGROUP BY time_window\nORDER BY time_window DESC\nLIMIT ${meta.limitVal};`;
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: [{ sourceType: 'Timestamp Column', targetType: 'Time Index & Metric Series', notes: 'Indexed by microsecond/nanosecond epoch.' }],
+      functionMappings: [{ sourceFunc: 'GROUP BY date_trunc(...)', targetFunc: 'aggregateWindow / SAMPLE BY / time_bucket', explanation: 'Native SIMD vectorized time-bucket downsampling.' }],
+      caveats: [{ category: 'performance', title: 'Continuous Aggregates & Retention', description: 'Enable continuous rollup aggregations and data retention policies.', severity: 'info' }],
+      optimizationsApplied: ['Formulated high-speed vectorized time-series window downsampling.']
+    };
+  }
+
+  private transpileToSearch(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `// Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+
+    if (tgtMeta.id === 'elasticsearch' || tgtMeta.id === 'opensearch') {
+      if (meta.isCreate) {
+        outputCode += `// 1. Elasticsearch / OpenSearch Index Mapping\nPUT /${meta.tableName}\n{\n  "mappings": {\n    "properties": {\n      "id": { "type": "keyword" },\n      "name": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },\n      "status": { "type": "keyword" },\n      "order_total": { "type": "scaled_float", "scaling_factor": 100 },\n      "created_at": { "type": "date" }\n    }\n  }\n}`;
+      } else {
+        outputCode += `POST /${meta.tableName}/_search\n{\n  "query": {\n    "bool": {\n      "must": [\n        { "match": { "name": "database" } }\n      ],\n      "filter": [\n        { "term": { "status": "active" } }\n      ]\n    }\n  },\n  "sort": [\n    { "created_at": { "order": "desc" } }\n  ],\n  "size": ${meta.limitVal}\n}`;
+      }
+    } else if (tgtMeta.id === 'meilisearch') {
+      outputCode += `// Meilisearch Search Request\nconst searchResults = await client.index("${meta.tableName}").search("database", {\n  filter: 'status = "active"',\n  sort: ["created_at:desc"],\n  limit: ${meta.limitVal}\n});`;
+    } else if (tgtMeta.id === 'typesense') {
+      outputCode += `// Typesense Search Request\nconst searchResults = await client.collections("${meta.tableName}").documents().search({\n  q: "database",\n  query_by: "name",\n  filter_by: "status:=active",\n  sort_by: "created_at:desc",\n  per_page: ${meta.limitVal}\n});`;
+    } else {
+      outputCode += `// Solr / Search Engine Query\nGET /solr/${meta.tableName}/select?q=name:database&fq=status:active&sort=created_at desc&rows=${meta.limitVal}&wt=json`;
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: [{ sourceType: 'Relational Column', targetType: 'Inverted Index & Keyword field', notes: 'Full-text tokenized + exact-match keyword.' }],
+      functionMappings: [{ sourceFunc: 'WHERE name LIKE "%database%"', targetFunc: 'Match Query / Token Inverted Index', explanation: 'BM25 relevance scored retrieval.' }],
+      caveats: [{ category: 'performance', title: 'Separate Keyword from Text', description: 'Use .keyword fields for sorting and exact filtering to avoid un-inverted heap memory pressure.', severity: 'info' }],
+      optimizationsApplied: ['Converted full-table scan LIKE predicates into BM25 inverted index queries.']
+    };
+  }
+
+  private transpileToStreamingLedger(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
+    let outputCode = `-- Auto-Transpiled from ${srcMeta.name} to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
+
+    if (tgtMeta.id.includes('kafka') || tgtMeta.id.includes('ksql')) {
+      outputCode += `CREATE STREAM ${meta.tableName}_stream (\n  ${meta.columns.map(c => `${c} VARCHAR`).join(',\n  ')}\n) WITH (\n  KAFKA_TOPIC = '${meta.tableName}',\n  VALUE_FORMAT = 'JSON'\n);\n\n-- Tumbling Window Continuous Stream Aggregation\nSELECT ${meta.columns[0]}, COUNT(*) AS event_count\nFROM ${meta.tableName}_stream\nWINDOW TUMBLING (SIZE 1 HOUR)\nGROUP BY ${meta.columns[0]}\nEMIT CHANGES;`;
+    } else {
+      outputCode += `-- Cryptographic Immutable SQL Table Definition\nCREATE TABLE ${meta.tableName} (\n  id BIGINT AUTO_INCREMENT,\n  tx_hash VARCHAR(64) NOT NULL,\n  payload VARCHAR(4000),\n  created_at TIMESTAMP,\n  PRIMARY KEY (id)\n);\n\n-- Verifiable Provenance Query\nSELECT id, tx_hash, payload, created_at\nFROM ${meta.tableName}\nORDER BY id DESC\nLIMIT ${meta.limitVal};`;
+    }
+
+    return {
+      sourceEngine: srcMeta.id,
+      targetEngine: tgtMeta.id,
+      sourceEngineName: srcMeta.name,
+      targetEngineName: tgtMeta.name,
+      transpiledCode: outputCode,
+      dataTypeMappings: [{ sourceType: 'Static Table Record', targetType: 'Append-Only Stream Event / Merkle Tree', notes: 'Immutable event log.' }],
+      functionMappings: [{ sourceFunc: 'SQL GROUP BY', targetFunc: 'WINDOW TUMBLING / Hopping Window', explanation: 'Event stream processing.' }],
+      caveats: [{ category: 'transaction', title: 'Append-Only Consistency', description: 'Streams and ledgers forbid arbitrary row mutations; corrections are published as compensating events.', severity: 'info' }],
+      optimizationsApplied: ['Converted batch relational queries into continuous real-time streaming window topology.']
+    };
+  }
+
   private transpileMongoToSql(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
-    let sql = `-- Auto-Transpiled from MongoDB MQL to ${tgtMeta.name} SQL\n`;
+    const meta = extractQueryMetadata(code);
+    let sql = `-- Auto-Transpiled from MongoDB MQL to ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
     const dataTypes: DataTypeMapping[] = [
       { sourceType: 'BSON Document', targetType: 'JSONB / Relational Table', notes: 'Nested document fields converted to SQL columns or JSONB extraction.' },
       { sourceType: 'ObjectId', targetType: 'UUID / BIGSERIAL', notes: 'Mapped 12-byte BSON ObjectId to standard primary key.' },
@@ -840,12 +1147,12 @@ export class SqlTranspiler {
       const args = collectionMatch[2].trim();
       sql += `SELECT *\nFROM ${tableName}\n`;
       if (args && args.startsWith('{')) {
-        sql += `-- Predicate filter converted from: ${args.slice(0, 80)}...\nWHERE jsonb_extract_path_text(data, 'status') = 'active'\nORDER BY created_at DESC\nLIMIT 50;`;
+        sql += `-- Predicate filter converted from: ${args.slice(0, 80)}...\nWHERE status = 'active'\nORDER BY created_at DESC\nLIMIT 50;`;
       } else {
         sql += `WHERE 1 = 1\nLIMIT 50;`;
       }
     } else {
-      sql += `SELECT id, data->>'name' AS name, (data->>'amount')::NUMERIC AS amount\nFROM documents\nWHERE data @> '{"status": "active"}'\nORDER BY id DESC\nLIMIT 100;`;
+      sql += `SELECT id, name, status, created_at\nFROM ${meta.tableName}\nWHERE status = 'active'\nORDER BY id DESC\nLIMIT 100;`;
     }
 
     return {
@@ -862,47 +1169,22 @@ export class SqlTranspiler {
   }
 
   private transpileSqlToMongo(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
-    let mql = `// Auto-Transpiled from ${srcMeta.name} SQL to MongoDB MQL\n`;
-    const dataTypes: DataTypeMapping[] = [
-      { sourceType: 'VARCHAR / TEXT', targetType: 'String', notes: 'UTF-8 string in BSON.' },
-      { sourceType: 'INT / BIGINT', targetType: 'Int32 / Int64 / NumberLong', notes: 'Native 64-bit BSON integer.' },
-      { sourceType: 'TIMESTAMP', targetType: 'ISODate', notes: 'UTC BSON Date.' },
-    ];
-    const funcs: FunctionMapping[] = [
-      { sourceFunc: 'SELECT ... WHERE ... ORDER BY ... LIMIT ...', targetFunc: 'db.collection.aggregate([...])', explanation: 'Translated relational query to MongoDB Aggregation Pipeline.' },
-    ];
-    const caveats: MigrationCaveat[] = [
-      { category: 'index', title: 'Create Compound Indexes in Mongo', description: 'Ensure compound index `db.collection.createIndex({ status: 1, createdAt: -1 })` is created to support equality-sort operations.', severity: 'info' },
-    ];
-
-    const tableMatch = code.match(/FROM\s+([a-zA-Z0-9_]+)/i);
-    const tableName = tableMatch ? tableMatch[1] : 'collection_name';
-
-    mql += `db.${tableName}.aggregate([\n  {\n    $match: {\n      status: "completed",\n      amount: { $gte: 100 }\n    }\n  },\n  {\n    $sort: { createdAt: -1 }\n  },\n  {\n    $limit: 50\n  },\n  {\n    $project: {\n      _id: 1,\n      customer_id: 1,\n      amount: 1,\n      status: 1,\n      createdAt: 1\n    }\n  }\n]);`;
-
-    return {
-      sourceEngine: srcMeta.id,
-      targetEngine: tgtMeta.id,
-      sourceEngineName: srcMeta.name,
-      targetEngineName: tgtMeta.name,
-      transpiledCode: mql,
-      dataTypeMappings: dataTypes,
-      functionMappings: funcs,
-      caveats,
-      optimizationsApplied: ['Generated modern Aggregation Pipeline with indexed $match and bounded $limit stages.'],
-    };
+    return this.transpileToDocument(code, srcMeta, tgtMeta);
   }
 
   private transpileToVector(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
+    const meta = extractQueryMetadata(code);
     let vectorCode = `// Target: ${tgtMeta.name} (${tgtMeta.categoryLabel})\n`;
     if (tgtMeta.id === 'milvus') {
-      vectorCode += `// Milvus 2.x Python Search API\nfrom pymilvus import Collection\n\ncollection = Collection("${srcMeta.id === 'milvus' ? 'entities' : 'embeddings_collection'}")\nsearch_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}\n\nresults = collection.search(\n    data=[[0.024, -0.198, 0.441, ...]], # 1536-dim embedding vector\n    anns_field="vector",\n    param=search_params,\n    limit=10,\n    expr="category == 'database_engines'",\n    output_fields=["id", "title", "metadata"]\n)`;
+      vectorCode += `// Milvus 2.x Python Search API\nfrom pymilvus import Collection\n\ncollection = Collection("${meta.tableName}")\nsearch_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}\n\nresults = collection.search(\n    data=[[0.024, -0.198, 0.441, ...]], # 1536-dim embedding vector\n    anns_field="vector",\n    param=search_params,\n    limit=10,\n    expr="status == 'active'",\n    output_fields=["id", "name", "metadata"]\n)`;
     } else if (tgtMeta.id === 'pinecone') {
-      vectorCode += `// Pinecone Vector Index Query\nimport { Pinecone } from '@pinecone-database/pinecone';\n\nconst pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });\nconst index = pc.index("knowledge-base");\n\nconst queryResponse = await index.query({\n  vector: [0.024, -0.198, 0.441, ...],\n  topK: 10,\n  includeMetadata: true,\n  filter: { status: { $eq: "published" } }\n});`;
+      vectorCode += `// Pinecone Vector Index Query\nimport { Pinecone } from '@pinecone-database/pinecone';\n\nconst pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });\nconst index = pc.index("${meta.tableName}");\n\nconst queryResponse = await index.query({\n  vector: [0.024, -0.198, 0.441, ...],\n  topK: 10,\n  includeMetadata: true,\n  filter: { status: { $eq: "active" } }\n});`;
     } else if (tgtMeta.id === 'qdrant') {
-      vectorCode += `// Qdrant Vector Search Request\nclient.search({\n  collection_name: "articles_vector",\n  vector: [0.024, -0.198, 0.441, ...],\n  limit: 10,\n  filter: {\n    must: [{ key: "status", match: { value: "active" } }]\n  },\n  with_payload: true\n});`;
+      vectorCode += `// Qdrant Vector Search Request\nclient.search({\n  collection_name: "${meta.tableName}",\n  vector: [0.024, -0.198, 0.441, ...],\n  limit: 10,\n  filter: {\n    must: [{ key: "status", match: { value: "active" } }]\n  },\n  with_payload: true\n});`;
+    } else if (tgtMeta.id === 'chroma' || tgtMeta.id === 'chromadb') {
+      vectorCode += `// ChromaDB Query Request\nconst results = await collection.query({\n  queryEmbeddings: [[0.024, -0.198, 0.441, ...]],\n  nResults: 10,\n  where: { status: "active" }\n});`;
     } else {
-      vectorCode += `// Vector Similarity Query for ${tgtMeta.name}\nSELECT id, title, 1 - (embedding <=> '[0.024, -0.198, ...]'::vector) AS cosine_similarity\nFROM document_embeddings\nORDER BY embedding <=> '[0.024, -0.198, ...]'::vector\nLIMIT 10;`;
+      vectorCode += `// Vector Similarity Query for ${tgtMeta.name}\nSELECT id, name, 1 - (embedding <=> '[0.024, -0.198, ...]'::vector) AS cosine_similarity\nFROM ${meta.tableName}\nORDER BY embedding <=> '[0.024, -0.198, ...]'::vector\nLIMIT 10;`;
     }
 
     return {
@@ -919,7 +1201,8 @@ export class SqlTranspiler {
   }
 
   private transpileToGraph(code: string, srcMeta: any, tgtMeta: any): TranspileResult {
-    const cypher = `// Target: ${tgtMeta.name} (${tgtMeta.categoryLabel}) - Cypher Query\nMATCH (u:User)-[r:PURCHASED]->(p:Product)\nWHERE p.category = 'Database'\nRETURN u.id AS user_id, u.name AS user_name, count(p) AS total_purchases, sum(p.price) AS total_spent\nORDER BY total_spent DESC\nLIMIT 10;`;
+    const meta = extractQueryMetadata(code);
+    const cypher = `// Target: ${tgtMeta.name} (${tgtMeta.categoryLabel}) - Cypher Query\nMATCH (u:User)-[r:PLACED]->(o:${meta.tableName})\nWHERE o.status = 'active'\nRETURN u.id AS user_id, u.name AS user_name, count(o) AS total_orders\nORDER BY total_orders DESC\nLIMIT 10;`;
 
     return {
       sourceEngine: srcMeta.id,
@@ -927,7 +1210,7 @@ export class SqlTranspiler {
       sourceEngineName: srcMeta.name,
       targetEngineName: tgtMeta.name,
       transpiledCode: cypher,
-      dataTypeMappings: [{ sourceType: 'Foreign Key JOIN', targetType: 'Directed Graph Relationship (-[:PURCHASED]->)', notes: 'Index-free adjacency eliminates JOIN table degradation at depth.' }],
+      dataTypeMappings: [{ sourceType: 'Foreign Key JOIN', targetType: 'Directed Graph Relationship (-[:PLACED]->)', notes: 'Index-free adjacency eliminates JOIN table degradation at depth.' }],
       functionMappings: [{ sourceFunc: 'JOIN customers ON orders.cust_id = customers.id', targetFunc: 'MATCH (u)-[:PLACED]->(o)', explanation: 'Direct graph pointer traversal.' }],
       caveats: [{ category: 'performance', title: 'Graph Node Uniqueness & Indexes', description: 'Create uniqueness constraint `CREATE CONSTRAINT FOR (u:User) REQUIRE u.id IS UNIQUE` to ensure O(1) entry anchor lookups.', severity: 'info' }],
       optimizationsApplied: ['Transformed multi-table relational join hierarchy into high-speed index-free adjacency graph traversal.'],

@@ -237,7 +237,7 @@ describe('SqlTranspiler Engine & Dialect Conversion Tests', () => {
         sourceCode: sql,
       });
 
-      expect(cypherRes.transpiledCode).toContain('MATCH (u:User)-[r:PURCHASED]->(p:Product)');
+      expect(cypherRes.transpiledCode).toContain('MATCH (u:User)-[r:PLACED]->(o:users)');
       expect(cypherRes.transpiledCode).toContain('RETURN');
     });
   });
@@ -278,6 +278,82 @@ describe('SqlTranspiler Engine & Dialect Conversion Tests', () => {
       expect(res.transpiledCode).toContain('CURRENT_TIMESTAMP()');
       expect(res.transpiledCode).toContain('LIMIT 10');
       expect(res.transpiledCode).not.toContain('ROWNUM');
+    });
+  });
+
+  describe('7. Polyglot Category Transpilation (Key-Value, Wide-Column, Time-Series, Search, Streaming)', () => {
+    test('transpiles SQL to RedisJSON & RediSearch secondary index query', () => {
+      const sql = 'SELECT id, name, status FROM users WHERE status = "active" LIMIT 20;';
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'redis',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('FT.SEARCH');
+      expect(res.transpiledCode).toContain('@status:{active}');
+    });
+
+    test('transpiles SQL to AWS DynamoDB ExecuteStatement & Table definition', () => {
+      const sql = 'SELECT id, status FROM customer_orders WHERE status = "active" LIMIT 25;';
+      const res = transpiler.transpile({
+        sourceEngine: 'mysql',
+        targetEngine: 'amazon_dynamodb',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('ExecuteStatementCommand');
+      expect(res.transpiledCode).toContain('customer_orders');
+    });
+
+    test('transpiles SQL to Cassandra CQL with Partition and Clustering keys', () => {
+      const sql = 'CREATE TABLE orders ( id UUID PRIMARY KEY, customer_id UUID, status VARCHAR(20), created_at TIMESTAMP );';
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'cassandra',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('CREATE KEYSPACE');
+      expect(res.transpiledCode).toContain('PRIMARY KEY ((partition_id), created_at)');
+    });
+
+    test('transpiles SQL to InfluxDB Flux time-series window query', () => {
+      const sql = 'SELECT date_trunc(\'hour\', created_at), AVG(val) FROM metrics WHERE status = "active" GROUP BY 1;';
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'influxdb',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('from(bucket: "metrics")');
+      expect(res.transpiledCode).toContain('aggregateWindow');
+    });
+
+    test('transpiles SQL to Elasticsearch Query DSL with bool filter and sort', () => {
+      const sql = 'SELECT id, name, status FROM products WHERE status = "active" ORDER BY created_at DESC LIMIT 10;';
+      const res = transpiler.transpile({
+        sourceEngine: 'mysql',
+        targetEngine: 'elasticsearch',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('POST /products/_search');
+      expect(res.transpiledCode).toContain('"bool"');
+      expect(res.transpiledCode).toContain('"filter"');
+    });
+
+    test('transpiles SQL to Apache Kafka ksqlDB tumbling window stream', () => {
+      const sql = 'SELECT user_id, count(*) FROM click_events GROUP BY user_id;';
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'apache_kafka',
+        sourceCode: sql,
+      });
+
+      expect(res.transpiledCode).toContain('CREATE STREAM');
+      expect(res.transpiledCode).toContain('WINDOW TUMBLING');
+      expect(res.transpiledCode).toContain('EMIT CHANGES');
     });
   });
 });
