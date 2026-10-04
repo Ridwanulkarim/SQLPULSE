@@ -68,6 +68,12 @@ export class ConfigAutoTuner {
       return this.tunePostgres(req, meta, ram, cores, conns, storage, workload);
     } else if (normalizedEngine === 'mysql' || normalizedEngine === 'mariadb') {
       return this.tuneMySQL(req, meta, ram, cores, conns, storage, workload);
+    } else if (normalizedEngine.includes('oracle') || normalizedEngine.includes('db2')) {
+      return this.tuneOracle(req, meta, ram, cores, conns, storage, workload);
+    } else if (normalizedEngine.includes('sqlserver') || normalizedEngine.includes('mssql') || normalizedEngine.includes('sql_server')) {
+      return this.tuneSqlServer(req, meta, ram, cores, conns, storage, workload);
+    } else if (normalizedEngine.includes('sqlite') || normalizedEngine.includes('turso') || normalizedEngine.includes('libsql')) {
+      return this.tuneSQLite(req, meta, ram, cores, conns, storage, workload);
     } else if (normalizedEngine === 'clickhouse') {
       return this.tuneClickHouse(req, meta, ram, cores, conns, storage, workload);
     } else if (normalizedEngine === 'redis' || normalizedEngine === 'keydb' || normalizedEngine === 'valkey') {
@@ -550,6 +556,170 @@ indices.memory.index_buffer_size: 20%
       expertTips: [
         'Set jvm.options: -Xms' + heapGb + 'g -Xmx' + heapGb + 'g for equal initial and maximum heap.',
         'Ensure vm.max_map_count is set to at least 262144 in /etc/sysctl.conf.',
+      ],
+    };
+  }
+
+  private tuneOracle(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
+    const sgaGb = +(ram * 0.60).toFixed(2);
+    const pgaGb = +(ram * 0.20).toFixed(2);
+    const processes = Math.max(100, Math.floor(conns * 1.2));
+    const sessions = Math.floor(processes * 1.5 + 24);
+
+    const config = `# =========================================================================
+# SQLPulse Production Config Auto-Tuner: Oracle Database 19c/21c/23c
+# Hardware: ${ram} GB RAM | ${cores} vCPUs | ${storage.toUpperCase()} Storage | ${workload.toUpperCase()}
+# File: init.ora / spfile
+# =========================================================================
+
+*.db_name='PROD'
+*.memory_target=0
+*.sga_target=${Math.floor(sgaGb * 1024)}M
+*.pga_aggregate_target=${Math.floor(pgaGb * 1024)}M
+*.processes=${processes}
+*.sessions=${sessions}
+*.open_cursors=1000
+*.db_block_size=8192
+*.filesystemio_options=SETALL
+*.disk_asynch_io=TRUE
+*.db_writer_processes=${Math.min(8, Math.max(2, Math.floor(cores / 4)))}
+*.parallel_max_servers=${cores * 4}
+*.cursor_sharing=EXACT
+*.undo_management=AUTO
+*.undo_retention=10800
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      configFileName: 'init.ora',
+      generatedConfigText: config,
+      sysctlConfigText: this.generateSysctl(ram, cores, conns),
+      limitsConfigText: this.generateLimits(),
+      ramAllocation: [
+        { label: 'System Global Area (SGA)', sizeGb: sgaGb, percentage: 60, color: '#DC2626', description: 'Buffer Cache, Shared Pool, Redo Log Buffer' },
+        { label: 'Program Global Area (PGA)', sizeGb: pgaGb, percentage: 20, color: '#F59E0B', description: 'Workareas for Sorting, Hashing, and Bitmap Operations' },
+        { label: 'Linux OS Kernel & Filesystem', sizeGb: +(ram * 0.20).toFixed(2), percentage: 20, color: '#10B981', description: 'HugePages and OS processes' },
+      ],
+      keyParameters: [
+        { param: 'sga_target', value: `${Math.floor(sgaGb * 1024)}M`, defaultVal: 'auto', category: 'memory', explanation: 'Total shared memory pool for data blocks, SQL parse tree cache, and redo buffer.' },
+        { param: 'pga_aggregate_target', value: `${Math.floor(pgaGb * 1024)}M`, defaultVal: 'auto', category: 'memory', explanation: 'Target memory allocated to session work areas for sorting and hash joins.' },
+        { param: 'filesystemio_options', value: 'SETALL', defaultVal: 'NONE', category: 'io', explanation: 'Enables asynchronous I/O and direct I/O simultaneously for optimal NVMe throughput.' },
+      ],
+      expertTips: [
+        'Configure Linux HugePages in `/etc/security/limits.conf` to eliminate TLB cache overhead for SGA allocations larger than 16GB.',
+        'Set `filesystemio_options = SETALL` on Linux systems using Ext4/XFS filesystems.',
+      ],
+    };
+  }
+
+  private tuneSqlServer(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
+    const maxServerMemoryMb = Math.floor(ram * 1024 * 0.80);
+    const minServerMemoryMb = Math.floor(ram * 1024 * 0.25);
+    const maxdop = Math.min(8, cores);
+    const costThreshold = 50;
+
+    const config = `-- =========================================================================
+-- SQLPulse Production Config Auto-Tuner: Microsoft SQL Server
+-- Hardware: ${ram} GB RAM | ${cores} vCPUs | ${storage.toUpperCase()} Storage | ${workload.toUpperCase()}
+-- =========================================================================
+
+EXEC sys.sp_configure N'show advanced options', 1;
+RECONFIGURE WITH OVERRIDE;
+GO
+
+-- 1. Buffer Pool Memory Caps (Preventing OS starvation)
+EXEC sys.sp_configure N'max server memory (MB)', ${maxServerMemoryMb};
+EXEC sys.sp_configure N'min server memory (MB)', ${minServerMemoryMb};
+GO
+
+-- 2. Parallelism Sizing
+EXEC sys.sp_configure N'max degree of parallelism', ${maxdop};
+EXEC sys.sp_configure N'cost threshold for parallelism', ${costThreshold};
+GO
+
+-- 3. Optimization Flags
+EXEC sys.sp_configure N'optimize for ad hoc workloads', 1;
+RECONFIGURE WITH OVERRIDE;
+GO
+
+-- 4. TempDB Sizing (Best Practice: 1 data file per CPU core up to 8)
+-- Check ALTER DATABASE tempdb ADD FILE syntax for multi-file striped tempdb.
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      configFileName: 'sqlserver_tuning.sql',
+      generatedConfigText: config,
+      sysctlConfigText: this.generateSysctl(ram, cores, conns),
+      limitsConfigText: this.generateLimits(),
+      ramAllocation: [
+        { label: 'SQL Server Buffer Pool', sizeGb: +(ram * 0.80).toFixed(2), percentage: 80, color: '#2563EB', description: 'Data pages, execution plan cache, and sort/hash memory' },
+        { label: 'OS & Thread Stack Overhead', sizeGb: +(ram * 0.20).toFixed(2), percentage: 20, color: '#10B981', description: 'Windows/Linux OS, CLR, thread stacks' },
+      ],
+      keyParameters: [
+        { param: 'max server memory (MB)', value: `${maxServerMemoryMb}`, defaultVal: '2147483647', category: 'memory', explanation: 'Upper bound on SQL Server buffer pool to prevent OS paging.' },
+        { param: 'cost threshold for parallelism', value: `${costThreshold}`, defaultVal: '5', category: 'cpu', explanation: 'Raises query cost threshold before SQL Server spawns parallel thread trees.' },
+        { param: 'max degree of parallelism', value: `${maxdop}`, defaultVal: '0', category: 'cpu', explanation: 'Caps MAXDOP to avoid CXPACKET thread coordination stalls.' },
+      ],
+      expertTips: [
+        'Set `optimize for ad hoc workloads = 1` to cache compiled plan stubs instead of full query plans on initial executions.',
+        'Grant the SQL Server Service Account `Perform Volume Maintenance Tasks` (Lock Pages in Memory - LPIM).',
+      ],
+    };
+  }
+
+  private tuneSQLite(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
+    const cacheSizeKb = Math.floor(ram * 1024 * 0.40 * 1024);
+    const mmapSizeMb = Math.min(2147483647, Math.floor(ram * 1024 * 0.50));
+
+    const config = `-- =========================================================================
+-- SQLPulse Production Config Auto-Tuner: SQLite 3
+-- Hardware: ${ram} GB RAM | ${cores} vCPUs | ${storage.toUpperCase()} Storage | ${workload.toUpperCase()}
+-- =========================================================================
+
+-- 1. Enable Write-Ahead Logging (Non-blocking concurrent readers + single writer)
+PRAGMA journal_mode = WAL;
+
+-- 2. Relax Disk Sync in WAL Mode (Safe from corruption, high write throughput)
+PRAGMA synchronous = NORMAL;
+
+-- 3. Dedicated Page Cache Allocation in RAM (-kibibytes)
+PRAGMA cache_size = -${cacheSizeKb};
+
+-- 4. Memory-Mapped I/O Allocation
+PRAGMA mmap_size = ${mmapSizeMb * 1024 * 1024};
+
+-- 5. In-Memory Temporary Storage for Sorts & Indexes
+PRAGMA temp_store = MEMORY;
+
+-- 6. Enforce Referential Integrity & Optimization
+PRAGMA foreign_keys = ON;
+PRAGMA page_size = 4096;
+PRAGMA busy_timeout = 5000;
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      configFileName: 'sqlite_tuning.sql',
+      generatedConfigText: config,
+      sysctlConfigText: this.generateSysctl(ram, cores, conns),
+      limitsConfigText: this.generateLimits(),
+      ramAllocation: [
+        { label: 'SQLite Page Cache & WAL Pool', sizeGb: +(ram * 0.40).toFixed(2), percentage: 40, color: '#0EA5E9', description: 'In-memory B-Tree pages' },
+        { label: 'OS Page Cache & mmap Space', sizeGb: +(ram * 0.50).toFixed(2), percentage: 50, color: '#10B981', description: 'Zero-copy kernel file mapping' },
+        { label: 'Application & Process Memory', sizeGb: +(ram * 0.10).toFixed(2), percentage: 10, color: '#F59E0B', description: 'Process runtime and memory temporary store' },
+      ],
+      keyParameters: [
+        { param: 'PRAGMA journal_mode', value: 'WAL', defaultVal: 'DELETE', category: 'io', explanation: 'Allows concurrent read operations without waiting on active transaction writers.' },
+        { param: 'PRAGMA synchronous', value: 'NORMAL', defaultVal: 'FULL', category: 'io', explanation: 'Avoids excessive fsync calls in WAL mode while remaining ACID safe.' },
+        { param: 'PRAGMA cache_size', value: `-${cacheSizeKb}`, defaultVal: '-2000', category: 'memory', explanation: 'Increases page cache allocation to retain active hot indexes in RAM.' },
+      ],
+      expertTips: [
+        'Always set `PRAGMA synchronous = NORMAL;` when using WAL mode for a 3-5x write throughput improvement.',
+        'Use `PRAGMA busy_timeout = 5000;` to gracefully wait on file locks instead of immediately failing with `SQLITE_BUSY`.',
       ],
     };
   }

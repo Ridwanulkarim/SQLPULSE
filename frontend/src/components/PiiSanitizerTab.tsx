@@ -88,7 +88,7 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
             PII Data Anonymizer &amp; Staging Sanitizer
           </h2>
           <p className="text-xs sm:text-sm text-zinc-600 mt-1 max-w-3xl">
-            Automatically detect personally identifiable information (Emails, Cards, SSNs, Passwords) in {engineMeta.name}. Export zero-leakage `pg_dump_anon` rules, deterministic relational fakers, and automated CI/CD staging sync scripts.
+            Automatically detect personally identifiable information (Emails, Cards, SSNs, Passwords) in {engineMeta.name}. Export zero-leakage masking directives, deterministic relational fakers, and automated CI/CD staging sync scripts.
           </p>
         </div>
       </div>
@@ -102,6 +102,34 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
             selectedEngine={selectedEngine}
             onSelectEngine={onSelectEngine}
           />
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {[
+              { id: 'postgres', label: 'PostgreSQL', icon: '🐘' },
+              { id: 'mysql', label: 'MySQL', icon: '🐬' },
+              { id: 'oracle', label: 'Oracle', icon: '🔴' },
+              { id: 'sqlserver', label: 'SQL Server', icon: '🪟' },
+              { id: 'mongodb', label: 'MongoDB', icon: '🍃' },
+              { id: 'redis', label: 'Redis', icon: '⚡' },
+              { id: 'clickhouse', label: 'ClickHouse', icon: '🟡' },
+              { id: 'sqlite', label: 'SQLite', icon: '🪶' },
+              { id: 'snowflake', label: 'Snowflake', icon: '❄️' },
+              { id: 'cassandra', label: 'Cassandra', icon: '👁️' },
+            ].map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onSelectEngine(preset.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                  selectedEngine.toLowerCase().includes(preset.id)
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <span>{preset.icon}</span>
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-purple-100">
@@ -216,7 +244,7 @@ export const PiiSanitizerTab: React.FC<PiiSanitizerTabProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                   <FileCode className="w-4 h-4 text-purple-600" />
-                  PostgreSQL Anonymizer Rules (pg_dump_anon)
+                  {result.engineName} Anonymizer Rules &amp; Directives
                 </h4>
                 <button
                   type="button"

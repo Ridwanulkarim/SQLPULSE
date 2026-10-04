@@ -137,6 +137,38 @@ export const CdcOutboxTab: React.FC<CdcOutboxTabProps> = ({
             </select>
           </div>
         </div>
+
+        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-violet-100">
+          {[
+            { id: 'postgres', label: 'PostgreSQL', icon: '🐘' },
+            { id: 'mysql', label: 'MySQL', icon: '🐬' },
+            { id: 'oracle', label: 'Oracle', icon: '🔴' },
+            { id: 'sqlserver', label: 'SQL Server', icon: '🪟' },
+            { id: 'mongodb', label: 'MongoDB', icon: '🍃' },
+            { id: 'redis', label: 'Redis', icon: '⚡' },
+            { id: 'clickhouse', label: 'ClickHouse', icon: '🟡' },
+            { id: 'sqlite', label: 'SQLite', icon: '🪶' },
+            { id: 'snowflake', label: 'Snowflake', icon: '❄️' },
+            { id: 'cassandra', label: 'Cassandra', icon: '👁️' },
+          ].map(preset => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => {
+                setSelectedEngine(preset.id);
+                onSelectEngine?.(preset.id as DatabaseEngine);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                selectedEngine.toLowerCase().includes(preset.id)
+                  ? 'bg-violet-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>{preset.icon}</span>
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {result && (

@@ -17,6 +17,7 @@ import { QueryRewriterAnalyzer } from './query-rewriter';
 import { analyzeSchemaDiff } from './schema-diff';
 import { auditProductionReadiness } from './production-readiness';
 import { simulateChaosScenario } from './chaos-simulator';
+import { generateCdcOutboxArchitecture } from './cdc-outbox';
 
 describe('Enterprise Multi-Engine Database Features Test Suite', () => {
   const transpiler = new SqlTranspiler();
@@ -589,6 +590,170 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     expect(clickhouse.faultType).toBe('DISK_OUT_OF_SPACE');
     expect(clickhouse.clusterTopologySummary.failoverManager).toContain('Keeper');
     expect(clickhouse.recommendedConfigPatch).toContain('keeper.xml');
+  });
+
+  test('27. SecurityRbacAnalyzer produces authentic architecture-specific RLS, DDM, and roles', () => {
+    // Oracle: VPD & DBMS_RLS
+    const oracle = securityRbacAnalyzer.analyze({ engine: 'oracle', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(oracle.engineName).toBe('Oracle');
+    expect(oracle.rlsPolicyScript).toContain('DBMS_RLS.ADD_POLICY');
+    expect(oracle.dataMaskingScript).toContain('DBMS_REDACT.ADD_POLICY');
+    expect(oracle.tlsHardeningConfig).toContain('SQLNET.ENCRYPTION_SERVER');
+
+    // SQL Server: Security.fn_tenantSecurityPredicate & Dynamic Data Masking
+    const mssql = securityRbacAnalyzer.analyze({ engine: 'sqlserver', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(mssql.engineName).toBe('Microsoft SQL Server');
+    expect(mssql.rlsPolicyScript).toContain('CREATE SECURITY POLICY');
+    expect(mssql.dataMaskingScript).toContain('ADD MASKED WITH (FUNCTION = \'email()\')');
+    expect(mssql.tlsHardeningConfig).toContain('DATABASE ENCRYPTION KEY');
+
+    // Snowflake: ROW ACCESS POLICY & MASKING POLICY
+    const snowflake = securityRbacAnalyzer.analyze({ engine: 'snowflake', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(snowflake.engineName).toBe('Snowflake');
+    expect(snowflake.rlsPolicyScript).toContain('CREATE OR REPLACE ROW ACCESS POLICY');
+    expect(snowflake.dataMaskingScript).toContain('CREATE OR REPLACE MASKING POLICY');
+
+    // ClickHouse: ROW POLICY
+    const clickhouse = securityRbacAnalyzer.analyze({ engine: 'clickhouse', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(clickhouse.engineName).toBe('ClickHouse');
+    expect(clickhouse.rlsPolicyScript).toContain('CREATE ROW POLICY');
+
+    // Redis: ACL SETUSER
+    const redis = securityRbacAnalyzer.analyze({ engine: 'redis', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(redis.engineName).toBe('Redis');
+    expect(redis.roles[0].ddlGrant).toContain('ACL SETUSER');
+
+    // SQLite: Views & Triggers
+    const sqlite = securityRbacAnalyzer.analyze({ engine: 'sqlite', tableName: 'customers', tenantColumn: 'tenant_id' });
+    expect(sqlite.engineName).toBe('SQLite');
+    expect(sqlite.rlsPolicyScript).toContain('CREATE TRIGGER IF NOT EXISTS trg_enforce_tenant_insert');
+  });
+
+  test('28. PiiSanitizerAnalyzer generates authentic sanitization scripts and masked views for non-Postgres engines', () => {
+    // MySQL
+    const mysql = piiSanitizerAnalyzer.sanitize({ engine: 'mysql', tableName: 'customers' });
+    expect(mysql.engineName).toBe('MySQL');
+    expect(mysql.inPlaceScrubDdl).toContain('OPTIMIZE TABLE `customers`');
+    expect(mysql.inPlaceScrubDdl).toContain('SHA2');
+    expect(mysql.stagingSyncBashScript).toContain('mysqldump');
+
+    // Oracle
+    const oracle = piiSanitizerAnalyzer.sanitize({ engine: 'oracle', tableName: 'customers' });
+    expect(oracle.engineName).toBe('Oracle');
+    expect(oracle.inPlaceScrubDdl).toContain('STANDARD_HASH');
+    expect(oracle.inPlaceScrubDdl).toContain('SHRINK SPACE');
+    expect(oracle.stagingSyncBashScript).toContain('expdp');
+
+    // SQL Server
+    const mssql = piiSanitizerAnalyzer.sanitize({ engine: 'sqlserver', tableName: 'customers' });
+    expect(mssql.engineName).toBe('Microsoft SQL Server');
+    expect(mssql.inPlaceScrubDdl).toContain('HASHBYTES');
+    expect(mssql.stagingSyncBashScript).toContain('bcp');
+
+    // Snowflake
+    const snowflake = piiSanitizerAnalyzer.sanitize({ engine: 'snowflake', tableName: 'customers' });
+    expect(snowflake.engineName).toBe('Snowflake');
+    expect(snowflake.inPlaceScrubDdl).toContain('CLONE PROD_DB.PUBLIC.CUSTOMERS');
+
+    // SQLite
+    const sqlite = piiSanitizerAnalyzer.sanitize({ engine: 'sqlite', tableName: 'customers' });
+    expect(sqlite.engineName).toBe('SQLite');
+    expect(sqlite.inPlaceScrubDdl).toContain('VACUUM;');
+  });
+
+  test('29. ReplicationTopologyAnalyzer dynamically assigns authentic ports and HA mechanisms across 10 engines', () => {
+    // Oracle port 1521 & Data Guard FSFO
+    const oracle = replicationAnalyzer.analyze({ engine: 'oracle' });
+    expect(oracle.failoverMechanism).toContain('Data Guard');
+    expect(oracle.topologyDiagramMermaid).toContain('PORT 1521');
+    expect(oracle.haConfigSnippet).toContain('DGMGRL');
+
+    // SQL Server port 1433 & Always On Availability Groups
+    const mssql = replicationAnalyzer.analyze({ engine: 'sqlserver' });
+    expect(mssql.failoverMechanism).toContain('Always On Availability Groups');
+    expect(mssql.topologyDiagramMermaid).toContain('PORT 1433');
+    expect(mssql.haConfigSnippet).toContain('CREATE AVAILABILITY GROUP');
+
+    // MySQL port 3306 & Group Replication
+    const mysql = replicationAnalyzer.analyze({ engine: 'mysql' });
+    expect(mysql.failoverMechanism).toContain('Group Replication');
+    expect(mysql.topologyDiagramMermaid).toContain('PORT 3306');
+
+    // Redis port 6379 & Sentinel
+    const redis = replicationAnalyzer.analyze({ engine: 'redis' });
+    expect(redis.failoverMechanism).toContain('Sentinel');
+    expect(redis.topologyDiagramMermaid).toContain('PORT 6379');
+
+    // ClickHouse port 8123 & Keeper
+    const ch = replicationAnalyzer.analyze({ engine: 'clickhouse' });
+    expect(ch.failoverMechanism).toContain('ClickHouse Keeper');
+    expect(ch.topologyDiagramMermaid).toContain('PORT 8123');
+  });
+
+  test('30. DisasterRecoveryCalculator generates authentic PITR runbooks for Oracle, SQL Server, and SQLite', () => {
+    // Oracle RMAN runbook
+    const oracle = drCalculator.calculate({ engine: 'oracle', dbSizeGb: 200, dailyChangePercent: 5, networkBandwidthMbps: 1000, diskThroughputMbSec: 500, backupStrategy: 'daily_full_plus_wal_cdc' });
+    expect(oracle.restoreRunbookMarkdown).toContain('rman target /');
+    expect(oracle.restoreRunbookMarkdown).toContain('RESETLOGS');
+    expect(oracle.backupScriptBash).toContain('BACKUP AS COMPRESSED BACKUPSET');
+
+    // SQL Server STOPAT runbook
+    const mssql = drCalculator.calculate({ engine: 'sqlserver', dbSizeGb: 200, dailyChangePercent: 5, networkBandwidthMbps: 1000, diskThroughputMbSec: 500, backupStrategy: 'daily_full_plus_wal_cdc' });
+    expect(mssql.restoreRunbookMarkdown).toContain('STOPAT = \'2026-10-03 12:00:00\'');
+    expect(mssql.restoreRunbookMarkdown).toContain('RESTORE DATABASE');
+
+    // SQLite Litestream runbook
+    const sqlite = drCalculator.calculate({ engine: 'sqlite', dbSizeGb: 20, dailyChangePercent: 5, networkBandwidthMbps: 1000, diskThroughputMbSec: 500, backupStrategy: 'daily_full_plus_wal_cdc' });
+    expect(sqlite.restoreRunbookMarkdown).toContain('litestream restore');
+  });
+
+  test('31. generateCdcOutboxArchitecture produces authentic DDL and connectors across engines', () => {
+    // Oracle SYS_GUID
+    const oracle = generateCdcOutboxArchitecture({ engine: 'oracle', sourceTable: 'orders' });
+    expect(oracle.outboxDdl).toContain('SYS_GUID()');
+    expect(oracle.debeziumConnectorConfigJson).toContain('OracleConnector');
+
+    // SQL Server NEWID
+    const mssql = generateCdcOutboxArchitecture({ engine: 'sqlserver', sourceTable: 'orders' });
+    expect(mssql.outboxDdl).toContain('NEWID()');
+    expect(mssql.debeziumConnectorConfigJson).toContain('SqlServerConnector');
+
+    // MongoDB Change Streams
+    const mongo = generateCdcOutboxArchitecture({ engine: 'mongodb', sourceTable: 'orders' });
+    expect(mongo.outboxDdl).toContain('db.createCollection("outbox_events"');
+    expect(mongo.debeziumConnectorConfigJson).toContain('MongoDbConnector');
+
+    // Snowflake Streams & Tasks
+    const snowflake = generateCdcOutboxArchitecture({ engine: 'snowflake', sourceTable: 'orders' });
+    expect(snowflake.outboxDdl).toContain('CREATE OR REPLACE STREAM orders_cdc_stream');
+    expect(snowflake.outboxDdl).toContain('CREATE OR REPLACE TASK');
+
+    // ClickHouse Kafka Engine
+    const clickhouse = generateCdcOutboxArchitecture({ engine: 'clickhouse', sourceTable: 'orders' });
+    expect(clickhouse.outboxDdl).toContain('ENGINE = Kafka');
+
+    // Redis Streams
+    const redis = generateCdcOutboxArchitecture({ engine: 'redis', sourceTable: 'orders' });
+    expect(redis.outboxDdl).toContain('XADD outbox_stream');
+
+    // SQLite
+    const sqlite = generateCdcOutboxArchitecture({ engine: 'sqlite', sourceTable: 'orders' });
+    expect(sqlite.outboxDdl).toContain('hex(randomblob(16))');
+  });
+
+  test('32. ConfigAutoTuner tunes Oracle, SQL Server, and SQLite with dedicated memory parameters', () => {
+    const oracle = configTuner.tune({ engine: 'oracle', ramGb: 64, cpuCores: 16, storageType: 'nvme_ssd', workloadType: 'oltp_web', maxConnections: 500 });
+    expect(oracle.generatedConfigText).toContain('sga_target');
+    expect(oracle.generatedConfigText).toContain('pga_aggregate_target');
+    expect(oracle.configFileName).toBe('init.ora');
+
+    const mssql = configTuner.tune({ engine: 'sqlserver', ramGb: 64, cpuCores: 16, storageType: 'nvme_ssd', workloadType: 'oltp_web', maxConnections: 500 });
+    expect(mssql.generatedConfigText).toContain('max server memory (MB)');
+    expect(mssql.configFileName).toBe('sqlserver_tuning.sql');
+
+    const sqlite = configTuner.tune({ engine: 'sqlite', ramGb: 16, cpuCores: 4, storageType: 'nvme_ssd', workloadType: 'oltp_web', maxConnections: 50 });
+    expect(sqlite.generatedConfigText).toContain('PRAGMA journal_mode = WAL;');
+    expect(sqlite.generatedConfigText).toContain('PRAGMA cache_size');
   });
 });
 
