@@ -677,13 +677,19 @@ ORDER BY n_dead_tup DESC;`;
       ];
     }
 
-    const totalWastedStorageFormatted = `${estimatedDiskFreedGb} GB`;
+    const totalWastedStorageFormatted = estimatedDiskFreedGb >= 1000
+      ? `${(estimatedDiskFreedGb / 1024).toFixed(2)} TB`
+      : `${estimatedDiskFreedGb} GB`;
+
+    const totalTableSizeFormatted = sizeGb >= 1000
+      ? `${(sizeGb / 1024).toFixed(1)} TB`
+      : `${sizeGb} GB`;
 
     return {
       engine: meta.id,
       engineName: engineName || meta.name,
       tableName: table,
-      totalTableSizeFormatted: `${sizeGb} GB`,
+      totalTableSizeFormatted,
       totalWastedStorageFormatted,
       averageBloatPercentage: deadPct,
       findings,

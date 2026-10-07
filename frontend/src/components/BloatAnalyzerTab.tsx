@@ -26,17 +26,39 @@ interface BloatAnalyzerTabProps {
   onSelectEngine: (engine: DatabaseEngine) => void;
 }
 
+interface BloatEngineProfile {
+  tableName: string;
+  totalTableSizeGb: number;
+  deadTuplePercentage: number;
+  avgDailyUpdates: number;
+  targetIoSpeedMbSec: number;
+  footprintLabel: string;
+}
+
+const ENGINE_PROFILES: Record<string, BloatEngineProfile> = {
+  postgresql: { tableName: 'orders', totalTableSizeGb: 120, deadTuplePercentage: 38, avgDailyUpdates: 500000, targetIoSpeedMbSec: 75, footprintLabel: '120 GB' },
+  mysql: { tableName: 'customer_orders', totalTableSizeGb: 85, deadTuplePercentage: 32, avgDailyUpdates: 400000, targetIoSpeedMbSec: 80, footprintLabel: '85 GB' },
+  oracle: { tableName: 'SALES_TRANSACTIONS', totalTableSizeGb: 250, deadTuplePercentage: 28, avgDailyUpdates: 650000, targetIoSpeedMbSec: 100, footprintLabel: '250 GB' },
+  sqlserver: { tableName: 'SalesOrders', totalTableSizeGb: 140, deadTuplePercentage: 35, avgDailyUpdates: 450000, targetIoSpeedMbSec: 90, footprintLabel: '140 GB' },
+  sqlite: { tableName: 'user_sessions', totalTableSizeGb: 3.5, deadTuplePercentage: 25, avgDailyUpdates: 50000, targetIoSpeedMbSec: 40, footprintLabel: '3.5 GB' },
+  clickhouse: { tableName: 'events_distributed', totalTableSizeGb: 1200, deadTuplePercentage: 22, avgDailyUpdates: 2500000, targetIoSpeedMbSec: 250, footprintLabel: '1.2 TB' },
+  mongodb: { tableName: 'orders_collection', totalTableSizeGb: 95, deadTuplePercentage: 34, avgDailyUpdates: 600000, targetIoSpeedMbSec: 85, footprintLabel: '95 GB' },
+  cassandra: { tableName: 'sensor_timeseries', totalTableSizeGb: 450, deadTuplePercentage: 40, avgDailyUpdates: 1200000, targetIoSpeedMbSec: 120, footprintLabel: '450 GB' },
+  redis: { tableName: 'session_cache', totalTableSizeGb: 12, deadTuplePercentage: 20, avgDailyUpdates: 3000000, targetIoSpeedMbSec: 200, footprintLabel: '12 GB' },
+  snowflake: { tableName: 'FACT_TRANSACTIONS', totalTableSizeGb: 2800, deadTuplePercentage: 18, avgDailyUpdates: 5000000, targetIoSpeedMbSec: 350, footprintLabel: '2.8 TB' },
+};
+
 const POPULAR_ENGINES = [
-  { id: 'postgresql', label: 'PostgreSQL' },
-  { id: 'mysql', label: 'MySQL' },
-  { id: 'oracle', label: 'Oracle' },
-  { id: 'sqlserver', label: 'SQL Server' },
-  { id: 'sqlite', label: 'SQLite' },
-  { id: 'clickhouse', label: 'ClickHouse' },
-  { id: 'mongodb', label: 'MongoDB' },
-  { id: 'cassandra', label: 'Cassandra' },
-  { id: 'redis', label: 'Redis' },
-  { id: 'snowflake', label: 'Snowflake' },
+  { id: 'postgresql', label: 'PostgreSQL', footprint: '120 GB' },
+  { id: 'mysql', label: 'MySQL', footprint: '85 GB' },
+  { id: 'oracle', label: 'Oracle', footprint: '250 GB' },
+  { id: 'sqlserver', label: 'SQL Server', footprint: '140 GB' },
+  { id: 'sqlite', label: 'SQLite', footprint: '3.5 GB' },
+  { id: 'clickhouse', label: 'ClickHouse', footprint: '1.2 TB' },
+  { id: 'mongodb', label: 'MongoDB', footprint: '95 GB' },
+  { id: 'cassandra', label: 'Cassandra', footprint: '450 GB' },
+  { id: 'redis', label: 'Redis', footprint: '12 GB' },
+  { id: 'snowflake', label: 'Snowflake', footprint: '2.8 TB' },
 ];
 
 export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
@@ -53,6 +75,42 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BloatAnalyzeResult | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Automatically update realistic table size, table name, and bloat profile when switching engines
+  useEffect(() => {
+    const norm = selectedEngine.toLowerCase();
+    let profile: BloatEngineProfile | undefined;
+
+    if (norm.includes('sqlite') || norm.includes('turso')) {
+      profile = ENGINE_PROFILES.sqlite;
+    } else if (norm.includes('redis') || norm.includes('valkey') || norm.includes('keydb')) {
+      profile = ENGINE_PROFILES.redis;
+    } else if (norm.includes('click') || norm.includes('duck')) {
+      profile = ENGINE_PROFILES.clickhouse;
+    } else if (norm.includes('snow') || norm.includes('bigquery') || norm.includes('redshift')) {
+      profile = ENGINE_PROFILES.snowflake;
+    } else if (norm.includes('cassandra') || norm.includes('scylla') || norm.includes('hbase')) {
+      profile = ENGINE_PROFILES.cassandra;
+    } else if (norm.includes('oracle') || norm.includes('db2')) {
+      profile = ENGINE_PROFILES.oracle;
+    } else if (norm.includes('sqlserver') || norm.includes('mssql')) {
+      profile = ENGINE_PROFILES.sqlserver;
+    } else if (norm.includes('mysql') || norm.includes('maria')) {
+      profile = ENGINE_PROFILES.mysql;
+    } else if (norm.includes('mongo') || norm.includes('document')) {
+      profile = ENGINE_PROFILES.mongodb;
+    } else {
+      profile = ENGINE_PROFILES.postgresql;
+    }
+
+    if (profile) {
+      setTableName(profile.tableName);
+      setTotalTableSizeGb(profile.totalTableSizeGb);
+      setDeadTuplePercentage(profile.deadTuplePercentage);
+      setAvgDailyUpdates(profile.avgDailyUpdates);
+      setTargetIoSpeedMbSec(profile.targetIoSpeedMbSec);
+    }
+  }, [selectedEngine]);
 
   const handleAnalyze = async (forcedSimulate?: boolean) => {
     setIsLoading(true);
@@ -122,13 +180,14 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
                 key={eng.id}
                 type="button"
                 onClick={() => onSelectEngine(eng.id as DatabaseEngine)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
                   selectedEngine.toLowerCase().includes(eng.id)
                     ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
                     : 'bg-amber-900/60 text-amber-200 hover:bg-amber-800/80 border border-amber-700/50'
                 }`}
               >
-                {eng.label}
+                <span>{eng.label}</span>
+                <span className="text-[10px] opacity-75 font-mono">({eng.footprint})</span>
               </button>
             ))}
           </div>
