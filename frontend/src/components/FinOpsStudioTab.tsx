@@ -14,6 +14,8 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { calculateFinOps } from '../services/api';
 import { FinOpsResult, CloudProviderType, DATABASE_CATALOG } from '../types';
 
+import { resolveFinOpsPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface FinOpsStudioTabProps {
   selectedEngine: string;
   onSelectEngine: (engine: string) => void;
@@ -31,6 +33,17 @@ export const FinOpsStudioTab: React.FC<FinOpsStudioTabProps> = ({
   const [writesM, setWritesM] = useState<number>(15);
   const [isHa, setIsHa] = useState<boolean>(true);
   const [backupRetentionDays, setBackupRetentionDays] = useState<number>(30);
+
+  // Dynamically update cloud database finops sizing when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolveFinOpsPreset(selectedEngine);
+    setProvider(preset.provider);
+    setDbSizeGb(preset.dbSizeGb);
+    setVCpuCount(preset.vCpuCount);
+    setRamGb(preset.ramGb);
+    setReadsM(preset.readsM);
+    setWritesM(preset.writesM);
+  }, [selectedEngine]);
 
   const [result, setResult] = useState<FinOpsResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);

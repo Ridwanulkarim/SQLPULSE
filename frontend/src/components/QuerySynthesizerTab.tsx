@@ -107,8 +107,37 @@ export const QuerySynthesizerTab: React.FC<QuerySynthesizerTabProps> = ({
   };
 
   useEffect(() => {
-    handleSynthesize(prompt, targetEngine, domainPreset);
-  }, [targetEngine, domainPreset]);
+    const norm = targetEngine.toLowerCase();
+    let newPrompt = prompt;
+    let newDomain = domainPreset;
+
+    if (norm.includes('pinecone') || norm.includes('milvus') || norm.includes('qdrant')) {
+      newPrompt = 'Search top 10 document embeddings matching query with category and published_year metadata filters';
+      newDomain = 'vector_rag';
+    } else if (norm.includes('timescale') || norm.includes('influx')) {
+      newPrompt = 'Aggregate 1-hour time_bucket intervals calculating average CPU and P95 latency for online devices over last 24 hours';
+      newDomain = 'iot_timeseries';
+    } else if (norm.includes('mongo')) {
+      newPrompt = 'MongoDB aggregation pipeline for completed orders in last 90 days grouped by customer with total spent';
+      newDomain = 'ecommerce';
+    } else if (norm.includes('neo4j')) {
+      newPrompt = 'Find customers who placed orders for database products with total spend and purchase count in Cypher';
+      newDomain = 'social_network';
+    } else if (norm.includes('redis')) {
+      newPrompt = 'Redis leaderboard query for top 10 spending customers using ZREVRANGE and pipelined hash lookups';
+      newDomain = 'ecommerce';
+    } else if (norm.includes('click') || norm.includes('duck')) {
+      newPrompt = 'Aggregate hourly request metrics and distinct user sessions over the last 30 days grouped by country';
+      newDomain = 'fintech_iot';
+    } else {
+      newPrompt = 'Find top 10 customers with highest purchase volume in the last 90 days who have placed at least 3 orders';
+      newDomain = 'ecommerce';
+    }
+
+    setPrompt(newPrompt);
+    setDomainPreset(newDomain);
+    handleSynthesize(newPrompt, targetEngine, newDomain);
+  }, [targetEngine]);
 
   const applySamplePrompt = (sample: typeof samplePrompts[0]) => {
     setPrompt(sample.text);

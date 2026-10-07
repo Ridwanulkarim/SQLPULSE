@@ -4,6 +4,8 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { generateSecurityRbac } from '../services/api';
 import { ShieldCheck, Copy, Check, RefreshCw, Lock, Key, EyeOff, ShieldAlert, UserCheck, AlertTriangle } from 'lucide-react';
 
+import { resolveSecurityPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface SecurityRbacTabProps {
   selectedEngine: DatabaseEngine;
   onSelectEngine: (engine: DatabaseEngine) => void;
@@ -13,6 +15,7 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
   selectedEngine,
   onSelectEngine,
 }) => {
+  const [activeCategory, setActiveCategory] = useState<string>('top_ranked');
   const [tableName, setTableName] = useState('customers');
   const [tenantColumn, setTenantColumn] = useState('tenant_id');
   const [enforceTls, setEnforceTls] = useState(true);
@@ -20,6 +23,13 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SecurityRbacResult | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Dynamically update realistic security parameters when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolveSecurityPreset(selectedEngine);
+    setTableName(preset.tableName);
+    setTenantColumn(preset.tenantColumn);
+  }, [selectedEngine]);
 
   const handleGenerate = async () => {
     setIsLoading(true);
@@ -49,7 +59,22 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const engineMeta = DATABASE_CATALOG.find(db => db.id === selectedEngine) || { name: selectedEngine, icon: '🗄️' };
+  const engineMeta = getEngineMetadataSafe(selectedEngine);
+
+  const categoryPills = [
+    { id: 'top_ranked', label: '🏆 Top Ranked' },
+    { id: 'relational', label: '🏛️ Relational (SQL)' },
+    { id: 'olap', label: '📊 Columnar & OLAP' },
+    { id: 'document', label: '📄 Document NoSQL' },
+    { id: 'wide_column', label: '📦 Wide-Column' },
+    { id: 'graph', label: '🕸️ Graph DBs' },
+    { id: 'baas_embedded', label: '🚀 Embedded / Edge' },
+  ];
+
+  const quickEngines = DATABASE_CATALOG.filter((db) => {
+    if (activeCategory === 'top_ranked') return db.rank && db.rank <= 12;
+    return db.category === activeCategory;
+  }).slice(0, 10);
 
   return (
     <div className="space-y-6 font-sans">
@@ -69,8 +94,54 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
             Database RBAC, Dynamic PII Masking &amp; Row-Level Security (RLS)
           </h2>
           <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-3xl">
-            Generate least-privilege roles, multi-tenant Row-Level Security isolation policies, dynamic PII masking views, and TLS 1.3 / TDE encryption for {engineMeta.name}.
+            Generate least-privilege roles, multi-tenant Row-Level Security isolation policies, dynamic PII masking views, and TLS 1.3 / TDE encryption for <span className="text-emerald-300 font-bold">{engineMeta.name}</span> across all {DATABASE_CATALOG.length} supported models.
           </p>
+
+          {/* Category Filter & Quick Engine Pills */}
+          <div className="mt-4 pt-3 border-t border-emerald-800/40 space-y-2.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] text-emerald-300/90 font-bold uppercase tracking-wider shrink-0 mr-1">
+                Security Profiles:
+              </span>
+              {categoryPills.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeCategory === cat.id
+                      ? 'bg-emerald-400 text-slate-950 shadow-sm'
+                      : 'bg-emerald-900/50 text-emerald-200 hover:bg-emerald-800/70 border border-emerald-700/40'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-emerald-300/70 font-semibold uppercase tracking-wider mr-1">
+                Quick Models:
+              </span>
+              {quickEngines.map((eng) => {
+                const isSelected = selectedEngine.toLowerCase() === eng.id.toLowerCase();
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => onSelectEngine(eng.id as DatabaseEngine)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-emerald-400 text-slate-950 shadow-md font-bold'
+                        : 'bg-emerald-950/70 text-emerald-100 hover:bg-emerald-900 border border-emerald-700/40'
+                    }`}
+                  >
+                    <span>{eng.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -83,34 +154,6 @@ export const SecurityRbacTab: React.FC<SecurityRbacTabProps> = ({
             selectedEngine={selectedEngine}
             onSelectEngine={onSelectEngine}
           />
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
-            {[
-              { id: 'postgres', label: 'PostgreSQL', icon: '🐘' },
-              { id: 'mysql', label: 'MySQL', icon: '🐬' },
-              { id: 'oracle', label: 'Oracle', icon: '🔴' },
-              { id: 'sqlserver', label: 'SQL Server', icon: '🪟' },
-              { id: 'mongodb', label: 'MongoDB', icon: '🍃' },
-              { id: 'redis', label: 'Redis', icon: '⚡' },
-              { id: 'clickhouse', label: 'ClickHouse', icon: '🟡' },
-              { id: 'sqlite', label: 'SQLite', icon: '🪶' },
-              { id: 'snowflake', label: 'Snowflake', icon: '❄️' },
-              { id: 'cassandra', label: 'Cassandra', icon: '👁️' },
-            ].map(preset => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => onSelectEngine(preset.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                  selectedEngine.toLowerCase().includes(preset.id)
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <span>{preset.icon}</span>
-                <span>{preset.label}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-purple-100">

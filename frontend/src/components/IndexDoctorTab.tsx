@@ -84,8 +84,31 @@ CREATE INDEX idx_users_is_active ON users (is_active);`
   };
 
   useEffect(() => {
-    runAudit(tableName, rawDdl, selectedEngine);
-  }, [selectedEngine, tableName]);
+    const norm = selectedEngine.toLowerCase();
+    let newTable = tableName;
+    let newDdl = rawDdl;
+
+    if (norm.includes('mysql') || norm.includes('maria')) {
+      newTable = 'invoices';
+      newDdl = `CREATE INDEX idx_inv_account ON invoices (account_id);\nCREATE INDEX idx_inv_account_status ON invoices (account_id, status);\nCREATE INDEX idx_inv_account_due ON invoices (account_id, due_date);\nCREATE INDEX idx_inv_status_only ON invoices (status);`;
+    } else if (norm.includes('oracle') || norm.includes('db2')) {
+      newTable = 'USERS';
+      newDdl = `CREATE INDEX IDX_USERS_ORG ON USERS (ORGANIZATION_ID);\nCREATE INDEX IDX_USERS_ORG_ROLE ON USERS (ORGANIZATION_ID, ROLE);\nCREATE INDEX IDX_USERS_IS_ACTIVE ON USERS (IS_ACTIVE);`;
+    } else if (norm.includes('sqlserver') || norm.includes('mssql')) {
+      newTable = 'SalesOrders';
+      newDdl = `CREATE NONCLUSTERED INDEX IX_SalesOrders_Customer ON SalesOrders (CustomerID);\nCREATE NONCLUSTERED INDEX IX_SalesOrders_Customer_Status ON SalesOrders (CustomerID, Status);\nCREATE NONCLUSTERED INDEX IX_SalesOrders_OrderDate ON SalesOrders (OrderDate DESC);`;
+    } else if (norm.includes('mongo') || norm.includes('document')) {
+      newTable = 'orders';
+      newDdl = `db.orders.createIndex({ customer_id: 1 });\ndb.orders.createIndex({ customer_id: 1, created_at: -1 });\ndb.orders.createIndex({ status: 1, customer_id: 1 });`;
+    } else {
+      newTable = 'orders';
+      newDdl = `CREATE INDEX idx_orders_customer_id ON orders (customer_id);\nCREATE INDEX idx_orders_customer_and_created ON orders (customer_id, created_at);\nCREATE INDEX idx_orders_status_and_user ON orders (status, customer_id);\nCREATE INDEX idx_orders_tenant_status ON orders (tenant_id, status);\nCREATE INDEX idx_orders_tenant_only ON orders (tenant_id);\nCREATE INDEX idx_orders_created_at_desc ON orders (created_at DESC);`;
+    }
+
+    setTableName(newTable);
+    setRawDdl(newDdl);
+    runAudit(newTable, newDdl, selectedEngine);
+  }, [selectedEngine]);
 
   const handleApplyPreset = (p: typeof indexPresets[0]) => {
     onSelectEngine(p.engine);

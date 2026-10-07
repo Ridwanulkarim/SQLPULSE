@@ -47,7 +47,26 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
   };
 
   useEffect(() => {
-    handleAdvise(undefined, queryText, selectedEngine);
+    const norm = selectedEngine.toLowerCase();
+    const meta = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
+    let sample = queryText;
+    if (meta.category === 'document' || norm.includes('mongo')) {
+      sample = `// MongoDB: $where executes Javascript engine for every doc, disabling indexes\ndb.users.find({ $where: "this.credits > 100 && this.status == 'active'" }).skip(20000);`;
+    } else if (meta.category === 'keyvalue' || norm.includes('redis')) {
+      sample = `// Redis: KEYS * blocks single-threaded event loop causing outage\nKEYS session:user:*\nHGETALL large_analytics_hash`;
+    } else if (meta.category === 'wide_column' || norm.includes('cassandra')) {
+      sample = `-- Cassandra / Scylla: ALLOW FILTERING forces cluster-wide node scan\nSELECT * FROM user_events WHERE status = 'failed' ALLOW FILTERING;`;
+    } else if (meta.category === 'graph' || norm.includes('neo4j')) {
+      sample = `// Neo4j Cypher: Unbounded variable-length traversal (-[:KNOWS*]->) causes combinatorial blowup\nMATCH (u:User {email: 'alex@example.com'})-[:KNOWS*]->(friend:User)\nRETURN friend;`;
+    } else if (meta.category === 'vector' || norm.includes('pinecone') || norm.includes('milvus')) {
+      sample = `// Vector AI: Brute-force exact search across 10M embeddings\nclient.query({\n  vector: [0.12, -0.44, 0.89],\n  top_k: 10,\n  exact_search: true\n});`;
+    } else if (meta.category === 'olap' || norm.includes('click')) {
+      sample = `-- ClickHouse: Wildcard scan without partition pruning\nSELECT * FROM telemetry_events WHERE host_id LIKE '%server%' ORDER BY event_time DESC;`;
+    } else {
+      sample = `SELECT * \nFROM orders o\nJOIN customers c ON o.customer_id = c.id\nWHERE YEAR(o.created_at) = 2024 \n  AND o.status = 'completed'\nORDER BY o.created_at DESC\nOFFSET 15000;`;
+    }
+    setQueryText(sample);
+    handleAdvise(undefined, sample, selectedEngine);
   }, [selectedEngine]);
 
   const handleApplyPreset = (preset: typeof presets[0]) => {

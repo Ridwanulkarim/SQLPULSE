@@ -3,6 +3,8 @@ import { DatabaseEngine, DATABASE_CATALOG } from '../types';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { Calculator, Cpu, HardDrive, Layers, Server, Copy, Check, Network } from 'lucide-react';
 
+import { resolveSizingPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface DatabaseSizingTabProps {
   selectedEngine?: DatabaseEngine | string;
   onSelectEngine?: (engine: DatabaseEngine) => void;
@@ -24,15 +26,7 @@ export const DatabaseSizingTab: React.FC<DatabaseSizingTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'vector' | 'oltp' | 'partitioning' | 'pooler'>('oltp');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const currentDb = DATABASE_CATALOG.find((d) => d.id === selectedEngine) || DATABASE_CATALOG[0];
-
-  useEffect(() => {
-    if (currentDb.category === 'vector' || currentDb.category === 'search') {
-      setActiveSubTab('vector');
-    } else if (currentDb.category === 'relational' || currentDb.category === 'olap' || currentDb.category === 'wide_column') {
-      setActiveSubTab('oltp');
-    }
-  }, [selectedEngine]);
+  const currentDb = getEngineMetadataSafe(selectedEngine);
 
   const [vectorCount, setVectorCount] = useState<number>(1000000); 
   const [dimension, setDimension] = useState<number>(1536); 
@@ -53,6 +47,24 @@ export const DatabaseSizingTab: React.FC<DatabaseSizingTabProps> = ({
   const [appReplicas, setAppReplicas] = useState<number>(25); 
   const [threadsPerApp, setThreadsPerApp] = useState<number>(20); 
   const nvmeSpindles = 4;
+
+  // Dynamically update realistic sizing parameters for any of the 447 engines
+  useEffect(() => {
+    if (currentDb.category === 'vector' || currentDb.category === 'search') {
+      setActiveSubTab('vector');
+    } else if (currentDb.category === 'relational' || currentDb.category === 'olap' || currentDb.category === 'wide_column') {
+      setActiveSubTab('oltp');
+    }
+
+    const preset = resolveSizingPreset(selectedEngine);
+    setDailyWrites(preset.dailyWrites);
+    setAvgRowSizeBytes(preset.avgRowSizeBytes);
+    setRetentionDays(preset.retentionDays);
+    setVectorCount(preset.vectorCount);
+    setDimension(preset.dimension);
+    setPartitionTable(preset.partitionTable);
+    setDbCpuCores(preset.dbCpuCores);
+  }, [selectedEngine]);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);

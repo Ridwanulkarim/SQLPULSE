@@ -126,7 +126,7 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
             </div>
 
             <div className="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 pr-1 flex-1 max-h-64 sm:max-h-72 scrollbar-thin">
-              {filteredDatabases.slice(0, 100).map((db) => {
+              {filteredDatabases.map((db) => {
                 const isSelected = db.id === selectedEngine;
                 return (
                   <button
@@ -168,8 +168,9 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
             </div>
           )}
 
-            <div className="text-[10px] text-slate-400 text-right border-t border-purple-100 pt-2">
-              Showing {Math.min(75, filteredDatabases.length)} of {filteredDatabases.length} filtered systems (DB-Engines Index)
+            <div className="text-[10px] text-slate-500 font-medium text-right border-t border-purple-100 pt-2 flex items-center justify-between">
+              <span>All 447 engines available</span>
+              <span>Showing {filteredDatabases.length} of {DATABASE_CATALOG.length} models</span>
             </div>
           </div>
         </>

@@ -11,6 +11,8 @@ import { CdcOutboxResult } from '../types';
 
 import { DatabaseEngine } from '../types';
 
+import { resolveCdcPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface CdcOutboxTabProps {
   selectedEngine?: DatabaseEngine | string;
   onSelectEngine?: (engine: DatabaseEngine) => void;
@@ -34,6 +36,13 @@ export const CdcOutboxTab: React.FC<CdcOutboxTabProps> = ({
   const [activeCodeTab, setActiveCodeTab] = useState<'ddl' | 'debezium' | 'worker'>('ddl');
   const [copied, setCopied] = useState<boolean>(false);
   const [result, setResult] = useState<CdcOutboxResult | null>(null);
+
+  // Dynamically update source table and destination broker when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolveCdcPreset(selectedEngine);
+    setSourceTable(preset.sourceTable);
+    setDestinationBroker(preset.destinationBroker);
+  }, [selectedEngine]);
 
   const brokers = [
     { id: 'kafka', name: 'Apache Kafka', icon: '⚡' },

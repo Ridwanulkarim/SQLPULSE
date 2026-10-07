@@ -1,4 +1,4 @@
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
 
 export interface BloatAnalyzeRequest {
   engine: string;
@@ -47,26 +47,10 @@ export interface BloatAnalyzeResult {
   vacuumMetrics: VacuumExecutionPlan;
 }
 
-function getEngineMeta(engineId: string) {
-  const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
-  if (found) return found;
-  return {
-    id: engineId,
-    name: engineId.charAt(0).toUpperCase() + engineId.slice(1),
-    category: 'relational',
-    categoryLabel: 'Relational (SQL)',
-    icon: '🗄️',
-    rank: 999,
-    popularityScore: 10,
-    commandHint: 'EXPLAIN <query>',
-    description: 'Database Engine'
-  };
-}
-
 export class BloatAnalyzer {
   public analyze(req: BloatAnalyzeRequest): BloatAnalyzeResult {
     const raw = (req.engine || 'postgresql').toLowerCase();
-    const meta = getEngineMeta(req.engine);
+    const meta = getEngineMetadata(req.engine);
     const table = req.tableName?.trim() || 'orders';
     const sizeGb = Math.max(0.1, req.totalTableSizeGb !== undefined ? req.totalTableSizeGb : 120);
     const deadPct = Math.max(1, Math.min(95, req.deadTuplePercentage !== undefined ? req.deadTuplePercentage : 38));
@@ -87,34 +71,39 @@ export class BloatAnalyzer {
       deadPct >= 40 ? 'CRITICAL' : deadPct >= 25 ? 'HIGH' : deadPct >= 15 ? 'MODERATE' : 'LOW';
 
     let engineFamily = 'postgres';
-    let engineName = 'PostgreSQL';
-    if (raw.includes('mysql') || raw.includes('maria') || raw.includes('tidb') || raw.includes('percona') || raw.includes('planetscale')) {
+    let engineName = meta.name;
+    if (meta.category === 'search' || raw.includes('elastic') || raw.includes('opensearch') || raw.includes('solr') || raw.includes('meili')) {
+      engineFamily = 'search';
+    } else if (meta.category === 'graph' || raw.includes('neo4j') || raw.includes('memgraph') || raw.includes('tiger') || raw.includes('neptune')) {
+      engineFamily = 'graph';
+    } else if (meta.category === 'timeseries' || raw.includes('timescale') || raw.includes('influx') || raw.includes('quest') || raw.includes('tdengine')) {
+      engineFamily = 'timeseries';
+    } else if (meta.category === 'vector' || raw.includes('milvus') || raw.includes('pinecone') || raw.includes('qdrant') || raw.includes('chroma') || raw.includes('weaviate')) {
+      engineFamily = 'vector';
+    } else if (raw.includes('cockroach') || raw.includes('yugabyte') || raw.includes('spanner')) {
+      engineFamily = 'cockroach';
+    } else if (meta.category === 'streaming_ledger' || raw.includes('kafka') || raw.includes('redpanda') || raw.includes('pulsar') || raw.includes('immudb')) {
+      engineFamily = 'streaming_ledger';
+    } else if (meta.category === 'geo_spatial' || raw.includes('tile38') || raw.includes('postgis')) {
+      engineFamily = 'geo_spatial';
+    } else if (raw.includes('mysql') || raw.includes('maria') || raw.includes('tidb') || raw.includes('percona') || raw.includes('planetscale')) {
       engineFamily = 'mysql';
-      engineName = 'MySQL / MariaDB';
     } else if (raw.includes('oracle') || raw.includes('db2')) {
       engineFamily = 'oracle';
-      engineName = 'Oracle Database';
     } else if (raw.includes('sqlserver') || raw.includes('mssql') || raw.includes('azure_sql')) {
       engineFamily = 'mssql';
-      engineName = 'Microsoft SQL Server';
     } else if (raw.includes('sqlite') || raw.includes('turso') || raw.includes('libsql') || raw.includes('d1')) {
       engineFamily = 'sqlite';
-      engineName = 'SQLite';
-    } else if (raw.includes('click') || raw.includes('duck') || raw.includes('starrocks') || raw.includes('trino')) {
+    } else if (raw.includes('click') || raw.includes('duck') || raw.includes('starrocks') || raw.includes('trino') || meta.category === 'olap') {
       engineFamily = 'clickhouse';
-      engineName = 'ClickHouse';
-    } else if (raw.includes('mongo') || raw.includes('document') || raw.includes('couch')) {
+    } else if (raw.includes('mongo') || raw.includes('document') || raw.includes('couch') || meta.category === 'document') {
       engineFamily = 'mongodb';
-      engineName = 'MongoDB';
-    } else if (raw.includes('cassandra') || raw.includes('scylla') || raw.includes('hbase')) {
+    } else if (raw.includes('cassandra') || raw.includes('scylla') || raw.includes('hbase') || meta.category === 'wide_column') {
       engineFamily = 'cassandra';
-      engineName = 'Apache Cassandra';
-    } else if (raw.includes('redis') || raw.includes('keydb') || raw.includes('dragonfly') || raw.includes('valkey') || raw.includes('memcached')) {
+    } else if (raw.includes('redis') || raw.includes('keydb') || raw.includes('dragonfly') || raw.includes('valkey') || raw.includes('memcached') || meta.category === 'keyvalue') {
       engineFamily = 'redis';
-      engineName = 'Redis';
     } else if (raw.includes('snow') || raw.includes('bigquery') || raw.includes('redshift') || raw.includes('databricks')) {
       engineFamily = 'snowflake';
-      engineName = 'Snowflake';
     }
 
     let findings: BloatFinding[] = [];
@@ -612,7 +601,315 @@ WHERE table_name = UPPER('${table}');`;
         'Cluster on low-cardinality date/status keys so partition pruning skips 90%+ of micro-partitions during analytical queries.',
       ];
 
-    // --- 10. PostgreSQL Family (Default) ---
+    // --- 10. Search Engines (Elasticsearch / OpenSearch / Solr) ---
+    } else if (engineFamily === 'search') {
+      lockLevel = 'NONE (Online Background Segment Merge)';
+      recommendedCommand = `POST /${table}/_forcemerge?max_num_segments=1&only_expunge_deletes=true`;
+      findings = [
+        {
+          objectName: `${table} (Lucene Deleted Document Bitsets & Segments)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Deleted documents remain on disk in immutable segments until segment merge executes',
+          remedyAction: `Trigger background force-merge: POST /${table}/_forcemerge?max_num_segments=1`,
+        },
+        {
+          objectName: `${table} (FST Inverted Index Dictionary)`,
+          objectType: 'index',
+          totalSizeBytes: Math.floor(totalSizeBytes * 0.40),
+          bloatSizeBytes: indexBloatBytes,
+          bloatPercentage: Math.min(95, deadPct + 5),
+          wastedStorageFormatted: `${(indexBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Segment count amplification causes excessive filesystem descriptor churn',
+          remedyAction: 'Consolidate Lucene shard segments via Index Lifecycle Management (ILM)',
+        },
+      ];
+
+      repackScript = `#!/usr/bin/env bash
+# Elasticsearch / OpenSearch Zero-Downtime Segment Defragmentation
+# 1. Expunge soft-deleted documents from immutable Lucene segments:
+curl -X POST "http://localhost:9200/${table}/_forcemerge?only_expunge_deletes=true"
+
+# 2. Force-merge segments into single optimized segment per shard:
+curl -X POST "http://localhost:9200/${table}/_forcemerge?max_num_segments=1"
+
+# 3. Flush transaction log to disk:
+curl -X POST "http://localhost:9200/${table}/_flush/synced"
+`;
+
+      autovacuumDdl = `PUT /_ilm/policy/${table}_retention_policy
+{
+  "policy": {
+    "phases": {
+      "warm": {
+        "actions": {
+          "forcemerge": { "max_num_segments": 1 },
+          "shrink": { "number_of_shards": 1 }
+        }
+      },
+      "delete": {
+        "min_age": "30d",
+        "actions": { "delete": {} }
+      }
+    }
+  }
+}
+`;
+
+      hygieneQuery = `GET /_cat/indices/${table}?v&h=index,docs.count,docs.deleted,pri.store.size,segments.count`;
+
+      expertRecommendations = [
+        'Lucene segments are write-once; deleting a document merely flips a bit in a tombstone bitset until a merge occurs.',
+        'Always run `_forcemerge` only on read-only or rolled-over indices; merging active write indices can trigger severe I/O throttling.',
+        'Configure Index Lifecycle Management (ILM) to automatically force-merge older indices during off-peak hours.',
+      ];
+
+    // --- 11. Graph Databases (Neo4j / Memgraph / TigerGraph) ---
+    } else if (engineFamily === 'graph') {
+      lockLevel = 'ONLINE (Transactional Node & Relationship Compaction)';
+      recommendedCommand = `CALL dbms.compactDatabase('${table}');`;
+      findings = [
+        {
+          objectName: `${table} (Dead Node & Relationship Store Records)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Deleted nodes leave vacant pointer slots in double-linked relationship chains',
+          remedyAction: 'Execute Neo4j store compaction and drop dangling property store blocks',
+        },
+      ];
+
+      repackScript = `#!/usr/bin/env bash
+# Neo4j Store File Compaction & Free Block Reallocation
+neo4j-admin database copy --from-database=neo4j --to-database=compacted_neo4j --compact-node-store
+neo4j-admin database copy --from-database=neo4j --to-database=compacted_neo4j --compact-relationship-store
+`;
+
+      autovacuumDdl = `# neo4j.conf Storage Optimization Settings
+dbms.transaction.log.rotation.retention_policy=2 days
+dbms.jvm.additional=-XX:+UseG1GC
+dbms.memory.pagecache.size=${Math.round(sizeGb * 0.6)}g
+`;
+
+      hygieneQuery = `CALL apoc.monitor.store() YIELD nodeStoreSize, relationshipStoreSize, propertyStoreSize;`;
+
+      expertRecommendations = [
+        'Neo4j node and relationship records use fixed-size disk blocks. When entities are deleted, pointer reuse can cause fragmentation.',
+        'Use `neo4j-admin database copy --compact-node-store` during scheduled maintenance to repack pointers and reclaim contiguous disk extents.',
+        'Prune transactional write-ahead logs (`dbms.transaction.log.rotation.retention_policy`) to avoid disk bloat from Cypher batch mutations.',
+      ];
+
+    // --- 12. Time-Series (TimescaleDB / InfluxDB / QuestDB) ---
+    } else if (engineFamily === 'timeseries') {
+      lockLevel = 'NONE (Background Columnar Chunk Compression)';
+      recommendedCommand = `SELECT compress_chunk(c) FROM show_chunks('${table}') c;`;
+      findings = [
+        {
+          objectName: `${table} (Uncompressed Row-Store Chunks)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Older chunks remaining in uncompressed row format consume 90% more disk bandwidth',
+          remedyAction: `Convert aged chunks to columnar format via compress_chunk()`,
+        },
+      ];
+
+      repackScript = `-- TimescaleDB Hypertable Chunk Compression & Data Defragmentation
+-- 1. Enable compression policy on hypertable:
+ALTER TABLE ${table} SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'device_id',
+    timescaledb.compress_orderby = 'recorded_at DESC'
+);
+
+-- 2. Add automatic policy for chunks older than 7 days:
+SELECT add_compression_policy('${table}', INTERVAL '7 days');
+
+-- 3. Compress all existing historical chunks immediately:
+SELECT compress_chunk(i) FROM show_chunks('${table}', older_than => INTERVAL '7 days') i;
+`;
+
+      autovacuumDdl = `-- TimescaleDB Automated Data Retention & Chunk Drop Policy
+SELECT add_retention_policy('${table}', INTERVAL '90 days');
+`;
+
+      hygieneQuery = `SELECT 
+    hypertable_name, 
+    chunk_name, 
+    is_compressed, 
+    pg_size_pretty(before_compression_total_bytes) AS uncompressed_size,
+    pg_size_pretty(after_compression_total_bytes) AS compressed_size
+FROM timescaledb_information.chunks
+WHERE hypertable_name = '${table}';`;
+
+      expertRecommendations = [
+        'TimescaleDB columnar compression achieves 90-95% disk reduction while maintaining queryability.',
+        'Always segment compression by high-cardinality lookup keys (e.g., `device_id`, `tenant_id`) and order by timestamp.',
+        'Drop old chunks via `drop_chunks()` instead of running `DELETE`; dropping a chunk is an instant metadata operation without MVCC bloat.',
+      ];
+
+    // --- 13. Vector AI Engines (Milvus / Pinecone / Qdrant / pgvector) ---
+    } else if (engineFamily === 'vector') {
+      lockLevel = 'NONE (Online Background Segment Vector Compaction)';
+      recommendedCommand = `POST /collections/${table}/compact`;
+      findings = [
+        {
+          objectName: `${table} (Tombstoned Vectors & Fragmented HNSW Graph)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Deleted embedding IDs remain in HNSW neighbor links, degrading ANN recall accuracy',
+          remedyAction: `Trigger collection compaction and rebuild HNSW/IVF index segments`,
+        },
+      ];
+
+      repackScript = `#!/usr/bin/env bash
+# Milvus / Vector Database Collection Compaction
+curl -X POST "http://localhost:19530/v2/vectordb/collections/compact" \\
+  -H "Content-Type: application/json" \\
+  -d '{"collectionName": "${table}"}'
+
+# Rebuild ANN Index Graph after vector purges:
+curl -X POST "http://localhost:19530/v2/vectordb/indexes/rebuild" \\
+  -H "Content-Type: application/json" \\
+  -d '{"collectionName": "${table}", "fieldName": "vector"}'
+`;
+
+      autovacuumDdl = `# Vector Store Auto-Compaction Settings
+auto_compaction_enabled: true
+compaction_trigger_deleted_ratio: 0.15
+segment_max_size_mb: 512
+`;
+
+      hygieneQuery = `GET /v2/vectordb/collections/describe?collectionName=${table}`;
+
+      expertRecommendations = [
+        'Vector deletions mark entity vectors as tombstones without immediately recomputing graph neighbor links.',
+        'Compaction merges smaller raw segments into target 512MB segments and purges deleted embeddings.',
+        'Rebuild scalar and HNSW indexes after large deletions to restore maximum ANN search throughput (QPS).',
+      ];
+
+    // --- 14. Distributed SQL (CockroachDB / YugabyteDB / TiDB) ---
+    } else if (engineFamily === 'cockroach') {
+      lockLevel = 'NONE (Distributed Range LSM Compaction)';
+      recommendedCommand = `ALTER TABLE ${table} CONFIGURE ZONE USING gc.ttlseconds = 86400;`;
+      findings = [
+        {
+          objectName: `${table} (Pebble/RocksDB MVCC Historical Keys & Range Tombstones)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Uncompacted MVCC row revisions force Range Leaseholders to scan dead Pebble key tombstones',
+          remedyAction: 'Reduce gc.ttlseconds and trigger range compaction on table span',
+        },
+      ];
+
+      repackScript = `-- CockroachDB Zone Configuration & Range Compaction
+-- 1. Lower MVCC Garbage Collection TTL to 24 hours:
+ALTER TABLE ${table} CONFIGURE ZONE USING gc.ttlseconds = 86400;
+
+-- 2. Force manual compaction on range span:
+ALTER RANGE [table_start_key, table_end_key] COMPACT;
+`;
+
+      autovacuumDdl = `-- CockroachDB Automated GC Settings
+ALTER TABLE ${table} CONFIGURE ZONE USING 
+    gc.ttlseconds = 86400,
+    range_min_bytes = 16777216,
+    range_max_bytes = 67108864;
+`;
+
+      hygieneQuery = `SHOW ZONE CONFIGURATION FOR TABLE ${table};
+SELECT * FROM crdb_internal.ranges WHERE table_name = '${table}';`;
+
+      expertRecommendations = [
+        'CockroachDB retains historical row versions for Time Travel queries (AS OF SYSTEM TIME).',
+        'Lowering `gc.ttlseconds` allows Pebble background compactions to drop dead revisions and reclaim NVMe disk space.',
+        'Ensure tables with heavy UPDATE traffic have compact primary keys to avoid large LSM range tombstone scans.',
+      ];
+
+    // --- 15. Streaming & Ledger (Kafka / Redpanda / Immudb) ---
+    } else if (engineFamily === 'streaming_ledger') {
+      lockLevel = 'NONE (Background Topic Log Cleaner Thread)';
+      recommendedCommand = `kafka-configs.sh --alter --entity-type topics --entity-name ${table} --add-config cleanup.policy=compact`;
+      findings = [
+        {
+          objectName: `${table} (Uncompacted Log Segments & Superseded Record Keys)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Outdated record keys remain in append-only partition segment files',
+          remedyAction: 'Enable log compaction policy and tune min.cleanable.dirty.ratio',
+        },
+      ];
+
+      repackScript = `#!/usr/bin/env bash
+# Kafka / Redpanda Topic Log Compaction
+kafka-configs.sh --bootstrap-server localhost:9092 \\
+  --alter --entity-type topics --entity-name ${table} \\
+  --add-config cleanup.policy=compact,min.cleanable.dirty.ratio=0.2,segment.ms=86400000
+`;
+
+      autovacuumDdl = `# Broker server.properties Log Cleaner Tuning
+log.cleaner.enable=true
+log.cleaner.threads=4
+log.cleaner.dedupe.buffer.size=134217728
+`;
+
+      hygieneQuery = `kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic ${table}`;
+
+      expertRecommendations = [
+        'Log compaction ensures that Kafka retains at least the last known value for each record key within a partition.',
+        'Lower `min.cleanable.dirty.ratio` (e.g., from 0.5 to 0.2) to initiate cleaner threads more frequently on active topics.',
+        'Ensure messages specify unique partition keys; records with null keys cannot be compacted and will be retained indefinitely.',
+      ];
+
+    // --- 16. Spatial & Geo (PostGIS / Tile38 / SpatiaLite) ---
+    } else if (engineFamily === 'geo_spatial') {
+      lockLevel = 'CONCURRENT (Spatial GiST / R-Tree Bounding Box Repack)';
+      recommendedCommand = `CLUSTER ${table} USING idx_${table}_geom;`;
+      findings = [
+        {
+          objectName: `${table} (Fragmented Spatial Geometries & GiST Index Bounding Boxes)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Overlapping spatial bounding boxes in GiST index cause redundant tree traversals',
+          remedyAction: `Re-cluster table along spatial Hilbert curve and reindex GiST concurrently`,
+        },
+      ];
+
+      repackScript = `-- Spatial Table & R-Tree / GiST Defragmentation
+CLUSTER ${table} USING idx_${table}_geom;
+REINDEX INDEX CONCURRENTLY idx_${table}_geom;
+VACUUM ANALYZE ${table};
+`;
+
+      autovacuumDdl = `ALTER TABLE ${table} SET (autovacuum_vacuum_scale_factor = 0.05);`;
+      hygieneQuery = `SELECT relname, n_dead_tup, round(n_dead_tup::numeric / (n_live_tup + 1) * 100, 2) AS dead_pct FROM pg_stat_user_tables WHERE relname = '${table}';`;
+
+      expertRecommendations = [
+        'Spatial GiST indexes degrade in efficiency as bounding boxes become fragmented from non-spatial updates.',
+        'Reclustering on a spatial index physically orders geometries along a Hilbert curve for optimal disk locality.',
+        'Use `REINDEX INDEX CONCURRENTLY` to avoid blocking GIS API endpoints.',
+      ];
+
+    // --- 17. PostgreSQL Family (Default) ---
     } else {
       lockLevel = 'NONE (Zero-Downtime Online Repack via pg_repack / REINDEX CONCURRENTLY)';
       recommendedCommand = `REINDEX TABLE CONCURRENTLY ${table};`;

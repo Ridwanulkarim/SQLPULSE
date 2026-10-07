@@ -21,50 +21,18 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 
+import { resolveBloatPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface BloatAnalyzerTabProps {
   selectedEngine: DatabaseEngine;
   onSelectEngine: (engine: DatabaseEngine) => void;
 }
 
-interface BloatEngineProfile {
-  tableName: string;
-  totalTableSizeGb: number;
-  deadTuplePercentage: number;
-  avgDailyUpdates: number;
-  targetIoSpeedMbSec: number;
-  footprintLabel: string;
-}
-
-const ENGINE_PROFILES: Record<string, BloatEngineProfile> = {
-  postgresql: { tableName: 'orders', totalTableSizeGb: 120, deadTuplePercentage: 38, avgDailyUpdates: 500000, targetIoSpeedMbSec: 75, footprintLabel: '120 GB' },
-  mysql: { tableName: 'customer_orders', totalTableSizeGb: 85, deadTuplePercentage: 32, avgDailyUpdates: 400000, targetIoSpeedMbSec: 80, footprintLabel: '85 GB' },
-  oracle: { tableName: 'SALES_TRANSACTIONS', totalTableSizeGb: 250, deadTuplePercentage: 28, avgDailyUpdates: 650000, targetIoSpeedMbSec: 100, footprintLabel: '250 GB' },
-  sqlserver: { tableName: 'SalesOrders', totalTableSizeGb: 140, deadTuplePercentage: 35, avgDailyUpdates: 450000, targetIoSpeedMbSec: 90, footprintLabel: '140 GB' },
-  sqlite: { tableName: 'user_sessions', totalTableSizeGb: 3.5, deadTuplePercentage: 25, avgDailyUpdates: 50000, targetIoSpeedMbSec: 40, footprintLabel: '3.5 GB' },
-  clickhouse: { tableName: 'events_distributed', totalTableSizeGb: 1200, deadTuplePercentage: 22, avgDailyUpdates: 2500000, targetIoSpeedMbSec: 250, footprintLabel: '1.2 TB' },
-  mongodb: { tableName: 'orders_collection', totalTableSizeGb: 95, deadTuplePercentage: 34, avgDailyUpdates: 600000, targetIoSpeedMbSec: 85, footprintLabel: '95 GB' },
-  cassandra: { tableName: 'sensor_timeseries', totalTableSizeGb: 450, deadTuplePercentage: 40, avgDailyUpdates: 1200000, targetIoSpeedMbSec: 120, footprintLabel: '450 GB' },
-  redis: { tableName: 'session_cache', totalTableSizeGb: 12, deadTuplePercentage: 20, avgDailyUpdates: 3000000, targetIoSpeedMbSec: 200, footprintLabel: '12 GB' },
-  snowflake: { tableName: 'FACT_TRANSACTIONS', totalTableSizeGb: 2800, deadTuplePercentage: 18, avgDailyUpdates: 5000000, targetIoSpeedMbSec: 350, footprintLabel: '2.8 TB' },
-};
-
-const POPULAR_ENGINES = [
-  { id: 'postgresql', label: 'PostgreSQL', footprint: '120 GB' },
-  { id: 'mysql', label: 'MySQL', footprint: '85 GB' },
-  { id: 'oracle', label: 'Oracle', footprint: '250 GB' },
-  { id: 'sqlserver', label: 'SQL Server', footprint: '140 GB' },
-  { id: 'sqlite', label: 'SQLite', footprint: '3.5 GB' },
-  { id: 'clickhouse', label: 'ClickHouse', footprint: '1.2 TB' },
-  { id: 'mongodb', label: 'MongoDB', footprint: '95 GB' },
-  { id: 'cassandra', label: 'Cassandra', footprint: '450 GB' },
-  { id: 'redis', label: 'Redis', footprint: '12 GB' },
-  { id: 'snowflake', label: 'Snowflake', footprint: '2.8 TB' },
-];
-
 export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
   selectedEngine,
   onSelectEngine,
 }) => {
+  const [activeCategory, setActiveCategory] = useState<string>('top_ranked');
   const [tableName, setTableName] = useState('orders');
   const [totalTableSizeGb, setTotalTableSizeGb] = useState<number>(120);
   const [deadTuplePercentage, setDeadTuplePercentage] = useState<number>(38);
@@ -76,40 +44,14 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
   const [result, setResult] = useState<BloatAnalyzeResult | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Automatically update realistic table size, table name, and bloat profile when switching engines
+  // Automatically update realistic table size, table name, and bloat profile when switching ANY of the 447 engines
   useEffect(() => {
-    const norm = selectedEngine.toLowerCase();
-    let profile: BloatEngineProfile | undefined;
-
-    if (norm.includes('sqlite') || norm.includes('turso')) {
-      profile = ENGINE_PROFILES.sqlite;
-    } else if (norm.includes('redis') || norm.includes('valkey') || norm.includes('keydb')) {
-      profile = ENGINE_PROFILES.redis;
-    } else if (norm.includes('click') || norm.includes('duck')) {
-      profile = ENGINE_PROFILES.clickhouse;
-    } else if (norm.includes('snow') || norm.includes('bigquery') || norm.includes('redshift')) {
-      profile = ENGINE_PROFILES.snowflake;
-    } else if (norm.includes('cassandra') || norm.includes('scylla') || norm.includes('hbase')) {
-      profile = ENGINE_PROFILES.cassandra;
-    } else if (norm.includes('oracle') || norm.includes('db2')) {
-      profile = ENGINE_PROFILES.oracle;
-    } else if (norm.includes('sqlserver') || norm.includes('mssql')) {
-      profile = ENGINE_PROFILES.sqlserver;
-    } else if (norm.includes('mysql') || norm.includes('maria')) {
-      profile = ENGINE_PROFILES.mysql;
-    } else if (norm.includes('mongo') || norm.includes('document')) {
-      profile = ENGINE_PROFILES.mongodb;
-    } else {
-      profile = ENGINE_PROFILES.postgresql;
-    }
-
-    if (profile) {
-      setTableName(profile.tableName);
-      setTotalTableSizeGb(profile.totalTableSizeGb);
-      setDeadTuplePercentage(profile.deadTuplePercentage);
-      setAvgDailyUpdates(profile.avgDailyUpdates);
-      setTargetIoSpeedMbSec(profile.targetIoSpeedMbSec);
-    }
+    const profile = resolveBloatPreset(selectedEngine);
+    setTableName(profile.tableName);
+    setTotalTableSizeGb(profile.totalTableSizeGb);
+    setDeadTuplePercentage(profile.deadTuplePercentage);
+    setAvgDailyUpdates(profile.avgDailyUpdates);
+    setTargetIoSpeedMbSec(profile.targetIoSpeedMbSec);
   }, [selectedEngine]);
 
   const handleAnalyze = async (forcedSimulate?: boolean) => {
@@ -143,7 +85,27 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const engineMeta = DATABASE_CATALOG.find(db => db.id === selectedEngine) || { name: selectedEngine, icon: '🗄️' };
+  const engineMeta = getEngineMetadataSafe(selectedEngine);
+
+  // Filter engines for the quick-selector strip across all 447 databases
+  const categoryPills = [
+    { id: 'top_ranked', label: '🏆 Top Ranked' },
+    { id: 'relational', label: '🏛️ Relational (SQL)' },
+    { id: 'olap', label: '📊 Analytics & OLAP' },
+    { id: 'document', label: '📄 Document NoSQL' },
+    { id: 'keyvalue', label: '⚡ Key-Value & Memory' },
+    { id: 'vector', label: '🧠 Vector AI' },
+    { id: 'search', label: '🔍 Search Engines' },
+    { id: 'graph', label: '🕸️ Graph DBs' },
+    { id: 'timeseries', label: '📈 Time-Series' },
+    { id: 'wide_column', label: '📦 Wide-Column' },
+    { id: 'baas_embedded', label: '🚀 Embedded / Edge' },
+  ];
+
+  const quickEngines = DATABASE_CATALOG.filter((db) => {
+    if (activeCategory === 'top_ranked') return db.rank && db.rank <= 12;
+    return db.category === activeCategory;
+  }).slice(0, 10);
 
   // Calculate percentage splits for the visual before-and-after storage bar
   const bloatPct = simulatePostVacuum ? 2 : (result?.averageBloatPercentage || deadTuplePercentage);
@@ -159,7 +121,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
               <Trash2 className="w-3.5 h-3.5 text-amber-300" /> Storage Hygiene &amp; Vacuum Optimization
             </span>
             <span className="text-xs text-amber-300 font-medium">
-              MVCC Dead Tuples • High Water Mark • B-Tree Page Splits • Zero-Downtime Repack
+              447 Database Models • Segment Force-Merge • Compaction • MVCC Dead Tuples • Zero-Downtime Repack
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
@@ -167,29 +129,55 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             Table Bloat &amp; Vacuum Diagnostic Studio
           </h2>
           <p className="text-xs sm:text-sm text-amber-100/90 mt-1 max-w-3xl">
-            Diagnose dead row versions, empty page fragments, and unmerged storage below High Water Marks for {engineMeta.name}. Calculate exact vacuum runtimes, reclaimable disk space, and autovacuum schedule tuning.
+            Diagnose dead row versions, empty page fragments, unmerged SSTable segments, and uncompacted storage below High Water Marks for <span className="text-amber-300 font-bold">{engineMeta.name}</span>. Calculate exact vacuum runtimes, reclaimable disk space, and autovacuum schedule tuning across all {DATABASE_CATALOG.length} database models.
           </p>
 
-          {/* Quick Engine Pills */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-amber-800/40">
-            <span className="text-[11px] text-amber-300/80 font-bold uppercase tracking-wider mr-1 flex items-center gap-1">
-              <Database className="w-3 h-3 text-amber-400" /> Database Presets:
-            </span>
-            {POPULAR_ENGINES.map((eng) => (
-              <button
-                key={eng.id}
-                type="button"
-                onClick={() => onSelectEngine(eng.id as DatabaseEngine)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
-                  selectedEngine.toLowerCase().includes(eng.id)
-                    ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
-                    : 'bg-amber-900/60 text-amber-200 hover:bg-amber-800/80 border border-amber-700/50'
-                }`}
-              >
-                <span>{eng.label}</span>
-                <span className="text-[10px] opacity-75 font-mono">({eng.footprint})</span>
-              </button>
-            ))}
+          {/* Category Filter & Quick Engine Pills */}
+          <div className="mt-4 pt-3 border-t border-amber-800/40 space-y-2.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] text-amber-300/90 font-bold uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                <Database className="w-3 h-3 text-amber-400" /> Model Categories:
+              </span>
+              {categoryPills.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeCategory === cat.id
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'bg-amber-900/50 text-amber-200 hover:bg-amber-800/70 border border-amber-700/40'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-amber-300/70 font-semibold uppercase tracking-wider mr-1">
+                Quick Models:
+              </span>
+              {quickEngines.map((eng) => {
+                const preset = resolveBloatPreset(eng.id);
+                const isSelected = selectedEngine.toLowerCase() === eng.id.toLowerCase();
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => onSelectEngine(eng.id as DatabaseEngine)}
+                    className={`px-2 py-0.5 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-950 shadow-md font-bold'
+                        : 'bg-amber-950/70 text-amber-100 hover:bg-amber-900 border border-amber-700/40'
+                    }`}
+                  >
+                    <span>{eng.name}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({preset.footprintLabel})</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

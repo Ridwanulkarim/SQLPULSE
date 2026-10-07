@@ -12,6 +12,7 @@ import { UniversalDbSelector } from './UniversalDbSelector';
 import { planPartitionStrategy } from '../services/api';
 import { PartitionResult, DATABASE_CATALOG } from '../types';
 
+import { resolvePartitionPreset, getEngineMetadataSafe } from '../utils/enginePresets';
 import { DatabaseEngine } from '../types';
 
 interface PartitionArchitectTabProps {
@@ -32,11 +33,23 @@ export const PartitionArchitectTab: React.FC<PartitionArchitectTabProps> = ({
       setSelectedEngine(propEngine);
     }
   }, [propEngine]);
+
+  const [activeCategory, setActiveCategory] = useState<string>('top_ranked');
   const [tableName, setTableName] = useState<string>('order_transactions');
   const [partitionColumn, setPartitionColumn] = useState<string>('created_at');
   const [strategy, setStrategy] = useState<string>('range_monthly');
   const [estimatedMonthlyRows, setEstimatedMonthlyRows] = useState<number>(25000000);
   const [retentionMonths, setRetentionMonths] = useState<number>(24);
+
+  // Dynamically synchronize realistic partition parameters when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolvePartitionPreset(selectedEngine);
+    setTableName(preset.tableName);
+    setPartitionColumn(preset.partitionColumn);
+    setStrategy(preset.strategy);
+    setEstimatedMonthlyRows(preset.estimatedMonthlyRows);
+    setRetentionMonths(preset.retentionMonths);
+  }, [selectedEngine]);
 
   const [result, setResult] = useState<PartitionResult | null>(null);
   const [activeTab, setActiveTab] = useState<'ddl' | 'partman'>('ddl');
@@ -70,7 +83,23 @@ export const PartitionArchitectTab: React.FC<PartitionArchitectTabProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const engineMeta = DATABASE_CATALOG.find(db => db.id === selectedEngine) || { name: selectedEngine, icon: '🗄️' };
+  const engineMeta = getEngineMetadataSafe(selectedEngine);
+
+  const categoryPills = [
+    { id: 'top_ranked', label: '🏆 Top Ranked' },
+    { id: 'olap', label: '📊 Columnar & OLAP' },
+    { id: 'relational', label: '🏛️ Relational (SQL)' },
+    { id: 'timeseries', label: '📈 Time-Series' },
+    { id: 'wide_column', label: '📦 Wide-Column' },
+    { id: 'document', label: '📄 Document NoSQL' },
+    { id: 'search', label: '🔍 Search Indices' },
+    { id: 'baas_embedded', label: '🚀 Embedded / Edge' },
+  ];
+
+  const quickEngines = DATABASE_CATALOG.filter((db) => {
+    if (activeCategory === 'top_ranked') return db.rank && db.rank <= 12;
+    return db.category === activeCategory;
+  }).slice(0, 10);
 
   return (
     <div className="space-y-6 font-sans">
@@ -90,8 +119,57 @@ export const PartitionArchitectTab: React.FC<PartitionArchitectTabProps> = ({
             Table Partitioning &amp; Sharding Architect
           </h2>
           <p className="text-xs sm:text-sm text-purple-200/90 mt-1 max-w-3xl">
-            Architect declarative range slices, hash distributed shards, and automated partition retention policies with query pruning verification for {engineMeta.name}.
+            Architect declarative range slices, hash distributed shards, and automated partition retention policies with query pruning verification for <span className="text-purple-300 font-bold">{engineMeta.name}</span> across all {DATABASE_CATALOG.length} catalog models.
           </p>
+
+          {/* Category Filter & Quick Engine Pills */}
+          <div className="mt-4 pt-3 border-t border-purple-800/40 space-y-2.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] text-purple-300/90 font-bold uppercase tracking-wider shrink-0 mr-1">
+                Architecture Families:
+              </span>
+              {categoryPills.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeCategory === cat.id
+                      ? 'bg-purple-400 text-slate-950 shadow-sm'
+                      : 'bg-purple-900/50 text-purple-200 hover:bg-purple-800/70 border border-purple-700/40'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-purple-300/70 font-semibold uppercase tracking-wider mr-1">
+                Quick Models:
+              </span>
+              {quickEngines.map((eng) => {
+                const isSelected = selectedEngine.toLowerCase() === eng.id.toLowerCase();
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEngine(eng.id);
+                      onSelectEngine?.(eng.id as DatabaseEngine);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-purple-400 text-slate-950 shadow-md font-bold'
+                        : 'bg-purple-950/70 text-purple-100 hover:bg-purple-900 border border-purple-700/40'
+                    }`}
+                  >
+                    <span>{eng.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 

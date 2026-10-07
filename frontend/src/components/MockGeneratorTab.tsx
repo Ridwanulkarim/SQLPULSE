@@ -37,6 +37,30 @@ export const MockGeneratorTab: React.FC<MockGeneratorTabProps> = ({
     }
   };
 
+  // Automatically adjust domain preset and row volume based on engine family
+  useEffect(() => {
+    const norm = selectedEngine.toLowerCase();
+    const meta = DATABASE_CATALOG.find(d => d.id === selectedEngine);
+    const cat = meta?.category;
+
+    if (cat === 'timeseries' || norm.includes('timescale') || norm.includes('influx')) {
+      setPreset('iot');
+      setRowCount(25000);
+    } else if (cat === 'olap' || norm.includes('click') || norm.includes('snow')) {
+      setPreset('fraud_detection');
+      setRowCount(50000);
+    } else if (cat === 'vector' || norm.includes('milvus') || norm.includes('pinecone')) {
+      setPreset('vector_embeddings');
+      setRowCount(10000);
+    } else if (cat === 'keyvalue' || norm.includes('redis')) {
+      setPreset('gaming');
+      setRowCount(20000);
+    } else if (cat === 'baas_embedded' || norm.includes('sqlite')) {
+      setPreset('saas');
+      setRowCount(1500);
+    }
+  }, [selectedEngine]);
+
   useEffect(() => {
     handleGenerate();
   }, [selectedEngine, preset, rowCount]);

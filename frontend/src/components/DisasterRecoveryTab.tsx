@@ -16,6 +16,8 @@ import { DisasterRecoveryResult, DATABASE_CATALOG } from '../types';
 
 import { DatabaseEngine } from '../types';
 
+import { resolveDisasterRecoveryPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface DisasterRecoveryTabProps {
   selectedEngine?: DatabaseEngine | string;
   onSelectEngine?: (engine: DatabaseEngine) => void;
@@ -40,6 +42,14 @@ export const DisasterRecoveryTab: React.FC<DisasterRecoveryTabProps> = ({
   const [diskThroughputMbSec, setDiskThroughputMbSec] = useState<number>(500);
   const [backupStrategy, setBackupStrategy] = useState<string>('daily_full_plus_wal_cdc');
   const [cloudProvider, setCloudProvider] = useState<string>('aws_s3');
+
+  // Dynamically update disaster recovery sizing when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolveDisasterRecoveryPreset(selectedEngine);
+    setDbSizeGb(preset.dbSizeGb);
+    setDailyChangePercent(preset.dailyChangePercent);
+    setCloudProvider(preset.cloudProvider);
+  }, [selectedEngine]);
 
   const [result, setResult] = useState<DisasterRecoveryResult | null>(null);
   const [activeTab, setActiveTab] = useState<'script' | 'cron' | 'runbook' | 'verify'>('script');

@@ -37,22 +37,12 @@ import {
   DATABASE_CATALOG,
 } from '../types';
 
+import { getEngineMetadataSafe } from '../utils/enginePresets';
+
 interface ChaosSimulatorTabProps {
   selectedEngine?: DatabaseEngine | string;
   onSelectEngine?: (engine: DatabaseEngine) => void;
 }
-
-const POPULAR_ENGINES = [
-  { id: 'postgresql', label: 'PostgreSQL', port: 5432, daemon: 'postgres' },
-  { id: 'mysql', label: 'MySQL', port: 3306, daemon: 'mysqld' },
-  { id: 'oracle', label: 'Oracle', port: 1521, daemon: 'oracle' },
-  { id: 'sqlserver', label: 'SQL Server', port: 1433, daemon: 'sqlservr' },
-  { id: 'mongodb', label: 'MongoDB', port: 27017, daemon: 'mongod' },
-  { id: 'redis', label: 'Redis', port: 6379, daemon: 'redis-server' },
-  { id: 'clickhouse', label: 'ClickHouse', port: 8123, daemon: 'clickhouse' },
-  { id: 'cassandra', label: 'Cassandra', port: 9042, daemon: 'cassandra' },
-  { id: 'sqlite', label: 'SQLite', port: 0, daemon: 'in-process' },
-];
 
 export const ChaosSimulatorTab: React.FC<ChaosSimulatorTabProps> = ({
   selectedEngine: propEngine,
@@ -68,12 +58,31 @@ export const ChaosSimulatorTab: React.FC<ChaosSimulatorTabProps> = ({
     }
   }, [propEngine]);
 
+  const [activeCategory, setActiveCategory] = useState<string>('top_ranked');
   const [scenarioId, setScenarioId] = useState<string>('primary_crash');
   const [clusterSize, setClusterSize] = useState<number>(3);
   const [syncMode, setSyncMode] = useState<'sync' | 'async'>('sync');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<ChaosSimulationResult | null>(null);
+
+  // Automatically adjust cluster topology when switching engine families
+  useEffect(() => {
+    const norm = selectedEngine.toLowerCase();
+    if (norm.includes('sqlite') || norm.includes('turso')) {
+      setClusterSize(2);
+      setSyncMode('async');
+    } else if (norm.includes('cassandra') || norm.includes('scylla') || norm.includes('click')) {
+      setClusterSize(5);
+      setSyncMode('sync');
+    } else if (norm.includes('redis')) {
+      setClusterSize(3);
+      setSyncMode('async');
+    } else {
+      setClusterSize(3);
+      setSyncMode('sync');
+    }
+  }, [selectedEngine]);
 
   // Interactive timeline & scrubber state
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
@@ -170,11 +179,24 @@ export const ChaosSimulatorTab: React.FC<ChaosSimulatorTabProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const engineMeta =
-    DATABASE_CATALOG.find((db) => db.id === selectedEngine) || {
-      name: selectedEngine,
-      icon: '🗄️',
-    };
+  const engineMeta = getEngineMetadataSafe(selectedEngine);
+
+  const categoryPills = [
+    { id: 'top_ranked', label: '🏆 Top Ranked' },
+    { id: 'relational', label: '🏛️ Relational (SQL)' },
+    { id: 'olap', label: '📊 Columnar & OLAP' },
+    { id: 'document', label: '📄 Document NoSQL' },
+    { id: 'keyvalue', label: '⚡ Key-Value & Memory' },
+    { id: 'wide_column', label: '📦 Wide-Column' },
+    { id: 'search', label: '🔍 Search Clusters' },
+    { id: 'graph', label: '🕸️ Graph DBs' },
+    { id: 'baas_embedded', label: '🚀 Embedded / Edge' },
+  ];
+
+  const quickEngines = DATABASE_CATALOG.filter((db) => {
+    if (activeCategory === 'top_ranked') return db.rank && db.rank <= 12;
+    return db.category === activeCategory;
+  }).slice(0, 10);
 
   const currentStep: ChaosStep | undefined =
     result?.timeline && result.timeline.length > 0
@@ -204,34 +226,56 @@ export const ChaosSimulatorTab: React.FC<ChaosSimulatorTabProps> = ({
             High-Availability Chaos &amp; Disaster Simulator
           </h2>
           <p className="text-xs sm:text-sm text-rose-200/90 mt-1 max-w-3xl">
-            Inject catastrophic production failures into a {engineMeta.name} cluster: sudden primary crashes, split-brain network partitions, connection storms, and disk stalls. Verify automated failover timelines and zero-data-loss SLAs.
+            Inject catastrophic production failures into a <span className="text-rose-300 font-bold">{engineMeta.name}</span> cluster: sudden primary crashes, split-brain network partitions, connection storms, and disk stalls. Verify automated failover timelines and zero-data-loss SLAs across all {DATABASE_CATALOG.length} models.
           </p>
 
-          {/* Quick Engine Pills */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-rose-800/40">
-            <span className="text-[11px] text-rose-300/80 font-bold uppercase tracking-wider mr-1 flex items-center gap-1">
-              <Database className="w-3 h-3 text-rose-400" /> Cluster Engine:
-            </span>
-            {POPULAR_ENGINES.map((eng) => (
-              <button
-                key={eng.id}
-                type="button"
-                onClick={() => {
-                  setSelectedEngine(eng.id);
-                  onSelectEngine?.(eng.id as DatabaseEngine);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1 ${
-                  selectedEngine.toLowerCase().includes(eng.id)
-                    ? 'bg-rose-400 text-slate-950 shadow-md font-bold'
-                    : 'bg-rose-900/60 text-rose-200 hover:bg-rose-800/80 border border-rose-700/50'
-                }`}
-              >
-                <span>{eng.label}</span>
-                {eng.port > 0 && (
-                  <span className="text-[10px] opacity-75 font-mono">:{eng.port}</span>
-                )}
-              </button>
-            ))}
+          {/* Category Filter & Quick Engine Pills */}
+          <div className="mt-4 pt-3 border-t border-rose-800/40 space-y-2.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] text-rose-300/90 font-bold uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                <Database className="w-3 h-3 text-rose-400" /> Cluster Families:
+              </span>
+              {categoryPills.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeCategory === cat.id
+                      ? 'bg-rose-400 text-slate-950 shadow-sm'
+                      : 'bg-rose-900/50 text-rose-200 hover:bg-rose-800/70 border border-rose-700/40'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-rose-300/70 font-semibold uppercase tracking-wider mr-1">
+                Quick Models:
+              </span>
+              {quickEngines.map((eng) => {
+                const isSelected = selectedEngine.toLowerCase() === eng.id.toLowerCase();
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEngine(eng.id);
+                      onSelectEngine?.(eng.id as DatabaseEngine);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-rose-400 text-slate-950 shadow-md font-bold'
+                        : 'bg-rose-950/70 text-rose-100 hover:bg-rose-900 border border-rose-700/40'
+                    }`}
+                  >
+                    <span>{eng.name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

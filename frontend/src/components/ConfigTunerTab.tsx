@@ -22,6 +22,8 @@ interface ConfigTunerTabProps {
   onSelectEngine?: (engine: DatabaseEngine) => void;
 }
 
+import { resolveConfigTunerPreset, getEngineMetadataSafe } from '../utils/enginePresets';
+
 export const ConfigTunerTab: React.FC<ConfigTunerTabProps> = ({
   selectedEngine: propEngine,
   onSelectEngine,
@@ -40,6 +42,16 @@ export const ConfigTunerTab: React.FC<ConfigTunerTabProps> = ({
   const [storageType, setStorageType] = useState<string>('nvme_ssd');
   const [workloadType, setWorkloadType] = useState<string>('oltp_web');
   const [maxConnections, setMaxConnections] = useState<number>(300);
+
+  // Dynamically update realistic kernel and RAM tuning parameters when switching ANY of the 447 engines
+  useEffect(() => {
+    const preset = resolveConfigTunerPreset(selectedEngine);
+    setRamGb(preset.ramGb);
+    setCpuCores(preset.cpuCores);
+    setStorageType(preset.storageType);
+    setWorkloadType(preset.workloadType);
+    setMaxConnections(preset.maxConnections);
+  }, [selectedEngine]);
 
   const [result, setResult] = useState<ConfigTuningResult | null>(null);
   const [activeCodeTab, setActiveCodeTab] = useState<'engine' | 'sysctl' | 'limits'>('engine');

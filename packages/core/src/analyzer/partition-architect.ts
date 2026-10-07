@@ -50,6 +50,18 @@ export class PartitionArchitect {
 
     if (norm === 'clickhouse') {
       return this.planClickHouse(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('timescale') || norm.includes('influx') || meta.category === 'timeseries') {
+      return this.planTimescale(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('cockroach') || norm.includes('yugabyte')) {
+      return this.planCockroach(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('bigquery')) {
+      return this.planBigQuery(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('redshift')) {
+      return this.planRedshift(meta, table, col, strategy, rows, retention);
+    } else if (meta.category === 'search' || norm.includes('elastic') || norm.includes('opensearch')) {
+      return this.planElasticsearch(meta, table, col, strategy, rows, retention);
+    } else if (meta.category === 'baas_embedded' || norm.includes('sqlite') || norm.includes('turso')) {
+      return this.planSQLite(meta, table, col, strategy, rows, retention);
     } else if (norm === 'mysql' || norm === 'mariadb' || norm === 'planetscale') {
       return this.planMySQL(meta, table, col, strategy, rows, retention);
     } else if (norm === 'oracle' || norm === 'db2') {
@@ -547,4 +559,283 @@ CREATE TABLE production_keyspace.${table} (
       ],
     };
   }
+
+  private planTimescale(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- TimescaleDB Hypertable Dynamic Chunk Partitioning
+CREATE TABLE ${table} (
+    ${col} TIMESTAMPTZ NOT NULL,
+    device_id VARCHAR(64) NOT NULL,
+    metric_name VARCHAR(64) NOT NULL,
+    val DOUBLE PRECISION,
+    metadata JSONB
+);
+
+-- Convert to hypertable with automated 7-day chunk intervals:
+SELECT create_hypertable(
+    '${table}',
+    by_range('${col}', INTERVAL '7 days'),
+    if_not_exists => TRUE
+);
+
+-- Enable TimescaleDB Columnar Compression:
+ALTER TABLE ${table} SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'device_id, metric_name',
+    timescaledb.compress_orderby = '${col} DESC'
+);
+`;
+
+    const automation = `-- Automated 7-Day Chunk Compression Policy
+SELECT add_compression_policy('${table}', INTERVAL '7 days');
+
+-- Automated Retention Drop Policy (${retention} Months)
+SELECT add_retention_policy('${table}', INTERVAL '${retention * 30} days');
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'TimescaleDB Hypertable Range Chunk Partitioning',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: automation,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table} WHERE ${col} >= NOW() - INTERVAL '3 days';`,
+        partitionsScanned: '1 chunk scanned out of 48 total historical chunks',
+        totalPartitions: 48,
+        speedupFactor: '48x faster query execution',
+        explanation: 'Timescale query planner inspects chunk constraint exclusion catalog metadata and reads only the active chunk.',
+      },
+      shardDistribution: [
+        { shardName: '_hyper_1_1_chunk', rangeOrHash: 'Current 7-day window', estimatedRows: `${(rows / 4 / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '1.2 GB' },
+        { shardName: '_hyper_1_2_chunk', rangeOrHash: 'Previous 7-day window (Compressed)', estimatedRows: `${(rows / 4 / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '0.12 GB' },
+      ],
+      expertGuidelines: [
+        'Tune chunk_time_interval so each chunk fits entirely within shared_buffers for optimal write throughput.',
+        'Use `add_retention_policy` rather than SQL `DELETE` to drop expired time ranges with zero transaction log bloat.',
+      ],
+    };
+  }
+
+  private planCockroach(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- CockroachDB / YugabyteDB Multi-Region Geo-Partitioning
+CREATE TABLE ${table} (
+    id UUID DEFAULT gen_random_uuid(),
+    ${col} VARCHAR(16) NOT NULL, -- e.g. 'us-east', 'eu-west', 'ap-southeast'
+    tenant_id INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT clock_timestamp(),
+    payload JSONB,
+    PRIMARY KEY (${col}, id)
+) PARTITION BY LIST (${col}) (
+    PARTITION p_us VALUES IN ('us-east', 'us-west'),
+    PARTITION p_eu VALUES IN ('eu-west', 'eu-central'),
+    PARTITION p_ap VALUES IN ('ap-southeast', 'ap-northeast')
+);
+`;
+
+    const automation = `-- Pin Shard Partitions to Local Datacenter Survival Zones:
+ALTER PARTITION p_us OF TABLE ${table} CONFIGURE ZONE USING constraints = '[+region=us-east-1]';
+ALTER PARTITION p_eu OF TABLE ${table} CONFIGURE ZONE USING constraints = '[+region=eu-central-1]';
+ALTER PARTITION p_ap OF TABLE ${table} CONFIGURE ZONE USING constraints = '[+region=ap-southeast-1]';
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'CockroachDB Multi-Region Geo-Partitioned Spans',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: automation,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table} WHERE ${col} = 'us-east' AND id = '9e0b1f23...';`,
+        partitionsScanned: '1 partition (p_us) within local datacenter',
+        totalPartitions: 3,
+        speedupFactor: 'Zero cross-continent WAN network hops (< 2ms response)',
+        explanation: 'CockroachDB routes queries directly to the leaseholder node located within the matching region.',
+      },
+      shardDistribution: [
+        { shardName: 'p_us', rangeOrHash: 'us-east, us-west', estimatedRows: `${(rows * 0.5 / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '12 GB' },
+        { shardName: 'p_eu', rangeOrHash: 'eu-west, eu-central', estimatedRows: `${(rows * 0.3 / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '7 GB' },
+        { shardName: 'p_ap', rangeOrHash: 'ap-southeast, ap-northeast', estimatedRows: `${(rows * 0.2 / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '5 GB' },
+      ],
+      expertGuidelines: [
+        'Place the partition key first in the composite PRIMARY KEY to enable localized multi-region consensus replication.',
+      ],
+    };
+  }
+
+  private planBigQuery(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- Google BigQuery Partitioned & Clustered Table Architecture
+CREATE OR REPLACE TABLE \`production_dataset.${table}\` (
+    ${col} DATE NOT NULL,
+    tenant_id INT64,
+    event_name STRING,
+    user_id STRING,
+    revenue NUMERIC
+)
+PARTITION BY ${col}
+CLUSTER BY tenant_id, event_name
+OPTIONS (
+    partition_expiration_days = ${retention * 30},
+    require_partition_filter = TRUE
+);
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'Google BigQuery Date Partitioning with Column Clustering',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- Enforce query cost prevention by demanding partition filters:\nALTER TABLE \`production_dataset.${table}\` SET OPTIONS (require_partition_filter = TRUE);`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM \`production_dataset.${table}\` WHERE ${col} BETWEEN '2026-10-01' AND '2026-10-05' AND tenant_id = 101;`,
+        partitionsScanned: '5 daily partitions out of 730 total (99.3% bytes billed reduction)',
+        totalPartitions: 730,
+        speedupFactor: '140x cheaper query scan cost',
+        explanation: 'BigQuery metadata skips non-matching storage blocks. Clustering further reduces scanned columnar bytes.',
+      },
+      shardDistribution: [
+        { shardName: 'Day Partition', rangeOrHash: 'Single Calendar Day', estimatedRows: `${(rows / 30 / 1000000).toFixed(2)}M rows/day`, estimatedSizeGb: '1.5 GB/day' },
+      ],
+      expertGuidelines: [
+        'Always set `require_partition_filter = TRUE` in production to prevent junior developers from triggering unpartitioned terabyte full scans.',
+      ],
+    };
+  }
+
+  private planRedshift(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- Amazon Redshift Distribution & Compound Sort Key Architecture
+CREATE TABLE public.${table} (
+    ${col} TIMESTAMP NOT NULL,
+    tenant_id INT NOT NULL,
+    transaction_id VARCHAR(64) NOT NULL,
+    amount NUMERIC(12,2)
+)
+DISTSTYLE KEY
+DISTKEY (tenant_id)
+COMPOUND SORTKEY (${col}, tenant_id);
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'Amazon Redshift MPP Key Distribution & Zone Map Pruning',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `VACUUM SORT ONLY public.${table};\nANALYZE public.${table};`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM public.${table} WHERE ${col} >= '2026-10-01' AND tenant_id = 902;`,
+        partitionsScanned: '1 slice node scanned; Zone maps prune 95% of 1MB storage blocks',
+        totalPartitions: 16,
+        speedupFactor: '16x parallel MPP throughput',
+        explanation: 'Redshift DISTKEY sends query directly to slice node; SORTKEY zone maps skip non-qualifying 1MB blocks.',
+      },
+      shardDistribution: [
+        { shardName: 'MPP Slices (1-16)', rangeOrHash: 'Hash(tenant_id) across compute slices', estimatedRows: `${(rows / 16 / 1000000).toFixed(1)}M rows/slice`, estimatedSizeGb: '2.5 GB/slice' },
+      ],
+      expertGuidelines: [
+        'Choose a high-cardinality foreign key like tenant_id as the DISTKEY to avoid slice data skew.',
+      ],
+    };
+  }
+
+  private planElasticsearch(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `PUT /_index_template/${table}_template
+{
+  "index_patterns": ["${table}-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "index.lifecycle.name": "${table}_policy",
+      "index.lifecycle.rollover_alias": "${table}_write"
+    },
+    "mappings": {
+      "properties": {
+        "${col}": { "type": "date" },
+        "tenant_id": { "type": "keyword" },
+        "message": { "type": "text" }
+      }
+    }
+  }
 }
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'Elasticsearch / OpenSearch ILM Shard Rollover & Time Sharding',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `PUT /_ilm/policy/${table}_policy\n{\n  "policy": {\n    "phases": {\n      "hot": { "actions": { "rollover": { "max_primary_shard_size": "50gb", "max_age": "30d" } } },\n      "delete": { "min_age": "${retention * 30}d", "actions": { "delete": {} } }\n    }\n  }\n}`,
+      pruningSimulation: {
+        sampleQuery: `GET /${table}-*/_search\n{ "query": { "range": { "${col}": { "gte": "now-7d" } } } }`,
+        partitionsScanned: '1 active monthly index out of 24 historical indices',
+        totalPartitions: 24,
+        speedupFactor: '24x lower disk IOPS',
+        explanation: 'Elasticsearch pre-filters indices outside the requested date range before issuing Lucene shard queries.',
+      },
+      shardDistribution: [
+        { shardName: `${table}-2026.10-000001`, rangeOrHash: 'Active Month', estimatedRows: `${(rows / 1000000).toFixed(1)}M docs`, estimatedSizeGb: '18 GB' },
+      ],
+      expertGuidelines: [
+        'Keep shard sizes between 10GB and 50GB for balanced search and JVM garbage collection performance.',
+      ],
+    };
+  }
+
+  private planSQLite(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- SQLite / Turso Application-Level Monthly Sharding Architecture
+-- Base monthly partition table schema:
+CREATE TABLE ${table}_2026_10 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ${col} TEXT NOT NULL,
+    payload TEXT
+);
+
+CREATE INDEX idx_${table}_2026_10_${col} ON ${table}_2026_10(${col});
+
+-- Consolidated Master Union View for Cross-Partition Reads:
+CREATE VIEW ${table}_all AS
+    SELECT '2026_10' AS partition_name, * FROM ${table}_2026_10
+    UNION ALL
+    SELECT '2026_09' AS partition_name, * FROM ${table}_2026_09;
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'SQLite View-Based Sharded Table Slices',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- SQLite Automated Prune via ATTACH / DETACH DATABASE:\nDROP TABLE ${table}_2024_10;\nVACUUM;`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table}_2026_10 WHERE ${col} >= '2026-10-15';`,
+        partitionsScanned: '1 table slice directly queried (B-Tree scan on single sub-file)',
+        totalPartitions: 12,
+        speedupFactor: '12x smaller B-Tree file index depth',
+        explanation: 'Direct queries bypass large central B-Tree and read compact partitioned table files.',
+      },
+      shardDistribution: [
+        { shardName: `${table}_2026_10`, rangeOrHash: '2026-10 Slices', estimatedRows: `${(rows / 1000).toFixed(0)}K rows`, estimatedSizeGb: '45 MB' },
+      ],
+      expertGuidelines: [
+        'SQLite lacks native declarative partitioning; query individual slice tables directly or use UNION ALL views with pushdown filters.',
+      ],
+    };
+  }
+}
+

@@ -163,6 +163,78 @@ function resolveEngineDetails(rawEngine: string): {
       standbyPrefix: 'dw-compute-wh-2',
     };
   }
+  if (norm.includes('elastic') || norm.includes('opensearch') || norm.includes('solr')) {
+    return {
+      family: 'elasticsearch',
+      name: 'Elasticsearch / OpenSearch',
+      port: 9200,
+      process: 'elasticsearch',
+      failoverManager: 'Master Node Quorum (Cluster Coordination)',
+      consensusProtocol: 'Raft Cluster State Consensus',
+      primaryPrefix: 'es-master-node-01',
+      standbyPrefix: 'es-data-node-02',
+    };
+  }
+  if (norm.includes('milvus') || norm.includes('qdrant') || norm.includes('pinecone') || norm.includes('weaviate')) {
+    return {
+      family: 'vector',
+      name: 'Milvus / Vector Engine',
+      port: 19530,
+      process: 'milvus-coordinator',
+      failoverManager: 'Coordinator Active-Standby / etcd Lease',
+      consensusProtocol: 'Raft Coordinator Quorum',
+      primaryPrefix: 'milvus-coord-primary',
+      standbyPrefix: 'milvus-query-node-02',
+    };
+  }
+  if (norm.includes('neo4j') || norm.includes('memgraph')) {
+    return {
+      family: 'neo4j',
+      name: 'Neo4j Graph Database',
+      port: 7687,
+      process: 'neo4j',
+      failoverManager: 'Causal Clustering Core Quorum',
+      consensusProtocol: 'Raft Protocol Consensus',
+      primaryPrefix: 'neo4j-core-leader-01',
+      standbyPrefix: 'neo4j-core-follower-02',
+    };
+  }
+  if (norm.includes('timescale') || norm.includes('influx')) {
+    return {
+      family: 'timescale',
+      name: 'TimescaleDB / InfluxDB',
+      port: 5432,
+      process: 'timescaledb',
+      failoverManager: 'Patroni HA + etcd',
+      consensusProtocol: 'Distributed DCS Raft',
+      primaryPrefix: 'ts-writer-01',
+      standbyPrefix: 'ts-reader-02',
+    };
+  }
+  if (norm.includes('cockroach') || norm.includes('yugabyte')) {
+    return {
+      family: 'cockroach',
+      name: 'CockroachDB / YugabyteDB',
+      port: 26257,
+      process: 'cockroach',
+      failoverManager: 'Range Leaseholder Auto-Rebalancing',
+      consensusProtocol: 'Multi-Raft Consensus per Range',
+      primaryPrefix: 'crdb-node-az1',
+      standbyPrefix: 'crdb-node-az2',
+    };
+  }
+  if (norm.includes('kafka') || norm.includes('redpanda')) {
+    return {
+      family: 'kafka',
+      name: 'Apache Kafka / Redpanda',
+      port: 9092,
+      process: 'kafka-broker',
+      failoverManager: 'KRaft Controller Quorum',
+      consensusProtocol: 'KRaft Quorum Protocol',
+      primaryPrefix: 'kafka-broker-leader-1',
+      standbyPrefix: 'kafka-broker-follower-2',
+    };
+  }
   return {
     family: 'postgres',
     name: 'PostgreSQL',

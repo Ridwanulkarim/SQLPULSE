@@ -36,11 +36,25 @@ export const DeadlockSimulatorTab: React.FC<DeadlockSimulatorTabProps> = ({
       setSelectedEngine(propEngine);
     }
   }, [propEngine]);
+
+  const [activeCategory, setActiveCategory] = useState<string>('top_ranked');
   const [selectedScenario, setSelectedScenario] = useState<string>('circular_row_locks');
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [result, setResult] = useState<DeadlockSimulationResult | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Automatically adjust concurrency scenario based on selected engine family
+  useEffect(() => {
+    const norm = selectedEngine.toLowerCase();
+    if (norm.includes('redis') || norm.includes('valkey')) {
+      setSelectedScenario('distributed_lock_race');
+    } else if (norm.includes('mysql') || norm.includes('maria')) {
+      setSelectedScenario('gap_locks_range');
+    } else if (norm.includes('postgres') || norm.includes('oracle') || norm.includes('sqlserver')) {
+      setSelectedScenario('circular_row_locks');
+    }
+  }, [selectedEngine]);
 
   const scenarios = [
     { id: 'circular_row_locks', label: '💥 Circular Row Lock Deadlock', desc: 'Order ➔ Account vs Account ➔ Order' },
@@ -109,8 +123,67 @@ export const DeadlockSimulatorTab: React.FC<DeadlockSimulatorTabProps> = ({
             Deadlock &amp; Race Condition Visual Simulator
           </h2>
           <p className="text-xs sm:text-sm text-rose-200/90 mt-1 max-w-3xl">
-            Step through concurrent transactions, inspect lock queues and row acquisitions, watch graph cycles form in real time, and apply 1-click deterministic ordering fixes.
+            Step through concurrent transactions, inspect lock queues and row acquisitions, watch graph cycles form in real time, and apply 1-click deterministic ordering fixes for <span className="text-rose-300 font-bold">{DATABASE_CATALOG.find(d => d.id === selectedEngine)?.name || selectedEngine}</span>.
           </p>
+
+          {/* Category Filter & Quick Engine Pills */}
+          <div className="mt-4 pt-3 border-t border-rose-800/40 space-y-2.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] text-rose-300/90 font-bold uppercase tracking-wider shrink-0 mr-1">
+                Engine Categories:
+              </span>
+              {[
+                { id: 'top_ranked', label: '🏆 Top Ranked' },
+                { id: 'relational', label: '🏛️ Relational (SQL)' },
+                { id: 'document', label: '📄 Document NoSQL' },
+                { id: 'keyvalue', label: '⚡ Key-Value & Redis' },
+                { id: 'graph', label: '🕸️ Graph DBs' },
+                { id: 'wide_column', label: '📦 Wide-Column' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
+                    activeCategory === cat.id
+                      ? 'bg-rose-400 text-slate-950 shadow-sm'
+                      : 'bg-rose-900/50 text-rose-200 hover:bg-rose-800/70 border border-rose-700/40'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-rose-300/70 font-semibold uppercase tracking-wider mr-1">
+                Quick Models:
+              </span>
+              {DATABASE_CATALOG.filter((db) => {
+                if (activeCategory === 'top_ranked') return db.rank && db.rank <= 12;
+                return db.category === activeCategory;
+              }).slice(0, 10).map((eng) => {
+                const isSelected = selectedEngine.toLowerCase() === eng.id.toLowerCase();
+                return (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEngine(eng.id);
+                      onSelectEngine?.(eng.id as DatabaseEngine);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition active:scale-95 flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-rose-400 text-slate-950 shadow-md font-bold'
+                        : 'bg-rose-950/70 text-rose-100 hover:bg-rose-900 border border-rose-700/40'
+                    }`}
+                  >
+                    <span>{eng.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
