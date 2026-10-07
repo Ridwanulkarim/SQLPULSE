@@ -42,46 +42,102 @@ export class MultiEngineDispatcher {
 
     let isFallback = false;
 
-    if (engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona') {
-      result = this.mysqlAnalyzer.analyze(plan);
-    } else if (engine === 'sqlite' || engine === 'turso' || engine === 'spatialite') {
-      result = this.sqliteAnalyzer.analyze(plan);
-    } else if (
+    const norm = (engine || '').toLowerCase().trim();
+
+    const isWideColumn =
+      metadata.category === 'wide_column' ||
+      norm.includes('cassandra') ||
+      norm.includes('scylla') ||
+      norm.includes('hbase') ||
+      norm.includes('accumulo') ||
+      (typeof plan === 'string' && /Tracing session|ALLOW FILTERING|ScyllaDB Trace/i.test(plan));
+
+    const isRedis =
+      metadata.category === 'keyvalue' ||
+      norm.includes('redis') ||
+      norm.includes('valkey') ||
+      norm.includes('keydb') ||
+      (typeof plan === 'string' && /SLOWLOG|SCAN 0|KEYS \*/i.test(plan));
+
+    const isOlap =
+      metadata.category === 'olap' ||
+      norm.includes('clickhouse') ||
+      norm.includes('snowflake') ||
+      norm.includes('duckdb') ||
+      norm.includes('bigquery') ||
+      norm.includes('redshift') ||
+      (typeof plan === 'string' && /ClickHouse Pipeline|Snowflake Profile|BigQuery Execution|DuckDB Physical/i.test(plan));
+
+    const isSearchVector =
+      metadata.category === 'vector' ||
+      metadata.category === 'search' ||
+      norm.includes('elastic') ||
+      norm.includes('opensearch') ||
+      norm.includes('solr') ||
+      norm.includes('meili') ||
+      (typeof plan === 'string' && /VectorScan|HNSW|FLAT|deep_pagination/i.test(plan)) ||
+      (typeof plan === 'object' && plan && ('took' in plan || 'shards' in plan));
+
+    const isGraph =
+      metadata.category === 'graph' ||
+      norm.includes('neo4j') ||
+      norm.includes('graph') ||
+      norm.includes('neptune') ||
+      (typeof plan === 'string' && /Cypher Execution|MATCH \(|AllNodesScan/i.test(plan));
+
+    const isTimeSeries =
+      metadata.category === 'timeseries' ||
+      norm.includes('influx') ||
+      norm.includes('prometheus') ||
+      norm.includes('dolphin') ||
+      (typeof plan === 'string' && /PromQL|InfluxDB|DolphinDB/i.test(plan));
+
+    const isDocument =
       metadata.category === 'document' ||
       metadata.category === 'baas_embedded' ||
-      engine === 'mongodb' ||
-      engine === 'couchdb' ||
-      engine === 'couchbase' ||
-      engine === 'ravendb' ||
-      engine === 'rethinkdb'
-    ) {
-      result = this.mongoAnalyzer.analyze(plan);
-    } else if (metadata.category === 'keyvalue') {
-      result = SpecializedAnalyzers.analyzeRedis(plan);
-    } else if (metadata.category === 'vector' || metadata.category === 'search') {
-      result = SpecializedAnalyzers.analyzeSearchVector(plan, engine);
-    } else if (metadata.category === 'graph') {
-      result = SpecializedAnalyzers.analyzeGraph(plan, engine);
-    } else if (metadata.category === 'timeseries') {
-      result = SpecializedAnalyzers.analyzeTimeSeries(plan, engine);
-    } else if (metadata.category === 'wide_column') {
+      norm.includes('mongo') ||
+      norm.includes('dynamo') ||
+      norm.includes('couch') ||
+      norm.includes('firestore');
+
+    if (norm === 'mysql' || norm === 'mariadb' || norm === 'planetscale' || norm === 'percona') {
+      result = this.mysqlAnalyzer.analyze(plan);
+    } else if (norm === 'sqlite' || norm === 'turso' || norm === 'spatialite') {
+      result = this.sqliteAnalyzer.analyze(plan);
+    } else if (isWideColumn) {
       result = SpecializedAnalyzers.analyzeWideColumn(plan, engine);
-    } else if (
-      metadata.category === 'olap' ||
-      engine === 'clickhouse' ||
-      engine === 'snowflake' ||
-      engine === 'duckdb' ||
-      engine === 'bigquery' ||
-      engine === 'google_bigquery' ||
-      engine === 'amazon_redshift' ||
-      engine === 'redshift' ||
-      engine === 'databricks'
-    ) {
+    } else if (isRedis) {
+      result = SpecializedAnalyzers.analyzeRedis(plan);
+    } else if (isOlap) {
       result = SpecializedAnalyzers.analyzeOlap(plan, engine);
+    } else if (isSearchVector) {
+      result = SpecializedAnalyzers.analyzeSearchVector(plan, engine);
+    } else if (isGraph) {
+      result = SpecializedAnalyzers.analyzeGraph(plan, engine);
+    } else if (isTimeSeries) {
+      result = SpecializedAnalyzers.analyzeTimeSeries(plan, engine);
+    } else if (isDocument) {
+      if (typeof plan === 'string' && (plan.includes('DynamoDB') || plan.includes('ConsumedCapacity') || !plan.trim().startsWith('{'))) {
+        result = SpecializedAnalyzers.analyzeDocumentText(plan, engine);
+      } else {
+        result = this.mongoAnalyzer.analyze(plan);
+      }
     } else {
-      result = this.postgresAnalyzer.analyze(plan);
-      if (!nativePostgresEngines.includes(engine.toLowerCase())) {
-        isFallback = true;
+      const isJsonPlan =
+        typeof plan === 'object' ||
+        (typeof plan === 'string' && (plan.trim().startsWith('{') || plan.trim().startsWith('[')));
+
+      if (isJsonPlan) {
+        try {
+          result = this.postgresAnalyzer.analyze(plan);
+          if (!nativePostgresEngines.includes(norm)) {
+            isFallback = true;
+          }
+        } catch {
+          result = SpecializedAnalyzers.analyzeRelationalText(plan, engine);
+        }
+      } else {
+        result = SpecializedAnalyzers.analyzeRelationalText(plan, engine);
       }
     }
 

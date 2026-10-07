@@ -408,4 +408,132 @@ export class SpecializedAnalyzers {
       graph: { nodes: graphNodes, edges: [] },
     };
   }
+
+  public static analyzeDocumentText(rawInput: any, engine: DatabaseEngine = 'dynamodb'): PlanAnalysisResult {
+    const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
+    const bottlenecks: BottleneckFinding[] = [];
+
+    if (/Operation:\s*Scan|TableScan|Full\s*Scan|FilterExpression/i.test(text) || text.includes('full table scan')) {
+      bottlenecks.push({
+        id: 'doc_full_scan',
+        nodeType: 'Unindexed Document Table Scan',
+        severity: 'CRITICAL',
+        title: `${engine.toUpperCase()}: Full Table Scan Anti-Pattern`,
+        description: 'Scanning the entire document collection reads every item and discards non-matching rows on the client/coordinator, resulting in high RCU consumption and high latency.',
+        metricLabel: 'Scan Scope',
+        metricValue: 'Full Collection Scan',
+        recommendation: 'Use partition/hash key queries or build a Global Secondary Index (GSI) to query directly by indexed attributes.',
+        suggestedSql: `Query with KeyConditionExpression on GSI Partition Key`,
+      });
+    }
+
+    const isBottleneck = bottlenecks.length > 0;
+    const graphNodes: GraphNodeData[] = [
+      {
+        id: 'doc_root',
+        nodeType: `${engine.toUpperCase()} Document Read`,
+        totalCost: isBottleneck ? 1850 : 2,
+        actualTotalTimeMs: isBottleneck ? 145.0 : 4.0,
+        costPercentage: 100,
+        timePercentage: 100,
+        planRows: isBottleneck ? 150000 : 120,
+        sharedHitBlocks: 1000,
+        sharedReadBlocks: isBottleneck ? 15000 : 0,
+        isBottleneck,
+        severity: isBottleneck ? 'CRITICAL' : 'OPTIMAL',
+        details: { docContext: text },
+      },
+    ];
+
+    return {
+      engine,
+      performanceScore: isBottleneck ? 25 : 98,
+      executionTimeMs: isBottleneck ? 145.0 : 4.0,
+      planningTimeMs: 0.5,
+      totalCost: isBottleneck ? 1850 : 2,
+      totalMemoryHits: 1000,
+      totalDiskReads: isBottleneck ? 15000 : 0,
+      cacheHitRatioPercentage: isBottleneck ? 45.0 : 100,
+      bottlenecks,
+      recommendations: bottlenecks.map((b) => ({
+        category: 'NoSQL Document Data Modeling',
+        title: b.title,
+        description: b.recommendation,
+        suggestedSql: b.suggestedSql,
+        impact: 'HIGH' as const,
+      })),
+      graph: { nodes: graphNodes, edges: [] },
+    };
+  }
+
+  public static analyzeRelationalText(rawInput: any, engine: DatabaseEngine = 'oracle'): PlanAnalysisResult {
+    const text = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput, null, 2);
+    const bottlenecks: BottleneckFinding[] = [];
+
+    if (/TABLE ACCESS FULL|Clustered Index Scan|Table Scan|Full Table Scan|Seq Scan|SEQ_SCAN/i.test(text)) {
+      bottlenecks.push({
+        id: 'rel_full_table_scan',
+        nodeType: 'Full Table Scan',
+        severity: 'CRITICAL',
+        title: `${engine.toUpperCase()}: Full Table Scan Detected`,
+        description: 'The query performs a full scan of all data blocks rather than utilizing B-Tree index lookups, creating high disk I/O and buffer cache churn.',
+        metricLabel: 'Access Path',
+        metricValue: 'Full Table Scan',
+        recommendation: 'Create a composite index on the predicate filter and join columns to enable index range seeks.',
+        suggestedSql: `CREATE INDEX idx_${engine}_optimized ON target_table (filter_col, created_at);`,
+      });
+    }
+
+    if (/SORT\s+ORDER\s+BY|SpillToTempDb|Tempdb\s+Spill|Disk\s+Sort/i.test(text)) {
+      bottlenecks.push({
+        id: 'rel_sort_spill',
+        nodeType: 'Heavy Sort / Temp Spill',
+        severity: 'WARNING',
+        title: `${engine.toUpperCase()}: Expensive Sort or Temp Area Spill`,
+        description: 'Sorting large result sets without an index ordering causes PGA / TempDB worktable disk spills.',
+        metricLabel: 'Workarea Memory',
+        metricValue: 'Temp Spill',
+        recommendation: 'Align B-Tree index column order with ORDER BY / GROUP BY clauses to eliminate runtime sorting.',
+      });
+    }
+
+    const isBottleneck = bottlenecks.length > 0;
+    const graphNodes: GraphNodeData[] = [
+      {
+        id: 'rel_root',
+        nodeType: `${engine.toUpperCase()} Execution Tree`,
+        totalCost: isBottleneck ? 3500 : 45,
+        actualTotalTimeMs: isBottleneck ? 180.0 : 2.5,
+        costPercentage: 100,
+        timePercentage: 100,
+        planRows: isBottleneck ? 50000 : 100,
+        sharedHitBlocks: 4500,
+        sharedReadBlocks: isBottleneck ? 25000 : 0,
+        isBottleneck,
+        severity: isBottleneck ? 'CRITICAL' : 'OPTIMAL',
+        details: { planText: text },
+      },
+    ];
+
+    return {
+      engine,
+      performanceScore: isBottleneck ? 35 : 95,
+      executionTimeMs: isBottleneck ? 180.0 : 2.5,
+      planningTimeMs: 1.0,
+      totalCost: isBottleneck ? 3500 : 45,
+      totalMemoryHits: 4500,
+      totalDiskReads: isBottleneck ? 25000 : 0,
+      cacheHitRatioPercentage: isBottleneck ? 60.0 : 100,
+      bottlenecks,
+      recommendations: bottlenecks.map((b) => ({
+        category: 'Relational Index Optimization',
+        title: b.title,
+        description: b.recommendation,
+        suggestedSql: b.suggestedSql,
+        impact: (b.severity === 'CRITICAL' ? 'HIGH' : 'MEDIUM') as 'HIGH' | 'MEDIUM' | 'LOW',
+      })),
+      graph: { nodes: graphNodes, edges: [] },
+    };
+  }
 }
+

@@ -92,8 +92,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    handleLoadSample('slow', selectedEngine);
-  }, [selectedEngine]);
+    if (activeTab === 'plan') {
+      handleLoadSample('slow', selectedEngine);
+    }
+  }, [selectedEngine, activeTab]);
 
   const handleAnalyze = async (planText: string, query?: string, engine: DatabaseEngine = selectedEngine) => {
     setIsLoading(true);
@@ -165,7 +167,10 @@ export function App() {
       setRawPlanInput(planToUse);
       setRawQuery(sampleQuery);
     } catch (err: any) {
-      alert(err.message || 'Failed to load sample plan');
+      console.warn('Failed to load sample plan for engine:', engine, err);
+      if (activeTab === 'plan') {
+        alert(err.message || 'Failed to load sample plan');
+      }
     } finally {
       setIsLoading(false);
     }

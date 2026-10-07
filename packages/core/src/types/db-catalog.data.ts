@@ -4922,27 +4922,72 @@ export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [
 
 export function getEngineMetadata(engine: string = 'postgres'): DatabaseEngineMetadata {
   const norm = (engine || '').toLowerCase().trim();
-  const found = DATABASE_CATALOG.find((d) => d.id === norm || d.id === engine);
-  if (found) return found;
+  let found = DATABASE_CATALOG.find((d) => d.id === norm || d.id === engine);
+
+  if (!found) {
+    // Canonical prefix / alias matching across the entire catalog
+    found = DATABASE_CATALOG.find(
+      (d) =>
+        d.id === `apache_${norm}` ||
+        d.id === `amazon_${norm}` ||
+        d.id === `google_${norm}` ||
+        d.id === `microsoft_${norm}` ||
+        d.id === `azure_${norm}` ||
+        d.id.replace(/^(apache|amazon|google|microsoft|azure)_/, '') === norm ||
+        d.name.toLowerCase() === norm ||
+        d.name.toLowerCase().startsWith(norm)
+    );
+  }
 
   // Well-known Aliases
   if (norm === 'postgres' || norm === 'postgresql') {
-    return DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+  } else if (norm === 'aurora' || norm === 'aurora_postgres' || norm === 'amazon_aurora') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_aurora') || DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+  } else if (norm === 'timescale' || norm === 'timescaledb') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'timescaledb') || DATABASE_CATALOG[0];
+  } else if (norm === 'yugabyte' || norm === 'yugabytedb') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'yugabytedb') || DATABASE_CATALOG[0];
+  } else if (norm === 'mssql' || norm === 'sqlserver' || norm === 'sql_server') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'microsoft_sql_server') || DATABASE_CATALOG[0];
+  } else if (norm === 'dynamodb' || norm === 'amazon_dynamodb') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_dynamodb') || DATABASE_CATALOG[0];
+  } else if (norm === 'cassandra' || norm === 'apache_cassandra') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'apache_cassandra') || DATABASE_CATALOG[0];
+  } else if (norm === 'hbase' || norm === 'apache_hbase') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'apache_hbase') || DATABASE_CATALOG[0];
+  } else if (norm === 'scylla' || norm === 'scylladb') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'scylladb') || DATABASE_CATALOG[0];
+  } else if (norm === 'bigquery' || norm === 'google_bigquery') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'google_bigquery') || DATABASE_CATALOG[0];
+  } else if (norm === 'redshift' || norm === 'amazon_redshift') {
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_redshift') || DATABASE_CATALOG[0];
   }
-  if (norm === 'aurora' || norm === 'aurora_postgres' || norm === 'amazon_aurora') {
-    return DATABASE_CATALOG.find((d) => d.id === 'amazon_aurora') || DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
-  }
-  if (norm === 'timescale' || norm === 'timescaledb') {
-    return DATABASE_CATALOG.find((d) => d.id === 'timescaledb') || DATABASE_CATALOG[0];
-  }
-  if (norm === 'yugabyte' || norm === 'yugabytedb') {
-    return DATABASE_CATALOG.find((d) => d.id === 'yugabytedb') || DATABASE_CATALOG[0];
-  }
-  if (norm === 'mssql' || norm === 'sqlserver' || norm === 'sql_server') {
-    return DATABASE_CATALOG.find((d) => d.id === 'microsoft_sql_server') || DATABASE_CATALOG[0];
-  }
-  if (norm === 'dynamodb' || norm === 'amazon_dynamodb') {
-    return DATABASE_CATALOG.find((d) => d.id === 'amazon_dynamodb') || DATABASE_CATALOG[0];
+
+  if (found) {
+    const checkName = (found.id + ' ' + found.name).toLowerCase();
+    let category = found.category;
+    let categoryLabel = found.categoryLabel;
+    if (category === 'relational') {
+      if (checkName.includes('search') || checkName.includes('solr') || checkName.includes('elastic') || checkName.includes('meili') || checkName.includes('zinc')) {
+        category = 'search';
+        categoryLabel = 'Search Engines';
+      } else if (checkName.includes('graph') || checkName.includes('neo4j') || checkName.includes('dgraph') || checkName.includes('neptune') || checkName.includes('orientdb')) {
+        category = 'graph';
+        categoryLabel = 'Graph Database';
+      } else if (checkName.includes('timescale') || checkName.includes('influx') || checkName.includes('prometheus') || checkName.includes('dolphin') || checkName.includes('greptime')) {
+        category = 'timeseries';
+        categoryLabel = 'Time Series';
+      } else if (checkName.includes('cassandra') || checkName.includes('scylla') || checkName.includes('hbase') || checkName.includes('accumulo') || checkName.includes('keyspace')) {
+        category = 'wide_column';
+        categoryLabel = 'Wide-Column NoSQL';
+      }
+    }
+    return {
+      ...found,
+      category,
+      categoryLabel,
+    };
   }
 
   // Dynamic fallback for custom/unknown engines (Do NOT default to Oracle)

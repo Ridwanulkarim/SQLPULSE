@@ -84,4 +84,23 @@ describe('PlanAnalyzer Engine Tests', () => {
     expect(res.engineMetadata?.name).toBe('Not A Real Engine (Custom)');
     expect(res.engineMetadata?.name).not.toBe('Oracle');
   });
+
+  test('MultiEngineDispatcher: Cassandra and wide-column tracing sessions parse cleanly without JSON errors', () => {
+    const cassandraTrace = `Tracing session 9e24fa10:
+Activity: Executing single-partition query
+Warning: Query 'SELECT * FROM user_events WHERE event_type = 'click' ALLOW FILTERING' scanned all partitions across 16 cluster nodes.
+Total Latency: 420ms`;
+
+    const res = dispatcher.analyzePlan('cassandra' as any, cassandraTrace);
+    expect(res.engine).toBe('cassandra');
+    expect(res.performanceScore).toBeLessThan(50);
+    expect(res.bottlenecks.length).toBeGreaterThan(0);
+    expect(res.bottlenecks[0].id).toBe('cassandra_allow_filtering');
+
+    // Apache Cassandra alias check
+    const apacheRes = dispatcher.analyzePlan('apache_cassandra' as any, cassandraTrace);
+    expect(apacheRes.engine).toBe('apache_cassandra');
+    expect(apacheRes.bottlenecks[0].id).toBe('cassandra_allow_filtering');
+  });
 });
+
