@@ -4941,27 +4941,27 @@ export function getEngineMetadata(engine: string = 'postgres'): DatabaseEngineMe
 
   // Well-known Aliases
   if (norm === 'postgres' || norm === 'postgresql') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'postgresql');
   } else if (norm === 'aurora' || norm === 'aurora_postgres' || norm === 'amazon_aurora') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_aurora') || DATABASE_CATALOG.find((d) => d.id === 'postgresql') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_aurora') || DATABASE_CATALOG.find((d) => d.id === 'postgresql');
   } else if (norm === 'timescale' || norm === 'timescaledb') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'timescaledb') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'timescaledb');
   } else if (norm === 'yugabyte' || norm === 'yugabytedb') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'yugabytedb') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'yugabytedb');
   } else if (norm === 'mssql' || norm === 'sqlserver' || norm === 'sql_server') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'microsoft_sql_server') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'microsoft_sql_server');
   } else if (norm === 'dynamodb' || norm === 'amazon_dynamodb') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_dynamodb') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_dynamodb');
   } else if (norm === 'cassandra' || norm === 'apache_cassandra') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'apache_cassandra') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'apache_cassandra');
   } else if (norm === 'hbase' || norm === 'apache_hbase') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'apache_hbase') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'apache_hbase');
   } else if (norm === 'scylla' || norm === 'scylladb') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'scylladb') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'scylladb');
   } else if (norm === 'bigquery' || norm === 'google_bigquery') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'google_bigquery') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'google_bigquery');
   } else if (norm === 'redshift' || norm === 'amazon_redshift') {
-    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_redshift') || DATABASE_CATALOG[0];
+    found = DATABASE_CATALOG.find((d) => d.id === 'amazon_redshift');
   }
 
   if (found) {

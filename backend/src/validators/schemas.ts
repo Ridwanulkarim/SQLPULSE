@@ -1,4 +1,13 @@
 import { z } from 'zod';
+import { isValidEngine } from '@sqlpulse/core';
+
+export const engineSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .refine((val) => isValidEngine(val), {
+    message: 'Unknown or unsupported database engine. Must be a valid engine from DATABASE_CATALOG.',
+  });
 
 export const saveReportSchema = z.object({
   title: z.string().max(200).optional(),
@@ -17,27 +26,27 @@ export const analyzePlanSchema = z.object({
     z.array(z.any()),
   ]),
   query: z.string().max(50000).optional(),
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
 });
 
 export const lintMigrationSchema = z.object({
   sql: z.string().min(1).max(100000),
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
 });
 
 export const adviseQuerySchema = z.object({
   query: z.string().min(1).max(50000),
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
 });
 
 export const transpileSchema = z.object({
-  sourceEngine: z.string().min(1).max(100).default('oracle'),
-  targetEngine: z.string().min(1).max(100).default('postgres'),
+  sourceEngine: engineSchema.default('oracle'),
+  targetEngine: engineSchema.default('postgres'),
   sourceCode: z.string().min(1).max(100000),
 });
 
 export const tuneConfigSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   ramGb: z.number().min(0.5).max(4096).default(16),
   cpuCores: z.number().min(1).max(512).default(4),
   storageType: z.string().max(50).default('nvme_ssd'),
@@ -46,14 +55,14 @@ export const tuneConfigSchema = z.object({
 });
 
 export const deadlockSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   scenarioId: z.string().max(100).default('circular_row_locks'),
   txASql: z.string().max(10000).optional(),
   txBSql: z.string().max(10000).optional(),
 });
 
 export const disasterRecoverySchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   dbSizeGb: z.number().min(1).max(1000000).default(500),
   dailyChangePercent: z.number().min(0.1).max(100).default(10),
   networkBandwidthMbps: z.number().min(1).max(100000).default(1000),
@@ -64,13 +73,13 @@ export const disasterRecoverySchema = z.object({
 
 export const synthesizeQuerySchema = z.object({
   prompt: z.string().min(1).max(10000),
-  targetEngine: z.string().min(1).max(100).default('postgres'),
+  targetEngine: engineSchema.default('postgres'),
   schemaContext: z.string().max(50000).optional(),
   domainPreset: z.string().max(50).optional(),
 });
 
 export const connectHubSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   host: z.string().max(255).optional(),
   port: z.number().min(1).max(65535).optional(),
   database: z.string().max(255).optional(),
@@ -81,7 +90,7 @@ export const connectHubSchema = z.object({
 });
 
 export const partitionSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   tableName: z.string().min(1).max(255).default('user_events'),
   partitionColumn: z.string().min(1).max(255).default('created_at'),
   strategy: z.string().max(50).default('range_monthly'),
@@ -90,21 +99,21 @@ export const partitionSchema = z.object({
 });
 
 export const inspectLogsSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   logContent: z.string().max(500000).default(''),
 });
 
 export const bloatSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   tableName: z.string().max(255).optional(),
   totalTableSizeGb: z.number().min(0.01).max(1000000).optional(),
   deadTuplePercentage: z.number().min(0).max(100).optional(),
   avgDailyUpdates: z.number().min(0).max(1000000000).optional(),
-  targetIoSpeedMbSec: z.number().min(1).max(10000).optional(),
+  targetIoSpeedMbSec: z.number().min(1).max(100000).optional(),
 });
 
 export const replicationSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   primaryRegion: z.string().max(100).optional(),
   syncReplicasCount: z.number().min(0).max(100).optional(),
   asyncReplicasCount: z.number().min(0).max(100).optional(),
@@ -113,7 +122,7 @@ export const replicationSchema = z.object({
 });
 
 export const securityRbacSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   tableName: z.string().max(255).optional(),
   tenantColumn: z.string().max(255).optional(),
   piiColumns: z.array(z.string().max(255)).max(100).optional(),
@@ -121,14 +130,14 @@ export const securityRbacSchema = z.object({
 });
 
 export const mockDataSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   preset: z.string().max(50).optional(),
   rowCount: z.number().min(1).max(50000).default(100),
   format: z.string().max(50).default('sql_insert'),
 });
 
 export const finOpsSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   cloudProvider: z.string().max(50).optional(),
   dbSizeGb: z.number().min(1).max(1000000).optional(),
   monthlyReadQueriesMillion: z.number().min(0).max(1000000000).optional(),
@@ -142,27 +151,27 @@ export const finOpsSchema = z.object({
 });
 
 export const indexDoctorSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   tableName: z.string().max(255).optional(),
   indexes: z.array(z.any()).max(100).optional(),
   rawIndexDdl: z.string().max(50000).optional(),
 });
 
 export const piiSanitizerSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   tableName: z.string().max(255).optional(),
   columns: z.array(z.string().max(255)).max(100).optional(),
   anonymizationSalt: z.string().max(255).optional(),
 });
 
 export const queryRewriterSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   query: z.string().min(1).max(50000),
   tableHint: z.string().max(255).optional(),
 });
 
 export const schemaDiffSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgresql'),
+  engine: engineSchema.default('postgresql'),
   sourceEnv: z.string().max(255).optional(),
   targetEnv: z.string().max(255).optional(),
   sourceDdl: z.string().max(200000).optional(),
@@ -170,33 +179,34 @@ export const schemaDiffSchema = z.object({
 });
 
 export const ormProfilerSchema = z.object({
+  engine: engineSchema.default('postgres'),
   framework: z.string().min(1).max(50).default('prisma'),
   rawQueryOrCode: z.string().max(100000).optional(),
   batchSize: z.number().min(1).max(50000).default(1000),
 });
 
 export const readinessSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   environmentType: z.string().max(50).optional(),
   estimatedQps: z.number().min(1).max(10000000).optional(),
   applyTuningPatch: z.boolean().optional(),
 });
 
 export const chaosSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   scenarioId: z.string().max(100).optional(),
   clusterSize: z.number().min(1).max(100).optional(),
   syncMode: z.enum(['sync', 'async']).optional(),
 });
 
 export const cdcOutboxSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   sourceTable: z.string().max(255).optional(),
   destinationBroker: z.enum(['kafka', 'rabbitmq', 'sqs', 'redis_streams']).optional(),
 });
 
 export const vectorTuneSchema = z.object({
-  engine: z.string().min(1).max(100).default('postgres'),
+  engine: engineSchema.default('postgres'),
   dimension: z.number().min(1).max(32768).optional(),
   vectorCount: z.number().min(1).max(1000000000).optional(),
   indexType: z.enum(['HNSW', 'IVFFLAT']).optional(),

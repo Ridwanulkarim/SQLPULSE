@@ -413,5 +413,42 @@ describe('SQLPulse API Integration & Security Tests', () => {
       expect(res.data.status).toBe('healthy');
       expect(res.data.service).toBe('SQLPulse Engine');
     });
+
+    it('rejects unknown engine ids with HTTP 400 across endpoints', () => {
+      const { analyzePlan, lintMigration, profileOrm } = require('./controllers/analyze.controller');
+
+      // 1. analyzePlan with unknown engine
+      const { req: pReq, res: pRes } = createMockReqRes({
+        body: {
+          plan: '{"Plan": {"Node Type": "Seq Scan"}}',
+          engine: 'non_existent_engine_9999',
+        },
+      });
+      analyzePlan(pReq, pRes);
+      expect(pRes.statusCode).toBe(400);
+      expect(pRes.data.success).toBe(false);
+
+      // 2. lintMigration with unknown engine
+      const { req: mReq, res: mRes } = createMockReqRes({
+        body: {
+          sql: 'CREATE TABLE t (id INT);',
+          engine: 'invented_fake_db',
+        },
+      });
+      lintMigration(mReq, mRes);
+      expect(mRes.statusCode).toBe(400);
+      expect(mRes.data.success).toBe(false);
+
+      // 3. profileOrm with unknown engine
+      const { req: oReq, res: oRes } = createMockReqRes({
+        body: {
+          engine: 'totally_bogus_db',
+          framework: 'prisma',
+        },
+      });
+      profileOrm(oReq, oRes);
+      expect(oRes.statusCode).toBe(400);
+      expect(oRes.data.success).toBe(false);
+    });
   });
 });

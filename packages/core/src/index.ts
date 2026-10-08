@@ -1,6 +1,8 @@
 // Types & Catalog
 export * from './types/plan.types';
 export * from './types/db-catalog.data';
+export * from './types/engine-profile';
+export * from './types/engine-profiles';
 
 // Analyzers & Heuristics
 export * from './analyzer/engine-dispatcher';
@@ -33,7 +35,7 @@ export * from './analyzer/production-readiness';
 export * from './analyzer/chaos-simulator';
 export * from './analyzer/cdc-outbox';
 export * from './analyzer/vector-tuner';
-export * from './analyzer/sql-utils';
+export { isValidIdentifier, sanitizeSqlIdentifier, quoteIdentifier } from './analyzer/sql-utils';
 
 // Samples
 export * from './samples/sample-data';

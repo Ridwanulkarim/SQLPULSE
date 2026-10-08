@@ -1,78 +1,49 @@
-import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
+import { EngineFamily } from '../types/engine-profile';
+import { resolveEngineFamily as resolveCanonicalFamily, getEngineProfile } from '../types/engine-profiles';
+
+export { EngineFamily } from '../types/engine-profile';
 
 /**
  * Utility functions for validating and sanitizing SQL identifiers.
  */
 
-/**
- * Sanitizes an SQL identifier (table name, column name, index name) to prevent
- * accidental syntax corruption or identifier-based injection when generating DDL scripts.
- */
+export function isValidIdentifier(identifier: string = ''): boolean {
+  if (!identifier || typeof identifier !== 'string') return false;
+  return /^[A-Za-z_][A-Za-z0-9_$]*$/.test(identifier.trim());
+}
+
 export function sanitizeSqlIdentifier(identifier: string = '', fallback: string = 'target_table'): string {
   if (!identifier || typeof identifier !== 'string') {
     return fallback;
   }
-  // Trim and strip characters outside of standard alphanumeric and underscores
-  const cleaned = identifier.trim().replace(/[^a-zA-Z0-9_.]/g, '');
-  return cleaned.length > 0 ? cleaned : fallback;
+  const trimmed = identifier.trim();
+  if (isValidIdentifier(trimmed)) {
+    return trimmed;
+  }
+  const cleaned = trimmed.replace(/[^A-Za-z0-9_$]/g, '');
+  if (cleaned.length === 0) return fallback;
+  if (/^[0-9$]/.test(cleaned)) return `t_${cleaned}`;
+  return cleaned;
 }
 
-/**
- * Safely quotes an SQL identifier for PostgreSQL / standard ANSI SQL.
- */
-export function quoteIdentifier(identifier: string = '', fallback: string = 'target_table'): string {
+export function quoteIdentifier(identifier: string = '', engineId: string = 'postgresql', fallback: string = 'target_table'): string {
   const safe = sanitizeSqlIdentifier(identifier, fallback);
-  if (safe.includes('.')) {
-    return safe
-      .split('.')
-      .map((part) => `"${part}"`)
-      .join('.');
-  }
-  return `"${safe}"`;
+  const profile = getEngineProfile(engineId);
+  return profile.syntax.quoteIdentifier(safe);
 }
 
-export type EngineFamily =
-  | 'postgres'
-  | 'mysql'
-  | 'oracle'
-  | 'sqlserver'
-  | 'snowflake'
-  | 'clickhouse'
-  | 'mongodb'
-  | 'redis'
-  | 'cassandra'
-  | 'sqlite';
-
-export function resolveEngineFamily(engineId: string): EngineFamily {
+export function resolveEngineFamily(engineId?: string): EngineFamily {
   const norm = (engineId || '').toLowerCase().trim();
-  const meta = getEngineMetadata(norm);
-
-  if (norm.includes('mysql') || norm.includes('maria') || norm === 'planetscale' || norm.includes('percona') || norm.includes('tidb') || norm.includes('singlestore') || norm.includes('aurora_mysql')) {
-    return 'mysql';
-  }
-  if (norm.includes('oracle') || norm.includes('db2') || norm.includes('exadata')) {
-    return 'oracle';
-  }
-  if (norm.includes('sqlserver') || norm.includes('mssql') || norm.includes('sql_server') || norm.includes('azure_sql') || norm.includes('sybase')) {
-    return 'sqlserver';
-  }
-  if (norm.includes('snowflake')) {
-    return 'snowflake';
-  }
-  if (norm.includes('clickhouse') || norm.includes('duckdb') || norm.includes('firebolt')) {
-    return 'clickhouse';
-  }
-  if (meta.category === 'document' || norm.includes('mongo') || norm.includes('documentdb') || norm.includes('couch')) {
-    return 'mongodb';
-  }
-  if (meta.category === 'keyvalue' || norm.includes('redis') || norm.includes('valkey') || norm.includes('keydb') || norm.includes('dragonfly') || norm.includes('memcached')) {
-    return 'redis';
-  }
-  if (meta.category === 'wide_column' || norm.includes('cassandra') || norm.includes('scylla') || norm.includes('hbase') || norm.includes('accumulo')) {
-    return 'cassandra';
-  }
-  if (norm.includes('sqlite') || norm.includes('turso') || norm.includes('libsql') || norm.includes('spatialite')) {
-    return 'sqlite';
-  }
-  return 'postgres';
+  if (norm.includes('snowflake')) return 'snowflake';
+  if (norm.includes('clickhouse')) return 'clickhouse';
+  if (norm.includes('sqlite') || norm.includes('duckdb')) return 'sqlite';
+  if (norm.includes('cassandra') || norm.includes('scylla')) return 'cassandra';
+  if (norm.includes('mongo') || norm.includes('dynamo')) return 'mongodb';
+  if (norm.includes('redis') || norm.includes('valkey') || norm.includes('keydb')) return 'redis';
+  if (norm.includes('mysql') || norm.includes('maria')) return 'mysql';
+  if (norm.includes('oracle')) return 'oracle';
+  if (norm.includes('sqlserver') || norm.includes('mssql')) return 'sqlserver';
+  const canonical = resolveCanonicalFamily(engineId);
+  if (canonical === 'postgresql') return 'postgres';
+  return canonical;
 }
