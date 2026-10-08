@@ -1,10 +1,23 @@
 import { MigrationAnalysisResult, MigrationSafetyCheck, DatabaseEngine } from '../types/plan.types';
 import { getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export class MigrationLinter {
   
   public lint(sqlScript: string, engine: DatabaseEngine = 'postgres'): MigrationAnalysisResult {
-    const metadata = getEngineMetadata(engine);
+    const profile = getEngineProfile(engine);
+    const metadata = getEngineMetadata(engine) || {
+      id: profile.engineId,
+      name: profile.name,
+      category: 'relational',
+      categoryLabel: 'Relational (SQL)',
+      icon: '🗄️',
+      rank: 999,
+      popularityScore: 10,
+      commandHint: profile.planCommand,
+      description: profile.description,
+    };
     const category = metadata.category || 'relational';
     const statements = this.splitStatements(sqlScript);
     const findings: MigrationSafetyCheck[] = [];
@@ -14,16 +27,22 @@ export class MigrationLinter {
       if (!cleanStmt) continue;
 
       if (category === 'relational') {
-        if (engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona') {
-          this.checkMySQLDDL(cleanStmt, findings);
-        } else if (engine === 'sqlite' || engine === 'turso' || engine === 'spatialite') {
-          this.checkSQLiteDDL(cleanStmt, findings);
-        } else if (engine === 'mssql' || engine === 'sqlserver') {
-          this.checkMSSQLDDL(cleanStmt, findings);
-        } else if (engine === 'oracle') {
-          this.checkOracleDDL(cleanStmt, findings);
-        } else {
+        if (profile.isPostgresFamily) {
           this.checkPostgresDDL(cleanStmt, findings);
+        } else if (profile.dialect === 'mysql') {
+          this.checkMySQLDDL(cleanStmt, findings);
+        } else if (profile.dialect === 'oracle') {
+          this.checkOracleDDL(cleanStmt, findings);
+        } else if (profile.dialect === 'sqlserver') {
+          this.checkMSSQLDDL(cleanStmt, findings);
+        } else if (profile.dialect === 'sqlite') {
+          this.checkSQLiteDDL(cleanStmt, findings);
+        } else if (profile.dialect === 'db2') {
+          this.checkDB2DDL(cleanStmt, findings);
+        } else if (profile.dialect === 'hana') {
+          this.checkHanaDDL(cleanStmt, findings);
+        } else {
+          this.checkGenericRelationalDDL(cleanStmt, findings, profile);
         }
       }
       // 2. Analytics & OLAP Engines
@@ -48,7 +67,7 @@ export class MigrationLinter {
       }
       // 7. Time-Series
       else if (category === 'timeseries') {
-        this.checkTimeSeriesDDL(cleanStmt, findings, metadata.name);
+        this.checkTimeSeriesDDL(cleanStmt, findings, metadata.name, profile.isPostgresFamily);
       }
       // 8. Wide-Column
       else if (category === 'wide_column') {
@@ -223,8 +242,105 @@ export class MigrationLinter {
         title: 'Oracle Database: Missing ONLINE Clause',
         reason: 'Creating an index in Oracle without ONLINE locks the table against DML.',
         unsafeSql: stmt,
-        safeAlternativeSql: `${stmt} ONLINE;`,
+        safeAlternativeSql: `${stmt.replace(';', '')} ONLINE;`,
         lockLevel: 'DDL EXCLUSIVE LOCK',
+      });
+    }
+  }
+
+  private checkDB2DDL(stmt: string, findings: MigrationSafetyCheck[]) {
+    if (/^CREATE\s+(UNIQUE\s+)?INDEX/i.test(stmt)) {
+      findings.push({
+        id: `db2_idx_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'WARNING',
+        title: 'IBM DB2: Index Creation Lock Advisory',
+        reason: 'Index creation on high-transaction tables requires dedicated maintenance window or DB2 online reorg planning.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `${stmt};\n-- Note: Check SYSPROC.ADMIN_CMD('REORG TABLE ...') if index requires clustering.`,
+        lockLevel: 'INDEX BUILD EXCLUSIVE LOCK',
+      });
+    }
+    if (/ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+DROP\s+COLUMN/i.test(stmt)) {
+      findings.push({
+        id: `db2_reorg_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: 'IBM DB2: Table REORG Required on Column Drop',
+        reason: 'Dropping a column puts the table in REORG PENDING state, blocking subsequent DML until reorg completes.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `${stmt};\nCALL SYSPROC.ADMIN_CMD('REORG TABLE table_name');`,
+        lockLevel: 'REORG PENDING STATE',
+      });
+    }
+    if (/^(DROP\s+TABLE|TRUNCATE)/i.test(stmt)) {
+      findings.push({
+        id: `db2_drop_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: 'IBM DB2: Destructive DDL Operation',
+        reason: 'Dropping or truncating tables removes data immediately.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `-- Verify with backup before proceeding.`,
+        lockLevel: 'EXCLUSIVE LOCK',
+      });
+    }
+  }
+
+  private checkHanaDDL(stmt: string, findings: MigrationSafetyCheck[]) {
+    if (/^CREATE\s+(UNIQUE\s+)?INDEX/i.test(stmt) && !/ONLINE/i.test(stmt)) {
+      findings.push({
+        id: `hana_idx_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: 'SAP HANA: Missing ONLINE Clause',
+        reason: 'Creating index without ONLINE takes an exclusive table lock in SAP HANA.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `${stmt.replace(';', '')} ONLINE;`,
+        lockLevel: 'TABLE EXCLUSIVE LOCK',
+      });
+    }
+    if (/^(DROP\s+TABLE|TRUNCATE)/i.test(stmt)) {
+      findings.push({
+        id: `hana_drop_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: 'SAP HANA: Destructive DDL Operation',
+        reason: 'Dropping or truncating tables destroys data and takes exclusive locks.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `-- Verify with backup before proceeding.`,
+        lockLevel: 'EXCLUSIVE LOCK',
+      });
+    }
+  }
+
+  private checkGenericRelationalDDL(stmt: string, findings: MigrationSafetyCheck[], profile: EngineProfile) {
+    if (/^CREATE\s+(UNIQUE\s+)?INDEX/i.test(stmt)) {
+      findings.push({
+        id: `gen_idx_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'WARNING',
+        title: `${profile.name}: Index Creation Advisory`,
+        reason: `Creating an index on populated tables may hold locks and impact concurrent write throughput.`,
+        unsafeSql: stmt,
+        safeAlternativeSql: `-- Schedule index creation during low-traffic maintenance window for ${profile.name}.\n${stmt}`,
+        lockLevel: 'SCHEMA / WRITE LOCK',
+      });
+    }
+    if (/ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+ADD\s+COLUMN\s+([a-zA-Z0-9_]+).*\s+NOT\s+NULL/i.test(stmt) && !/DEFAULT/i.test(stmt)) {
+      findings.push({
+        id: `gen_not_null_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: `${profile.name}: Adding NOT NULL Column without Default`,
+        reason: 'Adding NOT NULL column without a default value fails on tables with existing rows.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `-- Add column as nullable, backfill data, then apply NOT NULL constraint.\n${stmt.replace(/\s+NOT\s+NULL/i, '')};`,
+        lockLevel: 'EXCLUSIVE LOCK',
+      });
+    }
+    if (/^(DROP\s+TABLE|TRUNCATE)/i.test(stmt)) {
+      findings.push({
+        id: `gen_drop_${Math.random().toString(36).substring(2, 7)}`,
+        severity: 'CRITICAL',
+        title: `${profile.name}: Destructive DDL Operation`,
+        reason: 'Dropping or truncating tables destroys data and releases schema objects.',
+        unsafeSql: stmt,
+        safeAlternativeSql: `-- Confirm backup snapshot exists before dropping table.`,
+        lockLevel: 'EXCLUSIVE LOCK',
       });
     }
   }
@@ -323,7 +439,7 @@ export class MigrationLinter {
     }
   }
 
-  private checkTimeSeriesDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string) {
+  private checkTimeSeriesDDL(stmt: string, findings: MigrationSafetyCheck[], engineName: string, isTimescale = false) {
     if (/DROP\s+RETENTION|compress_chunk/i.test(stmt)) {
       findings.push({
         id: `ts_retention_${Math.random().toString(36).substring(2, 7)}`,
@@ -331,7 +447,9 @@ export class MigrationLinter {
         title: `${engineName}: Time-Series Retention / Compression Mutation`,
         reason: 'Dropping retention policies or compressing active chunks locks hypertable metadata.',
         unsafeSql: stmt,
-        safeAlternativeSql: `-- Ensure compression policy runs off-peak:\nSELECT add_compression_policy('hypertable_name', INTERVAL '7 days');`,
+        safeAlternativeSql: isTimescale
+          ? `-- Ensure compression policy runs off-peak:\nSELECT add_compression_policy('hypertable_name', INTERVAL '7 days');`
+          : `-- Ensure retention changes and downsampling tasks execute during off-peak hours for ${engineName}.`,
         lockLevel: 'CHUNK EXCLUSIVE LOCK',
       });
     }

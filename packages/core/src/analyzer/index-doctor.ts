@@ -1,4 +1,5 @@
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface IndexDefinition {
   name: string;
@@ -53,27 +54,22 @@ export interface IndexDoctorResult {
   expertAuditSummary: string[];
 }
 
-function getEngineMeta(engineId: string) {
-  const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
-  if (found) return found;
-  return {
-    id: engineId,
-    name: engineId.charAt(0).toUpperCase() + engineId.slice(1),
-    category: 'relational',
-    categoryLabel: 'Relational (SQL)',
-    icon: '🗄️',
-    rank: 999,
-    popularityScore: 10,
-    commandHint: 'EXPLAIN <query>',
-    description: 'Database Engine'
-  };
-}
 
 export class IndexDoctorAnalyzer {
   public audit(req: IndexDoctorRequest): IndexDoctorResult {
-    const meta = getEngineMeta(req.engine);
+    const profile = getEngineProfile(req.engine);
+    const meta = getEngineMetadata(req.engine) || {
+      id: profile.engineId,
+      name: profile.name,
+      category: 'relational',
+      categoryLabel: 'Relational (SQL)',
+      icon: '🗄️',
+      rank: 999,
+      popularityScore: 10,
+      commandHint: profile.planCommand,
+      description: profile.description,
+    };
     const tableName = req.tableName || 'orders';
-    const norm = req.engine.toLowerCase();
 
     let indexes: IndexDefinition[] = req.indexes || [
       { name: 'orders_pkey', tableName, columns: ['id'], isPrimary: true, sizeMb: 280, scansCount: 1450000 },
@@ -132,15 +128,13 @@ export class IndexDoctorAnalyzer {
             indexName: idxA.name,
             tableName: idxA.tableName,
             columns: idxA.columns,
-            redundantReason: `Exact left-prefix subset of compound index \`${idxB.name}\` (${idxB.columns.join(', ')}). B-Tree can satisfy all queries matching (${idxA.columns.join(', ')}) using \`${idxB.name}\` directly.`,
+            redundantReason: `Exact left-prefix subset of compound index \`${idxB.name}\` (${idxB.columns.join(', ')}). Index can satisfy all queries matching (${idxA.columns.join(', ')}) using \`${idxB.name}\` directly.`,
             supersedingIndexName: idxB.name,
             supersedingColumns: idxB.columns,
             writeAmplificationPenaltyPct: 14.5,
             estimatedSpaceSavingsMb: waste,
             suggestedAction: 'DROP',
-            safeDropDdl: norm === 'mysql' || norm === 'mariadb'
-              ? `ALTER TABLE \`${idxA.tableName}\` DROP INDEX \`${idxA.name}\`;`
-              : `DROP INDEX CONCURRENTLY IF EXISTS ${idxA.name};`
+            safeDropDdl: profile.onlineDdl.dropIndexSql(idxA.name, idxA.tableName),
           });
           break;
         }
@@ -154,15 +148,13 @@ export class IndexDoctorAnalyzer {
             indexName: idxA.name,
             tableName: idxA.tableName,
             columns: idxA.columns,
-            redundantReason: `Duplicate identical definition as \`${idxB.name}\`. Consumes duplicate memory and WAL bandwidth on every INSERT.`,
+            redundantReason: `Duplicate identical definition as \`${idxB.name}\`. Consumes duplicate memory and ${profile.backup.walOrLogName || 'write log'} bandwidth on every INSERT.`,
             supersedingIndexName: idxB.name,
             supersedingColumns: idxB.columns,
             writeAmplificationPenaltyPct: 18.0,
             estimatedSpaceSavingsMb: waste,
             suggestedAction: 'DROP',
-            safeDropDdl: norm === 'mysql' || norm === 'mariadb'
-              ? `ALTER TABLE \`${idxA.tableName}\` DROP INDEX \`${idxA.name}\`;`
-              : `DROP INDEX CONCURRENTLY IF EXISTS ${idxA.name};`
+            safeDropDdl: profile.onlineDdl.dropIndexSql(idxA.name, idxA.tableName),
           });
           break;
         }
@@ -172,19 +164,20 @@ export class IndexDoctorAnalyzer {
     for (const idx of indexes) {
       if (idx.columns.length >= 2 && (idx.columns[0] === 'status' || idx.columns[0] === 'is_active' || idx.columns[0] === 'is_deleted')) {
         const waste = Math.round((idx.sizeMb || 150) * 0.4);
+        const reorderedName = `idx_${idx.tableName}_${idx.columns[1]}_${idx.columns[0]}`;
+        const createReordered = profile.onlineDdl.createIndexSql(reorderedName, idx.tableName, `${idx.columns[1]}, ${idx.columns[0]}`);
+        const dropOld = profile.onlineDdl.dropIndexSql(idx.name, idx.tableName);
         findings.push({
           indexName: idx.name,
           tableName: idx.tableName,
           columns: idx.columns,
           redundantReason: `Low-cardinality leading column \`${idx.columns[0]}\` destroys index selectivity. Reordering to put high-cardinality column \`${idx.columns[1]}\` first enables 10x narrower index range scans.`,
-          supersedingIndexName: `idx_${idx.tableName}_${idx.columns[1]}_${idx.columns[0]}`,
+          supersedingIndexName: reorderedName,
           supersedingColumns: [idx.columns[1], idx.columns[0]],
           writeAmplificationPenaltyPct: 8.5,
           estimatedSpaceSavingsMb: waste,
           suggestedAction: 'REORDER_COLUMNS',
-          safeDropDdl: norm === 'mysql' || norm === 'mariadb'
-            ? `ALTER TABLE \`${idx.tableName}\` DROP INDEX \`${idx.name}\`;\nCREATE INDEX \`idx_${idx.tableName}_${idx.columns[1]}_${idx.columns[0]}\` ON \`${idx.tableName}\` (\`${idx.columns[1]}\`, \`${idx.columns[0]}\`);`
-            : `CREATE INDEX CONCURRENTLY idx_${idx.tableName}_${idx.columns[1]}_${idx.columns[0]} ON ${idx.tableName} (${idx.columns[1]}, ${idx.columns[0]});\nDROP INDEX CONCURRENTLY IF EXISTS ${idx.name};`
+          safeDropDdl: `${createReordered}\n${dropOld}`,
         });
       }
     }
@@ -192,23 +185,39 @@ export class IndexDoctorAnalyzer {
     const healthScore = Math.max(25, 100 - (findings.length * 18));
     const writeReductionPct = Math.min(65, findings.length * 15.5);
 
+    const custCoveringName = `idx_${tableName}_cust_created_covering`;
+    const tenantCoveringName = `idx_${tableName}_tenant_created`;
+
+    let custCoveringDdl: string;
+    let tenantCoveringDdl: string;
+
+    if (profile.isPostgresFamily) {
+      custCoveringDdl = `CREATE INDEX CONCURRENTLY ${custCoveringName} ON ${tableName} (customer_id, created_at) INCLUDE (status, total_amount);`;
+      tenantCoveringDdl = `CREATE INDEX CONCURRENTLY ${tenantCoveringName} ON ${tableName} (tenant_id, created_at DESC);`;
+    } else if (profile.dialect === 'mysql') {
+      custCoveringDdl = `CREATE INDEX \`${custCoveringName}\` ON \`${tableName}\` (\`customer_id\`, \`created_at\`, \`status\`, \`total_amount\`);`;
+      tenantCoveringDdl = `CREATE INDEX \`${tenantCoveringName}\` ON \`${tableName}\` (\`tenant_id\`, \`created_at\`);`;
+    } else if (profile.dialect === 'sqlserver') {
+      custCoveringDdl = `CREATE NONCLUSTERED INDEX [${custCoveringName}] ON [${tableName}](customer_id, created_at) INCLUDE (status, total_amount) WITH (ONLINE = ON);`;
+      tenantCoveringDdl = `CREATE NONCLUSTERED INDEX [${tenantCoveringName}] ON [${tableName}](tenant_id, created_at DESC) WITH (ONLINE = ON);`;
+    } else {
+      custCoveringDdl = profile.onlineDdl.createIndexSql(custCoveringName, tableName, 'customer_id, created_at, status, total_amount');
+      tenantCoveringDdl = profile.onlineDdl.createIndexSql(tenantCoveringName, tableName, 'tenant_id, created_at');
+    }
+
     const recommendedConsolidatedIndexes = [
       {
-        indexName: `idx_${tableName}_cust_created_covering`,
+        indexName: custCoveringName,
         columns: ['customer_id', 'created_at'],
         coveringIncludeColumns: ['status', 'total_amount'],
         purpose: 'Index-Only Scan covering 98% of customer order history lookups without touching table heap blocks.',
-        createDdl: norm === 'mysql' || norm === 'mariadb'
-          ? `CREATE INDEX \`idx_${tableName}_cust_created_covering\` ON \`${tableName}\` (\`customer_id\`, \`created_at\`, \`status\`, \`total_amount\`);`
-          : `CREATE INDEX CONCURRENTLY idx_${tableName}_cust_created_covering ON ${tableName} (customer_id, created_at) INCLUDE (status, total_amount);`
+        createDdl: custCoveringDdl,
       },
       {
-        indexName: `idx_${tableName}_tenant_created_brin`,
+        indexName: tenantCoveringName,
         columns: ['tenant_id', 'created_at'],
         purpose: 'High-efficiency composite index for multi-tenant chronological pagination.',
-        createDdl: norm === 'mysql' || norm === 'mariadb'
-          ? `CREATE INDEX \`idx_${tableName}_tenant_created\` ON \`${tableName}\` (\`tenant_id\`, \`created_at\`);`
-          : `CREATE INDEX CONCURRENTLY idx_${tableName}_tenant_created ON ${tableName} (tenant_id, created_at DESC);`
+        createDdl: tenantCoveringDdl,
       }
     ];
 
@@ -225,6 +234,14 @@ ${findings.map(f => `-- Step: Remove redundant index ${f.indexName} (${f.redunda
 ${recommendedConsolidatedIndexes[0].createDdl}
 `;
 
+    const lockGuidance = profile.isPostgresFamily
+      ? 'Always execute `DROP INDEX CONCURRENTLY` in PostgreSQL to prevent exclusive table locks.'
+      : profile.onlineDdl.supportsConcurrent
+      ? `Use concurrent index operations (${profile.onlineDdl.onlineClause}) to prevent exclusive locks.`
+      : profile.onlineDdl.onlineClause && profile.onlineDdl.onlineClause !== 'IMMEDIATE'
+      ? `Apply online DDL directives (${profile.onlineDdl.onlineClause}) to avoid blocking concurrent read/write workloads.`
+      : `Schedule index modifications during maintenance windows or use zero-downtime online DDL tools suitable for ${profile.name}.`;
+
     return {
       engine: meta.id,
       engineName: meta.name,
@@ -239,9 +256,9 @@ ${recommendedConsolidatedIndexes[0].createDdl}
       cleanupMigrationScript: cleanupDdl,
       expertAuditSummary: [
         `Found ${findings.length} redundant or sub-optimal indexes on \`${tableName}\` causing unnecessary write amplification.`,
-        `Reclaiming ~${totalWasteMb} MB of RAM and Buffer Pool space currently wasted on duplicate B-Trees.`,
+        `Reclaiming ~${totalWasteMb} MB of RAM and ${profile.memoryParams.cacheParam || 'buffer pool'} space currently wasted on duplicate indexes.`,
         `Eliminating prefix redundancies will improve bulk \`INSERT\` and \`UPDATE\` throughput by an estimated ${writeReductionPct.toFixed(1)}%.`,
-        `Always execute \`DROP INDEX CONCURRENTLY\` in PostgreSQL or separate online DDL in MySQL to prevent exclusive table locks.`
+        lockGuidance,
       ]
     };
   }

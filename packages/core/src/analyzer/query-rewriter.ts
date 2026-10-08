@@ -1,4 +1,5 @@
 import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface QueryRewriterRequest {
   engine: string;
@@ -51,6 +52,7 @@ function getEngineMeta(engineId: string) {
 export class QueryRewriterAnalyzer {
   public rewrite(req: QueryRewriterRequest): QueryRewriterResult {
     const meta = getEngineMeta(req.engine);
+    const profile = getEngineProfile(req.engine);
     const query = req.query || `SELECT * FROM orders WHERE YEAR(created_at) = 2024 AND LOWER(status) = 'completed' AND customer_id IN (SELECT id FROM vip_customers);`;
     const norm = req.engine.toLowerCase();
 
@@ -131,12 +133,17 @@ export class QueryRewriterAnalyzer {
 
     if (/^SELECT\s+\*\s+FROM/i.test(optimized.trim())) {
       optimized = optimized.replace(/^SELECT\s+\*\s+FROM/i, 'SELECT id, customer_id, total_amount, status, created_at FROM');
+      const jsonDescription = profile.isPostgresFamily
+        ? 'JSONB blobs'
+        : (profile.syntax.jsonType !== 'NONE' && profile.syntax.jsonType !== 'TEXT'
+            ? `${profile.syntax.jsonType} payloads`
+            : 'semi-structured document payloads');
       optimizationsApplied.push({
         ruleName: 'Projection Narrowing (Eliminate SELECT *)',
         category: 'PROJECTION',
         beforeSnippet: 'SELECT * FROM',
         afterSnippet: 'SELECT id, customer_id, total_amount, status, created_at FROM',
-        explanation: `\`SELECT *\` retrieves unneeded wide columns, large text fields, and JSONB blobs, preventing Index-Only Scans and increasing network serialization overhead.`,
+        explanation: `\`SELECT *\` retrieves unneeded wide columns, large text fields, and ${jsonDescription}, preventing index-only access paths and increasing network serialization overhead.`,
         estimatedSpeedup: '3.5x faster'
       });
     }
@@ -156,27 +163,55 @@ export class QueryRewriterAnalyzer {
     const tableName = tableMatch ? tableMatch[1].replace(/[`"\[\]]/g, '') : 'orders';
 
     let zeroDowntimeIndexDdl = '';
-    if (norm === 'mysql' || norm === 'mariadb') {
-      zeroDowntimeIndexDdl = `-- MySQL 8.0+ Zero-Downtime Companion Covering Index
-ALTER TABLE \`${tableName}\`
-ADD INDEX \`idx_${tableName}_created_status_covering\` (\`created_at\`, \`status\`, \`customer_id\`),
-ALGORITHM = INPLACE, LOCK = NONE;`;
-    } else if (norm === 'oracle') {
-      zeroDowntimeIndexDdl = `-- Oracle Online Composite Index
-CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id) ONLINE;`;
-    } else if (norm.includes('mssql') || norm.includes('sqlserver') || norm.includes('sql_server')) {
-      zeroDowntimeIndexDdl = `-- SQL Server Online Nonclustered Index with INCLUDE
-CREATE NONCLUSTERED INDEX idx_${tableName}_covering ON ${tableName} (created_at, status)
-INCLUDE (customer_id) WITH (ONLINE = ON);`;
-    } else if (norm === 'clickhouse') {
-      zeroDowntimeIndexDdl = `-- ClickHouse Skipping Index
-ALTER TABLE ${tableName} ADD INDEX idx_${tableName}_status status TYPE set(100) GRANULARITY 4;`;
-    } else {
+    if (profile.isPostgresFamily) {
       zeroDowntimeIndexDdl = `-- PostgreSQL Zero-Downtime Companion Covering Index
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_${tableName}_created_status_covering
 ON ${tableName} (created_at, status)
 INCLUDE (customer_id);`;
+    } else if (profile.dialect === 'mysql') {
+      zeroDowntimeIndexDdl = `-- MySQL 8.0+ Zero-Downtime Companion Covering Index
+ALTER TABLE \`${tableName}\`
+ADD INDEX \`idx_${tableName}_created_status_covering\` (\`created_at\`, \`status\`, \`customer_id\`),
+ALGORITHM = INPLACE, LOCK = NONE;`;
+    } else if (profile.dialect === 'oracle') {
+      zeroDowntimeIndexDdl = `-- Oracle Online Composite Index
+CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id) ONLINE;`;
+    } else if (profile.dialect === 'sqlserver') {
+      zeroDowntimeIndexDdl = `-- SQL Server Online Nonclustered Index with INCLUDE
+CREATE NONCLUSTERED INDEX idx_${tableName}_covering ON ${tableName} (created_at, status)
+INCLUDE (customer_id) WITH (ONLINE = ON);`;
+    } else if (profile.dialect === 'db2') {
+      zeroDowntimeIndexDdl = `-- IBM DB2 Composite Index
+CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id);`;
+    } else if (profile.dialect === 'hana') {
+      zeroDowntimeIndexDdl = `-- SAP HANA Online Composite Index
+CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id) ONLINE;`;
+    } else if (profile.dialect === 'sqlite') {
+      zeroDowntimeIndexDdl = `-- SQLite / DuckDB Secondary Index
+CREATE INDEX IF NOT EXISTS idx_${tableName}_opt ON ${tableName} (created_at, status);`;
+    } else if (profile.family === 'columnar_olap') {
+      if (norm === 'clickhouse') {
+        zeroDowntimeIndexDdl = `-- ClickHouse Skipping Index
+ALTER TABLE ${tableName} ADD INDEX idx_${tableName}_status status TYPE set(100) GRANULARITY 4;`;
+      } else {
+        zeroDowntimeIndexDdl = `-- ${profile.name} Clustering Keys
+ALTER TABLE ${tableName} CLUSTER BY (created_at, status);`;
+      }
+    } else if (['document', 'keyvalue', 'wide_column', 'graph', 'vector', 'search'].includes(profile.family)) {
+      zeroDowntimeIndexDdl = `-- Note: Relational B-Tree covering indexes are not applicable for ${profile.name} (${meta.categoryLabel}).
+-- Review native partition/shard key distribution and engine-native query filters.`;
+    } else {
+      zeroDowntimeIndexDdl = `-- ${profile.name} Composite Index
+CREATE INDEX idx_${tableName}_opt ON ${tableName} (created_at, status, customer_id);`;
     }
+
+    const planBefore = profile.isPostgresFamily
+      ? `Seq Scan on ${tableName} (cost=0.00..84920.00 rows=48192 width=384) [Filter: YEAR(created_at) = 2024]`
+      : `${profile.dialect === 'oracle' ? 'TABLE ACCESS FULL' : profile.dialect === 'sqlserver' ? 'Table Scan' : 'Full Scan'} on ${tableName} (cost=est rows=48192) [Filter: YEAR(created_at) = 2024]`;
+
+    const planAfter = profile.isPostgresFamily
+      ? `Index Only Scan using idx_${tableName}_created_status_covering on ${tableName} (cost=0.42..312.00 rows=48192 width=48) [Index Cond: created_at >= 2024-01-01 AND created_at < 2025-01-01]`
+      : `${profile.dialect === 'oracle' ? 'INDEX RANGE SCAN' : profile.dialect === 'sqlserver' ? 'Index Seek' : 'Index Scan'} using idx_${tableName}_opt on ${tableName} (cost=est rows=48192) [Range Cond: created_at >= 2024-01-01 AND created_at < 2025-01-01]`;
 
     return {
       engine: meta.id,
@@ -187,8 +222,8 @@ INCLUDE (customer_id);`;
       optimizationsApplied,
       zeroDowntimeIndexDdl,
       astTransformationSummary: {
-        planBefore: `Seq Scan on ${tableName} (cost=0.00..84920.00 rows=48192 width=384) [Filter: YEAR(created_at) = 2024]`,
-        planAfter: `Index Only Scan using idx_${tableName}_created_status_covering on ${tableName} (cost=0.42..312.00 rows=48192 width=48) [Index Cond: created_at >= 2024-01-01 AND created_at < 2025-01-01]`,
+        planBefore,
+        planAfter,
         iopsReductionPct: 94.2,
         cpuReductionPct: 88.5
       },

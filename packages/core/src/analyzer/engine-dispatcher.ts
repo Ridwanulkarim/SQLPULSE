@@ -129,7 +129,7 @@ export class MultiEngineDispatcher {
 
       if (isJsonPlan) {
         try {
-          result = this.postgresAnalyzer.analyze(plan);
+          result = this.postgresAnalyzer.analyze(plan, engine);
           if (!nativePostgresEngines.includes(norm)) {
             isFallback = true;
           }

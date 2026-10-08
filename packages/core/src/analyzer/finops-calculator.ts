@@ -1,4 +1,5 @@
 import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export type CloudProviderType = 'aws_rds' | 'aws_aurora' | 'gcp_cloudsql' | 'gcp_alloydb' | 'azure_sql' | 'azure_cosmos' | 'neon_serverless' | 'supabase_cloud' | 'mongodb_atlas';
 
@@ -68,6 +69,7 @@ function getEngineMeta(engineId: string) {
 export class FinOpsCalculatorAnalyzer {
   public calculate(req: FinOpsRequest): FinOpsResult {
     const meta = getEngineMeta(req.engine);
+    const profile = getEngineProfile(req.engine);
     const provider = req.cloudProvider || 'aws_aurora';
     const dbSizeGb = Math.max(10, req.dbSizeGb || 250);
     const readsM = Math.max(0.1, req.monthlyReadQueriesMillion || 50);
@@ -174,7 +176,7 @@ export class FinOpsCalculatorAnalyzer {
         description: `${(readsM + writesM).toFixed(1)}M Monthly I/O Operations & IOPS Burst Allocation`
       },
       {
-        category: 'Automated Snapshots & WAL Backup',
+        category: profile.isPostgresFamily ? 'Automated Snapshots & WAL Backup' : `Automated Snapshots & ${profile.backup.walOrLogName || 'Transaction Log'} Backup`,
         monthlyCostUsd: Math.round(monthlyBackupCost),
         pctOfTotal: Math.round((monthlyBackupCost / monthlyTotal) * 100),
         description: `${backupDays} Days Point-In-Time Continuous Recovery (PITR) Object Retention`
@@ -186,6 +188,57 @@ export class FinOpsCalculatorAnalyzer {
         description: 'Read replica replication data stream and application gateway egress'
       }
     ];
+    let coldPartitionSnippet = '';
+    if (profile.isPostgresFamily) {
+      coldPartitionSnippet = `-- PostgreSQL Native Columnar Compression (pg_analytics / pg_tier):
+ALTER TABLE orders_archive_2025 SET (toast_tuple_target = 128);
+-- Export cold partition to S3 Parquet:
+COPY (SELECT * FROM orders WHERE created_at < NOW() - INTERVAL '90 days')
+TO 's3://cold-data-lake-prod/orders_cold.parquet' WITH (FORMAT parquet);`;
+    } else if (profile.dialect === 'oracle') {
+      coldPartitionSnippet = `-- Oracle Hybrid Columnar Compression / Data Pump Archive:
+ALTER TABLE orders_archive_2025 COMPRESS FOR ARCHIVE HIGH;
+-- Export cold partition to cloud object storage:
+-- DBMS_DATAPUMP / External table unload to Parquet / S3`;
+    } else if (profile.dialect === 'mysql') {
+      coldPartitionSnippet = `-- MySQL / InnoDB Table Compression:
+ALTER TABLE orders_archive_2025 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;`;
+    } else if (profile.dialect === 'sqlserver') {
+      coldPartitionSnippet = `-- SQL Server Clustered Columnstore Archive:
+CREATE CLUSTERED COLUMNSTORE INDEX cci_orders_archive ON orders_archive_2025 WITH (DATA_COMPRESSION = COLUMNSTORE_ARCHIVE);`;
+    } else {
+      coldPartitionSnippet = `-- ${profile.name} Data Archival & Compression:
+-- Move historical records older than 90 days to compressed columnar object storage (Parquet/ZSTD)`;
+    }
+
+    let dropRedundantIndexSnippet = '';
+    let redundantFixText = '';
+    if (profile.isPostgresFamily) {
+      redundantFixText = 'Dropping 3+ overlapping secondary indexes reduces WAL generation and disk write IOPS drastically.';
+      dropRedundantIndexSnippet = `-- Identify & Drop Unused / Redundant Indexes:
+DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_id_redundant;
+DROP INDEX CONCURRENTLY IF EXISTS idx_transactions_created_at_duplicate;`;
+    } else if (profile.dialect === 'oracle') {
+      redundantFixText = 'Dropping 3+ overlapping secondary indexes reduces redo log generation and disk write IOPS drastically.';
+      dropRedundantIndexSnippet = `-- Identify & Drop Unused / Redundant Indexes:
+DROP INDEX idx_orders_customer_id_redundant;
+DROP INDEX idx_transactions_created_at_duplicate;`;
+    } else if (profile.dialect === 'mysql') {
+      redundantFixText = 'Dropping 3+ overlapping secondary indexes reduces binlog generation and disk write IOPS drastically.';
+      dropRedundantIndexSnippet = `-- Identify & Drop Unused / Redundant Indexes:
+ALTER TABLE orders DROP INDEX idx_orders_customer_id_redundant;
+ALTER TABLE transactions DROP INDEX idx_transactions_created_at_duplicate;`;
+    } else if (profile.dialect === 'sqlserver') {
+      redundantFixText = 'Dropping 3+ overlapping secondary indexes reduces transaction log generation and disk write IOPS drastically.';
+      dropRedundantIndexSnippet = `-- Identify & Drop Unused / Redundant Indexes:
+DROP INDEX idx_orders_customer_id_redundant ON orders;
+DROP INDEX idx_transactions_created_at_duplicate ON transactions;`;
+    } else {
+      redundantFixText = `Dropping 3+ overlapping secondary indexes reduces ${profile.backup.walOrLogName || 'transaction log'} generation and disk write IOPS drastically.`;
+      dropRedundantIndexSnippet = `-- Identify & Drop Unused / Redundant Indexes on ${profile.name}:
+DROP INDEX idx_orders_customer_id_redundant;
+DROP INDEX idx_transactions_created_at_duplicate;`;
+    }
 
     const savingsOpportunities = [
       {
@@ -205,21 +258,15 @@ aws rds modify-db-instance \\
         title: 'Compress Historical Cold Partitions to ZSTD / Parquet S3 (Save 65% Storage)',
         monthlySavingsUsd: Math.round(monthlyStorageCost * 0.45),
         difficulty: 'MODERATE' as const,
-        actionableFix: 'Move records older than 90 days into columnar S3 Iceberg/Parquet tables or apply native ZSTD/TOAST dictionary compression.',
-        ddlOrConfigSnippet: `-- PostgreSQL Native Columnar Compression (pg_analytics / pg_tier):
-ALTER TABLE orders_archive_2025 SET (toast_tuple_target = 128);
--- Export cold partition to S3 Parquet:
-COPY (SELECT * FROM orders WHERE created_at < NOW() - INTERVAL '90 days')
-TO 's3://cold-data-lake-prod/orders_cold.parquet' WITH (FORMAT parquet);`
+        actionableFix: 'Move records older than 90 days into columnar S3 Iceberg/Parquet tables or apply native compression.',
+        ddlOrConfigSnippet: coldPartitionSnippet
       },
       {
         title: 'Eliminate Redundant Indexes to Cut Write Amplification (Save 30% I/O Costs)',
         monthlySavingsUsd: Math.round(monthlyIopsCost * 0.35 + monthlyComputeCost * 0.08),
         difficulty: 'EASY' as const,
-        actionableFix: 'Dropping 3+ overlapping secondary indexes reduces WAL generation and disk write IOPS drastically.',
-        ddlOrConfigSnippet: `-- Identify & Drop Unused / Redundant Indexes:
-DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_id_redundant;
-DROP INDEX CONCURRENTLY IF EXISTS idx_transactions_created_at_duplicate;`
+        actionableFix: redundantFixText,
+        ddlOrConfigSnippet: dropRedundantIndexSnippet
       },
       {
         title: 'Reserved Instance (RI) / Savings Plan Commitment (Save 38% on Compute)',
@@ -236,6 +283,13 @@ aws rds purchase-reserved-db-instances-offering \\
 
     let terraformIaC = '';
     if (provider === 'gcp_alloydb' || provider === 'gcp_cloudsql') {
+      const gcpDbVersion = profile.dialect === 'mysql'
+        ? 'MYSQL_8_0'
+        : profile.dialect === 'sqlserver'
+        ? 'SQLSERVER_2022_STANDARD'
+        : profile.isPostgresFamily
+        ? 'POSTGRES_16'
+        : `${meta.name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_LATEST`;
       terraformIaC = `# -------------------------------------------------------------
 # Google Cloud Platform Database (Terraform HCL)
 # Engine: ${meta.name} (${providerName})
@@ -244,7 +298,7 @@ aws rds purchase-reserved-db-instances-offering \\
 
 resource "google_sql_database_instance" "production_db" {
   name             = "sqlpulse-prod-${req.engine}"
-  database_version = "POSTGRES_16"
+  database_version = "${gcpDbVersion}"
   region           = "us-central1"
 
   settings {
@@ -267,13 +321,20 @@ resource "google_sql_database_instance" "production_db" {
   }
 }`;
     } else if (provider === 'azure_sql' || provider === 'azure_cosmos') {
+      const azureResource = profile.dialect === 'sqlserver'
+        ? 'azurerm_mssql_server'
+        : profile.dialect === 'mysql'
+        ? 'azurerm_mysql_flexible_server'
+        : profile.isPostgresFamily
+        ? 'azurerm_postgresql_flexible_server'
+        : 'azurerm_database_instance';
       terraformIaC = `# -------------------------------------------------------------
 # Microsoft Azure Database (Terraform HCL)
 # Engine: ${meta.name} (${providerName})
 # Monthly Estimated Cost: $${monthlyTotal.toLocaleString()} USD
 # -------------------------------------------------------------
 
-resource "azurerm_postgresql_flexible_server" "production_db" {
+resource "${azureResource}" "production_db" {
   name                   = "sqlpulse-prod-${req.engine}"
   resource_group_name    = "rg-production"
   location               = "eastus"
@@ -343,6 +404,15 @@ resource "mongodbatlas_cluster" "production_db" {
   auto_scaling_disk_gb_enabled = true
 }`;
     } else {
+      const awsEngine = profile.dialect === 'mysql'
+        ? 'mysql'
+        : profile.dialect === 'oracle'
+        ? 'oracle-ee'
+        : profile.dialect === 'sqlserver'
+        ? 'sqlserver-ee'
+        : profile.isPostgresFamily
+        ? 'postgres'
+        : req.engine;
       terraformIaC = `# -------------------------------------------------------------
 # Production AWS RDS / Aurora (Terraform HCL)
 # Target Database: ${meta.name} (${providerName})
@@ -360,7 +430,7 @@ terraform {
 
 resource "aws_db_instance" "production_db" {
   identifier           = "sqlpulse-prod-${req.engine}"
-  engine               = "${req.engine === 'mysql' ? 'mysql' : 'postgres'}"
+  engine               = "${awsEngine}"
   instance_class       = "${instanceType.startsWith('db.') ? instanceType : 'db.r6g.xlarge'}"
   allocated_storage    = ${dbSizeGb}
   max_allocated_storage = ${Math.round(dbSizeGb * 2.5)}

@@ -521,7 +521,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(result.autovacuumTuningDdl, 'autovacuum')}
+                    onClick={() => copyToClipboard(result.maintenanceTuningDdl || result.autovacuumTuningDdl || '', 'autovacuum')}
                     className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 shadow-2xs transition active:scale-95"
                   >
                     {copiedKey === 'autovacuum' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-amber-600" />}
@@ -532,7 +532,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
                   Tuned threshold configuration so background cleaners run before bloat accumulates.
                 </p>
                 <pre className="mt-3 p-4 rounded-xl bg-slate-950 text-amber-200 font-mono text-xs overflow-x-auto leading-relaxed max-h-[300px] selection:bg-amber-600 selection:text-white">
-                  {result.autovacuumTuningDdl}
+                  {result.maintenanceTuningDdl || result.autovacuumTuningDdl}
                 </pre>
               </div>
             </div>

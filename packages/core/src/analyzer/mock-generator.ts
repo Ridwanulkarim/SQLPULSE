@@ -1,4 +1,5 @@
 import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export type DomainPresetType =
   
@@ -576,14 +577,47 @@ export class MockGeneratorAnalyzer {
       ? `${(totalSizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
       : `${(totalSizeBytes / (1024 * 1024)).toFixed(2)} MB`;
 
-    if (norm === 'mysql' || norm === 'mariadb') {
-      const keys = Object.keys(sampleRecordsJson[0] || {});
+    const profile = getEngineProfile(req.engine);
+    const keys = Object.keys(sampleRecordsJson[0] || {});
+    let expertRecommendations: string[] = [];
+
+    if (profile.isPostgresFamily) {
+      bulkScript = `-- PostgreSQL High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into "${tableName}")
+-- Method 1: Instant In-Engine Synthetic Generation via generate_series()
+INSERT INTO ${tableName} (${keys.join(', ')})
+SELECT 
+${keys.map((k) => {
+  const val = sampleRecordsJson[0][k];
+  if (typeof val === 'number') return `    round((random() * 500 + 10)::numeric, 2) AS ${k}`;
+  if (k.includes('id') || k.includes('number') || k.includes('vin') || k.includes('code') || k.includes('hash')) return `    '${k}_' || (1000 + (g % 5000)) AS ${k}`;
+  if (k.includes('date') || k.includes('at') || k.includes('timestamp')) return `    NOW() - (g || ' minutes')::interval AS ${k}`;
+  return `    'sample_${k}_' || (g % 100) AS ${k}`;
+}).join(',\n')}
+FROM generate_series(1, ${rowCount}) AS g;
+
+-- Method 2: High-Speed Binary Streaming via COPY (Bypasses Query Parser)
+-- COPY "${tableName}" (${keys.join(', ')}) FROM STDIN WITH (FORMAT csv, HEADER false);
+`;
+
+      benchmarkScript = `# pgbench High-Concurrency Production Benchmark (${tableName})
+# Step 1: Initialize pgbench tables with scale factor
+pgbench -i -s ${Math.max(10, Math.floor(rowCount / 10000))} -U postgres -d production_db
+
+# Step 2: Run 60s OLTP load test with 50 concurrent connections
+pgbench -c 50 -j 8 -T 60 -P 5 -U postgres -d production_db`;
+
+      expertRecommendations = [
+        'For loads over 100,000 rows, always drop secondary indexes prior to bulk ingestion and rebuild them afterwards (`CREATE INDEX CONCURRENTLY`) to eliminate per-row B-tree splitting overhead.',
+        'Use native binary streaming (`COPY ... FROM STDIN` in PostgreSQL) to bypass query parsing overhead, achieving 5x-10x higher ingestion throughput.',
+        'Wrap multi-value inserts in transactions of 5,000 to 10,000 rows each to prevent transaction log (WAL) saturation.',
+      ];
+    } else if (profile.dialect === 'mysql') {
       bulkScript = `-- MySQL High-Performance Ingestion (${rowCount.toLocaleString()} Rows into \`${tableName}\`)
 SET autocommit = 0;
 SET unique_checks = 0;
 SET foreign_key_checks = 0;
 
-INSERT INTO ${tableName} (${keys.join(', ')})
+INSERT INTO \`${tableName}\` (${keys.map(k => `\`${k}\``).join(', ')})
 VALUES 
 ${sampleRecordsJson.map(r => `  (${keys.map(k => typeof r[k] === 'number' ? r[k] : `'${r[k]}'`).join(', ')})`).join(',\n')},
   -- Execute in streaming batches of 5,000 multi-values for highest throughput
@@ -607,7 +641,72 @@ sysbench oltp_read_write \\
   --time=60 \\
   --report-interval=5 \\
   run`;
-    } else if (norm === 'mongodb') {
+
+      expertRecommendations = [
+        'For high-speed loading in MySQL, utilize `LOAD DATA INFILE` or disable unique and foreign key checks before executing large batched inserts.',
+        'Recreate secondary indexes online afterwards using `ALGORITHM=INPLACE, LOCK=NONE` to avoid write lock contention.',
+        'Wrap multi-value inserts in transactions of 5,000 to 10,000 rows to avoid excessive binary log (binlog) and InnoDB redo buffer contention.',
+      ];
+    } else if (profile.dialect === 'oracle') {
+      bulkScript = `-- Oracle High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into "${tableName.toUpperCase()}")
+-- Method 1: Set-Based Synthetic Generation via CONNECT BY LEVEL
+INSERT /*+ APPEND */ INTO ${tableName.toUpperCase()} (${keys.join(', ')})
+SELECT 
+${keys.map((k) => {
+  const val = sampleRecordsJson[0][k];
+  if (typeof val === 'number') return `    ROUND(DBMS_RANDOM.VALUE(10, 500), 2) AS ${k}`;
+  if (k.includes('id') || k.includes('number') || k.includes('vin') || k.includes('code') || k.includes('hash')) return `    '${k}_' || (1000 + MOD(LEVEL, 5000)) AS ${k}`;
+  if (k.includes('date') || k.includes('at') || k.includes('timestamp')) return `    SYSTIMESTAMP - NUMTODSINTERVAL(MOD(LEVEL, 1000), 'MINUTE') AS ${k}`;
+  return `    'sample_${k}_' || MOD(LEVEL, 100) AS ${k}`;
+}).join(',\n')}
+FROM DUAL
+CONNECT BY LEVEL <= ${Math.min(rowCount, 100000)};
+COMMIT;
+
+-- Method 2: High-Speed Direct Path Ingestion via SQL*Loader (sqlldr) or External Tables
+-- sqlldr userid=scott/tiger control=load.ctl direct=true parallel=true
+`;
+
+      benchmarkScript = `# Oracle SLOB / Swingbench Load Generator (${tableName})
+# Run SLOB (Sililly Little Oracle Benchmark) against database service
+./runit.sh 16`;
+
+      expertRecommendations = [
+        'For loads over 100,000 rows in Oracle, mark non-unique indexes UNUSABLE prior to loading and rebuild them afterwards using `ALTER INDEX ... REBUILD ONLINE NOLOGGING`.',
+        'Use direct-path inserts (`INSERT /*+ APPEND */`) or SQL*Loader with DIRECT=TRUE to bypass buffer cache and undo generation for maximum throughput.',
+        'Size redo log files and buffer pool appropriately to prevent frequent log file sync waits and checkpoint spikes.',
+      ];
+    } else if (profile.dialect === 'sqlserver') {
+      bulkScript = `-- SQL Server High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into [${tableName}])
+-- Method 1: Set-based batch generation via Tally CTE
+;WITH Tally(N) AS (
+    SELECT TOP (${Math.min(rowCount, 100000)}) ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+    FROM sys.all_columns a CROSS JOIN sys.all_columns b
+)
+INSERT INTO [${tableName}] (${keys.map(k => `[${k}]`).join(', ')})
+SELECT 
+${keys.map((k) => {
+  const val = sampleRecordsJson[0][k];
+  if (typeof val === 'number') return `    ROUND(RAND(CHECKSUM(NEWID())) * 490 + 10, 2) AS [${k}]`;
+  if (k.includes('id') || k.includes('number') || k.includes('vin') || k.includes('code') || k.includes('hash')) return `    '${k}_' + CAST(1000 + (N % 5000) AS VARCHAR(20)) AS [${k}]`;
+  if (k.includes('date') || k.includes('at') || k.includes('timestamp')) return `    DATEADD(minute, -(N % 1000), GETDATE()) AS [${k}]`;
+  return `    'sample_${k}_' + CAST(N % 100 AS VARCHAR(20)) AS [${k}]`;
+}).join(',\n')}
+FROM Tally;
+
+-- Method 2: High-Speed BCP Utility (Minimally Logged Bulk Insert)
+-- bcp production_db.dbo.${tableName} in data.csv -c -T -S localhost -b 10000 -h "TABLOCK"
+`;
+
+      benchmarkScript = `# SQL Server ostress / SQLQueryStress Benchmark (${tableName})
+ostress.exe -Slocalhost -E -dproduction_db -Q"SELECT TOP 100 * FROM ${tableName}" -n50 -r100`;
+
+      expertRecommendations = [
+        'Drop nonclustered indexes before large bulk loads and recreate them afterwards using `WITH (ONLINE = ON)` to maximize loading throughput.',
+        'Utilize `bcp` utility or `SqlBulkCopy` with TABLOCK to enable minimally logged bulk inserts under the Bulk-Logged recovery model.',
+        'Batch large operations to avoid transaction log growth and virtual log file (VLF) fragmentation.',
+      ];
+    } else if (profile.family === 'document') {
       bulkScript = `// MongoDB Bulk Ingestion (${rowCount.toLocaleString()} documents into "${tableName}")
 use production_db;
 
@@ -618,7 +717,7 @@ for (let i = 0; i < ${Math.min(1000, rowCount)}; i++) {
 
 db.${tableName}.insertMany(batch, { ordered: false });`;
 
-      benchmarkScript = `# k6 Load Benchmark for MongoDB API (${tableName})
+      benchmarkScript = `# k6 Load Benchmark for ${profile.name} API (${tableName})
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
@@ -635,8 +734,14 @@ export default function () {
   check(res, { 'status is 200': (r) => r.status === 200 });
   sleep(0.1);
 }`;
-    } else if (norm === 'redis' || norm === 'valkey' || norm === 'dragonfly') {
-      bulkScript = `# Redis Mass Insertion Protocol (RESP Protocol via redis-cli --pipe)
+
+      expertRecommendations = [
+        'Use unordered bulk inserts (`ordered: false`) to allow parallel document processing across shards.',
+        'Ensure secondary indexes are built in the background or created post-ingestion for multi-million document loads.',
+        'Tune write concern (e.g. `w: 1` vs `w: majority`) according to your durability versus ingestion throughput requirements.',
+      ];
+    } else if (profile.family === 'keyvalue') {
+      bulkScript = `# ${profile.name} Mass Insertion Protocol
 *3
 $3
 SET
@@ -653,34 +758,63 @@ $${JSON.stringify(sampleRecordsJson[1] || sampleRecordsJson[0]).length}
 ${JSON.stringify(sampleRecordsJson[1] || sampleRecordsJson[0])}
 `;
 
-      benchmarkScript = `# Redis Benchmark Pipeline Test (${tableName})
+      benchmarkScript = `# ${profile.name} Benchmark Pipeline Test (${tableName})
 redis-benchmark -h 127.0.0.1 -p 6379 -a ProductionStrongKey!2026 -t set,get -n ${rowCount} -c 50 -P 16 -q`;
-    } else {
-      
-      const keys = Object.keys(sampleRecordsJson[0] || {});
-      bulkScript = `-- PostgreSQL High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into "${tableName}")
--- Method 1: Instant In-Engine Synthetic Generation via generate_series()
-INSERT INTO ${tableName} (${keys.join(', ')})
-SELECT 
-${keys.map((k) => {
-  const val = sampleRecordsJson[0][k];
-  if (typeof val === 'number') return `    round((random() * 500 + 10)::numeric, 2) AS ${k}`;
-  if (k.includes('id') || k.includes('number') || k.includes('vin') || k.includes('code') || k.includes('hash')) return `    '${k}_' || (1000 + (g % 5000)) AS ${k}`;
-  if (k.includes('date') || k.includes('at') || k.includes('timestamp')) return `    NOW() - (g || ' minutes')::interval AS ${k}`;
-  return `    'sample_${k}_' || (g % 100) AS ${k}`;
-}).join(',\n')}
-FROM generate_series(1, ${rowCount}) AS g;
 
--- Method 2: High-Speed Binary Streaming via COPY (Bypasses Query Parser)
--- COPY ${tableName} (${keys.join(', ')}) FROM STDIN WITH (FORMAT csv, HEADER false);
+      expertRecommendations = [
+        `Utilize ${profile.name} pipelining or protocol streaming to maximize network throughput and minimize round-trip latencies.`,
+        'Monitor memory limits and evictions when populating large synthetic datasets.',
+        'Configure appropriate persistence snapshot intervals (RDB / AOF) during mass ingestion.',
+      ];
+    } else if (profile.family === 'wide_column') {
+      bulkScript = `-- ${profile.name} High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into ${tableName})
+-- Method 1: CQL Batched Statement (partition-aligned)
+INSERT INTO ${tableName} (${keys.join(', ')})
+VALUES (${keys.map(k => typeof sampleRecordsJson[0][k] === 'number' ? sampleRecordsJson[0][k] : `'${sampleRecordsJson[0][k]}'`).join(', ')});
+
+-- Method 2: High-Speed DSBulk / SSTableLoader utility
+-- dsbulk load -k production_keyspace -t ${tableName} -url data.csv
 `;
 
-      benchmarkScript = `# pgbench High-Concurrency Production Benchmark (${tableName})
-# Step 1: Initialize pgbench tables with scale factor
-pgbench -i -s ${Math.max(10, Math.floor(rowCount / 10000))} -U postgres -d production_db
+      benchmarkScript = `# ${profile.name} Stress Benchmark (${tableName})
+cassandra-stress user profile=cqlstress.yaml "ops(insert=1)" -node 127.0.0.1`;
 
-# Step 2: Run 60s OLTP load test with 50 concurrent connections
-pgbench -c 50 -j 8 -T 60 -P 5 -U postgres -d production_db`;
+      expertRecommendations = [
+        `Use ${profile.name} native bulk loading utilities (DSBulk or SSTableLoader) instead of unlogged multi-partition batches.`,
+        'Ensure partition keys are evenly distributed to avoid hot partitions across cluster nodes.',
+        'Monitor commit log writes and memtable flushing during high-volume ingestion.',
+      ];
+    } else if (profile.family === 'columnar_olap') {
+      bulkScript = `-- ${profile.name} Bulk Ingestion Script (${rowCount.toLocaleString()} Rows into ${tableName})
+-- Ingest via staging file (Parquet / ORC) or batched block inserts
+INSERT INTO ${tableName} (${keys.join(', ')})
+VALUES
+${sampleRecordsJson.map(r => `  (${keys.map(k => typeof r[k] === 'number' ? r[k] : `'${r[k]}'`).join(', ')})`).join(',\n')};
+`;
+
+      benchmarkScript = `# ${profile.name} Query & Ingestion Benchmark
+# Execute concurrent analytical batch queries against ${tableName}`;
+
+      expertRecommendations = [
+        `Load data into ${profile.name} using columnar file formats (Parquet, ORC, Arrow) rather than row-by-row statements.`,
+        'Group analytical ingestion into large batches (10,000+ rows) to maximize columnar compression efficiency.',
+        'Utilize cloud object storage staging and native copy commands for optimal throughput.',
+      ];
+    } else {
+      bulkScript = `-- ${profile.name} High-Throughput Synthetic Generation (${rowCount.toLocaleString()} Rows into ${tableName})
+INSERT INTO ${tableName} (${keys.join(', ')})
+VALUES
+${sampleRecordsJson.map(r => `  (${keys.map(k => typeof r[k] === 'number' ? r[k] : `'${r[k]}'`).join(', ')})`).join(',\n')};
+`;
+
+      benchmarkScript = `# ${profile.name} Performance Benchmark (${tableName})
+# Run concurrent client connections against ${tableName}`;
+
+      expertRecommendations = [
+        `Disable or drop non-primary indices prior to bulk loads and recreate them post-load to minimize indexing overhead.`,
+        `Batch bulk insertions into transactions of 1,000 to 5,000 items to reduce commit overhead and ${profile.backup.walOrLogName || 'transaction log'} strain.`,
+        `Use native streaming or bulk loading utilities provided by ${profile.name} for optimal throughput.`,
+      ];
     }
 
     return {
@@ -700,11 +834,7 @@ pgbench -c 50 -j 8 -T 60 -P 5 -U postgres -d production_db`;
         indexBuildTimeSec: `${((rowCount / 100000) * (preset === 'vector_embeddings' ? 8.5 : 1.8)).toFixed(1)}s`,
         ramFootprintMb: `${Math.round(totalSizeBytes / (1024 * 1024) * 1.3)} MB`,
       },
-      expertRecommendations: [
-        'For loads over 100,000 rows, always drop secondary indexes prior to bulk ingestion and rebuild them afterwards (`CREATE INDEX CONCURRENTLY`) to eliminate per-row B-tree splitting overhead.',
-        'Use native binary streaming (`COPY ... FROM STDIN` in PostgreSQL or `LOAD DATA INFILE` in MySQL) to bypass query parsing overhead, achieving 5x-10x higher ingestion throughput.',
-        'Wrap multi-value inserts in transactions of 5,000 to 10,000 rows each to prevent transaction log (WAL/binlog) saturation.',
-      ],
+      expertRecommendations,
     };
   }
 }

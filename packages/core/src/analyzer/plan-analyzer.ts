@@ -7,10 +7,13 @@ import {
   GraphEdgeData,
   SeverityLevel,
 } from '../types/plan.types';
+import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export class PlanAnalyzer {
   
-  public analyze(rawInput: any): PlanAnalysisResult {
+  public analyze(rawInput: any, engine: string = 'postgres'): PlanAnalysisResult {
+    const profile = getEngineProfile(engine);
     const planOutput = this.normalizeInput(rawInput);
     const rootNode = planOutput.Plan;
     const executionTimeMs = planOutput['Execution Time'] ?? rootNode['Actual Total Time'] ?? 0;
@@ -38,7 +41,7 @@ export class PlanAnalyzer {
       totalDiskReads += readBlocks;
       totalTempDiskUsage += tempWritten;
 
-      const nodeBottlenecks = this.evaluateNodeRules(node, rootCost, executionTimeMs);
+      const nodeBottlenecks = this.evaluateNodeRules(node, rootCost, executionTimeMs, profile);
       bottlenecks.push(...nodeBottlenecks);
 
       const isBottleneck = nodeBottlenecks.length > 0;
@@ -108,7 +111,7 @@ export class PlanAnalyzer {
     const recommendations = this.generateSummaryRecommendations(bottlenecks, cacheHitRatioPercentage);
 
     return {
-      engine: 'postgres',
+      engine: profile.engineId,
       performanceScore,
       executionTimeMs: Number(executionTimeMs.toFixed(3)),
       planningTimeMs: Number(planningTimeMs.toFixed(3)),
@@ -151,7 +154,8 @@ export class PlanAnalyzer {
   private evaluateNodeRules(
     node: PostgresPlanNode,
     rootCost: number,
-    totalExecutionTime: number
+    totalExecutionTime: number,
+    profile: EngineProfile
   ): BottleneckFinding[] {
     const findings: BottleneckFinding[] = [];
     const nodeType = node['Node Type'];
@@ -160,6 +164,7 @@ export class PlanAnalyzer {
     const rowsRemoved = node['Rows Removed by Filter'] || 0;
     const actualRows = node['Actual Rows'] ?? node['Plan Rows'] ?? 0;
     const nodeTime = node['Actual Total Time'] || 0;
+    const engineLabel = profile.isPostgresFamily ? 'PostgreSQL' : profile.name;
 
     if (nodeType === 'Seq Scan') {
       if (rowsRemoved > 500 || actualRows > 1000) {
@@ -173,11 +178,13 @@ export class PlanAnalyzer {
           relationName,
           severity: rowsRemoved > 5000 || actualRows > 10000 ? 'CRITICAL' : 'WARNING',
           title: `Expensive Sequential Scan on Table "${relationName}"`,
-          description: `Postgres scanned the entire table sequentially because no applicable index was found. Filter discarded ${rowsRemoved.toLocaleString()} rows.`,
+          description: `${engineLabel} scanned the entire table sequentially because no applicable index was found. Filter discarded ${rowsRemoved.toLocaleString()} rows.`,
           metricLabel: 'Rows Removed by Filter',
           metricValue: rowsRemoved,
           recommendation: `Add a B-Tree index on ${relationName} (${colList}) to enable rapid Index Scans.`,
-          suggestedSql: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${indexName} ON ${relationName} (${colList});`,
+          suggestedSql: profile.isPostgresFamily
+            ? `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${indexName} ON ${relationName} (${colList});`
+            : profile.onlineDdl.createIndexSql(indexName, relationName, colList),
         });
       }
     }
@@ -195,8 +202,8 @@ export class PlanAnalyzer {
           description: `The query planner predicted ${planRows.toLocaleString()} rows, but actual execution produced ${actualRows.toLocaleString()} rows (${rowRatio > 1 ? `${rowRatio.toFixed(1)}x higher` : 'significantly lower'}).`,
           metricLabel: 'Estimation Drift',
           metricValue: `${rowRatio.toFixed(1)}x`,
-          recommendation: `Update optimizer statistics to help PostgreSQL choose better join algorithms and scan paths.`,
-          suggestedSql: `ANALYZE ${relationName};`,
+          recommendation: `Update optimizer statistics to help ${engineLabel} choose better join algorithms and scan paths.`,
+          suggestedSql: profile.maintenance.statsCommand.replace('{table}', relationName),
         });
       }
     }
@@ -206,17 +213,24 @@ export class PlanAnalyzer {
       const sortSpaceType = node['Sort Space Type'] || '';
       if (sortMethod.toLowerCase().includes('external') || sortSpaceType.toLowerCase() === 'disk') {
         const spaceUsedKb = node['Sort Space Used'] || 0;
+        const workMemLabel = profile.memoryParams.workMemParam || 'work_mem';
         findings.push({
           id: `disk_sort_${Math.random().toString(36).substring(2, 8)}`,
           nodeType,
           relationName,
           severity: 'CRITICAL',
           title: `Sort Operation Spilled to Disk`,
-          description: `The sort operation exceeded work_mem and spilled ${spaceUsedKb.toLocaleString()} KB to temporary disk storage, introducing severe I/O latency.`,
+          description: `The sort operation exceeded ${workMemLabel} and spilled ${spaceUsedKb.toLocaleString()} KB to temporary disk storage, introducing severe I/O latency.`,
           metricLabel: 'Disk Space Used',
           metricValue: `${spaceUsedKb} KB`,
-          recommendation: `Increase work_mem for this session or add an index matching the ORDER BY clause.`,
-          suggestedSql: `SET work_mem = '64MB';`,
+          recommendation: `Increase ${workMemLabel} for this session or add an index matching the ORDER BY clause.`,
+          suggestedSql: profile.isPostgresFamily
+            ? `SET work_mem = '64MB';`
+            : profile.dialect === 'mysql'
+            ? `SET sort_buffer_size = 67108864;`
+            : profile.dialect === 'oracle'
+            ? `ALTER SESSION SET PGA_AGGREGATE_TARGET = 512M;`
+            : `-- Tune ${workMemLabel} for session sorting capacity.`,
         });
       }
     }
@@ -232,7 +246,7 @@ export class PlanAnalyzer {
           description: `Nested loop executed ${loops.toLocaleString()} iterations consuming ${(nodeTime).toFixed(2)}ms.`,
           metricLabel: 'Actual Loops',
           metricValue: loops,
-          recommendation: `Ensure foreign keys in join predicates are indexed so Postgres can switch to Index Scans or Hash Joins.`,
+          recommendation: `Ensure foreign keys in join predicates are indexed so ${engineLabel} can switch to Index Scans or Hash Joins.`,
         });
       }
     }
@@ -240,6 +254,7 @@ export class PlanAnalyzer {
     const readBlocks = (node['Shared Read Blocks'] || 0);
     const hitBlocks = (node['Shared Hit Blocks'] || 0);
     if (readBlocks > 1000 && readBlocks > hitBlocks * 2) {
+      const cacheParamName = profile.memoryParams.sharedBufferParam || profile.memoryParams.cacheParam || 'buffer cache';
       findings.push({
         id: `high_io_${Math.random().toString(36).substring(2, 8)}`,
         nodeType,
@@ -249,7 +264,7 @@ export class PlanAnalyzer {
         description: `Node read ${readBlocks.toLocaleString()} blocks directly from disk compared to only ${hitBlocks.toLocaleString()} cache hits.`,
         metricLabel: 'Disk Blocks Read',
         metricValue: readBlocks,
-        recommendation: `Ensure shared_buffers is adequately sized and hot tables/indexes fit into memory.`,
+        recommendation: `Ensure ${cacheParamName} is adequately sized and hot tables/indexes fit into memory.`,
       });
     }
 

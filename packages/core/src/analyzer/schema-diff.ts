@@ -1,4 +1,6 @@
 import { getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export interface SchemaDiffChange {
   id: string;
@@ -176,13 +178,13 @@ function splitSqlColumns(body: string): string[] {
   return result;
 }
 
-function formatSafeForwardDdl(changeType: string, tableName: string, colName: string, typeDef: string, engine: string): { forward: string; rollback: string } {
-  const isMySQL = engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale';
-  const isOracle = engine === 'oracle';
-  const isMSSQL = engine.includes('mssql') || engine.includes('sql_server') || engine.includes('microsoft_sql_server');
-  const isClickHouse = engine === 'clickhouse';
-  const isSnowflake = engine === 'snowflake';
-  const isPostgres = isPostgresEngine(engine);
+function formatSafeForwardDdl(changeType: string, tableName: string, colName: string, typeDef: string, profile: EngineProfile): { forward: string; rollback: string } {
+  const isMySQL = profile.dialect === 'mysql';
+  const isOracle = profile.dialect === 'oracle';
+  const isMSSQL = profile.dialect === 'sqlserver';
+  const isClickHouse = profile.engineId === 'clickhouse';
+  const isSnowflake = profile.engineId === 'snowflake';
+  const isPostgres = profile.isPostgresFamily;
 
   if (changeType === 'COLUMN_ADDED') {
     if (isMySQL) {
@@ -231,19 +233,30 @@ export function analyzeSchemaDiff(options: {
   sourceDdl?: string;
   targetDdl?: string;
 }): SchemaDiffResult {
-  const meta = getEngineMetadata(options.engine);
-  const engine = (meta.id || 'postgresql').toLowerCase();
+  const profile = getEngineProfile(options.engine);
+  const meta = getEngineMetadata(options.engine) || {
+    id: profile.engineId,
+    name: profile.name,
+    category: 'relational',
+    categoryLabel: 'Relational (SQL)',
+    icon: '🗄️',
+    rank: 999,
+    popularityScore: 10,
+    commandHint: profile.planCommand,
+    description: profile.description,
+  };
+  const engine = profile.engineId.toLowerCase();
   const sourceEnv = options.sourceEnv || 'Git / Staging (Source)';
   const targetEnv = options.targetEnv || 'Live Production (Target)';
 
-  const isMySQL = engine === 'mysql' || engine === 'mariadb' || engine === 'planetscale' || engine === 'percona';
-  const isOracle = engine === 'oracle';
-  const isMSSQL = engine.includes('mssql') || engine.includes('sql_server') || engine.includes('microsoft_sql_server') || engine.includes('sqlserver');
-  const isSQLite = engine === 'sqlite' || engine === 'turso';
+  const isMySQL = profile.dialect === 'mysql';
+  const isOracle = profile.dialect === 'oracle';
+  const isMSSQL = profile.dialect === 'sqlserver';
+  const isSQLite = profile.dialect === 'sqlite';
   const isClickHouse = engine === 'clickhouse';
   const isSnowflake = engine === 'snowflake';
-  const isMongoDB = engine === 'mongodb' || engine === 'documentdb';
-  const isPostgres = isPostgresEngine(engine);
+  const isMongoDB = profile.family === 'document' || engine.includes('mongo');
+  const isPostgres = profile.isPostgresFamily;
 
   let changes: SchemaDiffChange[] = [];
 
@@ -276,7 +289,7 @@ export function analyzeSchemaDiff(options: {
         // Missing Columns in Target (COLUMN_ADDED)
         for (const [colName, srcCol] of srcTbl.columns) {
           if (!tgtTbl.columns.has(colName)) {
-            const formatted = formatSafeForwardDdl('COLUMN_ADDED', tableName, srcCol.name, srcCol.rawType, engine);
+            const formatted = formatSafeForwardDdl('COLUMN_ADDED', tableName, srcCol.name, srcCol.rawType, profile);
             changes.push({
               id: `diff-${diffId++}`,
               type: 'COLUMN_ADDED',
@@ -345,15 +358,9 @@ export function analyzeSchemaDiff(options: {
               ? `CREATE ${srcIdx.isUnique ? 'UNIQUE ' : ''}INDEX ${srcIdx.name} ON ${tableName} (${srcIdx.columns.join(', ')}) ONLINE;`
               : isMSSQL
               ? `CREATE ${srcIdx.isUnique ? 'UNIQUE ' : ''}NONCLUSTERED INDEX [${srcIdx.name}] ON [dbo].[${tableName}] (${srcIdx.columns.map(c => `[${c}]`).join(', ')}) WITH (ONLINE = ON);`
-              : `CREATE ${srcIdx.isUnique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${srcIdx.name} ON ${tableName} (${srcIdx.columns.join(', ')});`;
+              : profile.onlineDdl.createIndexSql(srcIdx.name, tableName, srcIdx.columns.join(', '));
 
-            const idxRollback = isPostgres
-              ? `DROP INDEX CONCURRENTLY IF EXISTS ${srcIdx.name};`
-              : isMySQL
-              ? `DROP INDEX \`${srcIdx.name}\` ON \`${tableName}\`;`
-              : isOracle
-              ? `DROP INDEX ${srcIdx.name} ONLINE;`
-              : `DROP INDEX IF EXISTS ${srcIdx.name};`;
+            const idxRollback = profile.onlineDdl.dropIndexSql(srcIdx.name, tableName);
 
             changes.push({
               id: `diff-${diffId++}`,
@@ -380,27 +387,27 @@ export function analyzeSchemaDiff(options: {
 
     // Preset 2: SaaS Billing & Subscriptions
     if (srcNorm.includes('billing') || srcNorm.includes('saas') || srcNorm.includes('v2.4') || srcNorm.includes('stripe') || srcNorm.includes('subscription')) {
-      changes = getSaaSBillingPresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getSaaSBillingPresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
     // Preset 3: Enterprise ERP & Inventory
     else if (srcNorm.includes('erp') || srcNorm.includes('enterprise') || srcNorm.includes('release 14') || srcNorm.includes('inventory') || srcNorm.includes('exadata')) {
-      changes = getEnterpriseErpPresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getEnterpriseErpPresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
     // Preset 4: Healthcare HIPAA Audit
     else if (srcNorm.includes('hipaa') || srcNorm.includes('health') || srcNorm.includes('patient') || srcNorm.includes('medical')) {
-      changes = getHealthcareHipaaPresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getHealthcareHipaaPresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
     // Preset 5: Multi-Tenant Sharding
     else if (srcNorm.includes('tenant') || srcNorm.includes('shard') || srcNorm.includes('multi tenant')) {
-      changes = getMultiTenantPresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getMultiTenantPresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
     // Preset 6: FinTech Crypto Ledger
     else if (srcNorm.includes('fintech') || srcNorm.includes('crypto') || srcNorm.includes('ledger') || srcNorm.includes('wallet')) {
-      changes = getFintechLedgerPresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getFintechLedgerPresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
     // Preset 1 (Default): E-Commerce 2FA & Orders Drift
     else {
-      changes = getEcommercePresetChanges(engine, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
+      changes = getEcommercePresetChanges(profile, isMySQL, isOracle, isMSSQL, isClickHouse, isSnowflake, isMongoDB);
     }
   }
 
@@ -450,16 +457,18 @@ ${changes.filter(c => c.type === 'TABLE_ADDED').map(c => c.rollbackDdl).join('\n
 
 COMMIT;
 
--- Drop Added Indexes Concurrently
+-- Drop Added Indexes
 ${changes.filter(c => c.type === 'INDEX_MISSING').map(c => c.rollbackDdl).join('\n') || ''}
 `;
 
   const preflightChecks = [
     `Verify replica replication lag is < 500ms before running ALTER TABLE on ${meta.name}.`,
-    isPostgresEngine(engine)
+    profile.isPostgresFamily
       ? `Ensure active lock_timeout is set to '3s' to prevent cascade queuing of application transactions.`
       : isMySQL
       ? `Verify innodb_online_alter_log_max_size is large enough for active DML workloads.`
+      : isOracle
+      ? `Ensure temporary tablespace and undo tablespace have sufficient capacity for online operations.`
       : `Ensure transaction log space is sufficient to prevent rollback exhaustion.`,
     `Check free disk space: Table rewrites require at least 2.5x the table's total physical size.`,
     `Execute during lowest QPS maintenance window or blue/green staging environment.`
@@ -483,8 +492,8 @@ ${changes.filter(c => c.type === 'INDEX_MISSING').map(c => c.rollbackDdl).join('
 
 // --- PRESET GENERATORS ---
 
-function getEcommercePresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
-  const isPostgres = isPostgresEngine(engine);
+function getEcommercePresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -519,9 +528,11 @@ function getEcommercePresetChanges(engine: string, isMySQL: boolean, isOracle: b
         : isOracle
         ? 'CREATE INDEX idx_orders_cust_stat ON orders (customer_id, status, created_at DESC) ONLINE;'
         : isMSSQL
-        ? 'CREATE INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) WITH (ONLINE = ON);'
-        : 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);',
-      rollbackDdl: isMySQL ? 'DROP INDEX idx_orders_customer_status_created ON orders;' : 'DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_status_created;',
+        ? 'CREATE NONCLUSTERED INDEX idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC) WITH (ONLINE = ON);'
+        : isPostgres
+        ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_customer_status_created ON orders (customer_id, status, created_at DESC);'
+        : profile.onlineDdl.createIndexSql('idx_orders_customer_status_created', 'orders', 'customer_id, status, created_at DESC'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_orders_customer_status_created', 'orders'),
       description: 'Critical composite B-Tree index missing in production, causing full table scans on customer dashboard queries.',
     },
     {
@@ -548,8 +559,14 @@ function getEcommercePresetChanges(engine: string, isMySQL: boolean, isOracle: b
       impactLevel: 'SAFE',
       safeForwardDdl: isMySQL
         ? 'CREATE TABLE IF NOT EXISTS audit_event_logs (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, action VARCHAR(64) NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);'
-        : 'CREATE TABLE IF NOT EXISTS audit_event_logs (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, action VARCHAR(64) NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW());',
-      rollbackDdl: isMySQL ? 'DROP TABLE IF EXISTS audit_event_logs;' : 'DROP TABLE IF EXISTS audit_event_logs CASCADE;',
+        : isOracle
+        ? 'CREATE TABLE audit_event_logs (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, user_id NUMBER NOT NULL, action VARCHAR2(64) NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);'
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[audit_event_logs] (id BIGINT IDENTITY(1,1) PRIMARY KEY, user_id BIGINT NOT NULL, action NVARCHAR(64) NOT NULL, created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET());'
+        : isPostgres
+        ? 'CREATE TABLE IF NOT EXISTS audit_event_logs (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, action VARCHAR(64) NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW());'
+        : `CREATE TABLE IF NOT EXISTS audit_event_logs (${profile.syntax.identityColumn}, user_id BIGINT NOT NULL, action VARCHAR(64) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`,
+      rollbackDdl: isMySQL ? 'DROP TABLE IF EXISTS audit_event_logs;' : isOracle ? 'DROP TABLE audit_event_logs CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS audit_event_logs;',
       description: 'New audit event logging table added in migration branch.',
     },
     {
@@ -562,15 +579,21 @@ function getEcommercePresetChanges(engine: string, isMySQL: boolean, isOracle: b
       impactLevel: 'WARNING',
       safeForwardDdl: isPostgres
         ? 'ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT NOT VALID;\nALTER TABLE orders VALIDATE CONSTRAINT fk_orders_customer_id;'
-        : 'ALTER TABLE orders DROP FOREIGN KEY fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT;',
-      rollbackDdl: 'ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;',
-      description: 'Foreign key cascade rule modified to restrict mode. Use NOT VALID + VALIDATE to avoid table lock.',
+        : isOracle
+        ? 'ALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ENABLE NOVALIDATE;'
+        : isMySQL
+        ? 'ALTER TABLE orders DROP FOREIGN KEY fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT;'
+        : 'ALTER TABLE orders DROP CONSTRAINT IF EXISTS fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT;',
+      rollbackDdl: isMySQL
+        ? 'ALTER TABLE orders DROP FOREIGN KEY fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;'
+        : 'ALTER TABLE orders DROP CONSTRAINT fk_orders_customer_id;\nALTER TABLE orders ADD CONSTRAINT fk_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;',
+      description: 'Foreign key cascade rule modified to restrict mode. Use safe validation where supported to avoid table lock.',
     }
   ];
 }
 
-function getSaaSBillingPresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
-  const isPostgres = isPostgresEngine(engine);
+function getSaaSBillingPresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -610,8 +633,14 @@ function getSaaSBillingPresetChanges(engine: string, isMySQL: boolean, isOracle:
       impactLevel: 'SAFE',
       safeForwardDdl: isPostgres
         ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invoices_due_date_status ON invoices (due_date ASC, status);'
-        : 'CREATE INDEX idx_invoices_due_date_status ON invoices (due_date ASC, status) ALGORITHM=INPLACE, LOCK=NONE;',
-      rollbackDdl: isPostgres ? 'DROP INDEX CONCURRENTLY IF EXISTS idx_invoices_due_date_status;' : 'DROP INDEX idx_invoices_due_date_status ON invoices;',
+        : isMySQL
+        ? 'CREATE INDEX idx_invoices_due_date_status ON invoices (due_date ASC, status) ALGORITHM=INPLACE, LOCK=NONE;'
+        : isOracle
+        ? 'CREATE INDEX idx_invoices_due_date_status ON invoices (due_date ASC, status) ONLINE;'
+        : isMSSQL
+        ? 'CREATE NONCLUSTERED INDEX idx_invoices_due_date_status ON invoices (due_date ASC, status) WITH (ONLINE = ON);'
+        : profile.onlineDdl.createIndexSql('idx_invoices_due_date_status', 'invoices', 'due_date ASC, status'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_invoices_due_date_status', 'invoices'),
       description: 'Index for automated dunning and overdue collections worker.',
     },
     {
@@ -624,8 +653,14 @@ function getSaaSBillingPresetChanges(engine: string, isMySQL: boolean, isOracle:
       impactLevel: 'SAFE',
       safeForwardDdl: isPostgres
         ? 'CREATE TABLE IF NOT EXISTS billing_audit_ledger (id BIGSERIAL PRIMARY KEY, invoice_id BIGINT NOT NULL, event_type VARCHAR(64) NOT NULL, recorded_at TIMESTAMPTZ DEFAULT NOW());'
-        : 'CREATE TABLE IF NOT EXISTS billing_audit_ledger (id BIGINT AUTO_INCREMENT PRIMARY KEY, invoice_id BIGINT NOT NULL, event_type VARCHAR(64) NOT NULL, recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP);',
-      rollbackDdl: 'DROP TABLE IF EXISTS billing_audit_ledger CASCADE;',
+        : isOracle
+        ? 'CREATE TABLE billing_audit_ledger (id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, invoice_id NUMBER NOT NULL, event_type VARCHAR2(64) NOT NULL, recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);'
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[billing_audit_ledger] (id BIGINT IDENTITY(1,1) PRIMARY KEY, invoice_id BIGINT NOT NULL, event_type NVARCHAR(64) NOT NULL, recorded_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET());'
+        : isMySQL
+        ? 'CREATE TABLE IF NOT EXISTS billing_audit_ledger (id BIGINT AUTO_INCREMENT PRIMARY KEY, invoice_id BIGINT NOT NULL, event_type VARCHAR(64) NOT NULL, recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP);'
+        : `CREATE TABLE IF NOT EXISTS billing_audit_ledger (${profile.syntax.identityColumn}, invoice_id BIGINT NOT NULL, event_type VARCHAR(64) NOT NULL, recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`,
+      rollbackDdl: isOracle ? 'DROP TABLE billing_audit_ledger CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS billing_audit_ledger;',
       description: 'New double-entry compliance table for Stripe/Paddle reconciliation.',
     },
     {
@@ -643,8 +678,8 @@ function getSaaSBillingPresetChanges(engine: string, isMySQL: boolean, isOracle:
   ];
 }
 
-function getEnterpriseErpPresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
-  const isPostgres = isPostgresEngine(engine);
+function getEnterpriseErpPresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -674,8 +709,12 @@ function getEnterpriseErpPresetChanges(engine: string, isMySQL: boolean, isOracl
         ? 'CREATE INDEX idx_gl_journal_posting_date ON general_ledger_entries (posting_date DESC, fiscal_year, account_code) ONLINE;'
         : isMSSQL
         ? 'CREATE NONCLUSTERED INDEX idx_gl_journal_posting_date ON general_ledger_entries (posting_date DESC, fiscal_year, account_code) WITH (ONLINE = ON);'
-        : 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gl_journal_posting_date ON general_ledger_entries (posting_date DESC, fiscal_year, account_code);',
-      rollbackDdl: isOracle ? 'DROP INDEX idx_gl_journal_posting_date ONLINE;' : 'DROP INDEX CONCURRENTLY IF EXISTS idx_gl_journal_posting_date;',
+        : isPostgres
+        ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gl_journal_posting_date ON general_ledger_entries (posting_date DESC, fiscal_year, account_code);'
+        : isMySQL
+        ? 'CREATE INDEX idx_gl_journal_posting_date ON general_ledger_entries (posting_date DESC, fiscal_year, account_code) ALGORITHM=INPLACE, LOCK=NONE;'
+        : profile.onlineDdl.createIndexSql('idx_gl_journal_posting_date', 'general_ledger_entries', 'posting_date DESC, fiscal_year, account_code'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_gl_journal_posting_date', 'general_ledger_entries'),
       description: 'Accelerates GAAP/IFRS quarterly financial consolidation queries.',
     },
     {
@@ -702,8 +741,12 @@ function getEnterpriseErpPresetChanges(engine: string, isMySQL: boolean, isOracl
       impactLevel: 'SAFE',
       safeForwardDdl: isOracle
         ? 'CREATE TABLE erp_compliance_logs (log_id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, auditor_id VARCHAR2(64), change_hash VARCHAR2(128), verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);'
-        : 'CREATE TABLE IF NOT EXISTS erp_compliance_logs (log_id BIGSERIAL PRIMARY KEY, auditor_id VARCHAR(64), change_hash VARCHAR(128), verified_at TIMESTAMPTZ DEFAULT NOW());',
-      rollbackDdl: 'DROP TABLE erp_compliance_logs;',
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[erp_compliance_logs] (log_id BIGINT IDENTITY(1,1) PRIMARY KEY, auditor_id NVARCHAR(64), change_hash NVARCHAR(128), verified_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET());'
+        : isPostgres
+        ? 'CREATE TABLE IF NOT EXISTS erp_compliance_logs (log_id BIGSERIAL PRIMARY KEY, auditor_id VARCHAR(64), change_hash VARCHAR(128), verified_at TIMESTAMPTZ DEFAULT NOW());'
+        : `CREATE TABLE IF NOT EXISTS erp_compliance_logs (${profile.syntax.identityColumn}, auditor_id VARCHAR(64), change_hash VARCHAR(128), verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`,
+      rollbackDdl: isOracle ? 'DROP TABLE erp_compliance_logs CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS erp_compliance_logs;',
       description: 'SOX 404 immutable compliance tamper log.',
     },
     {
@@ -716,15 +759,17 @@ function getEnterpriseErpPresetChanges(engine: string, isMySQL: boolean, isOracl
       impactLevel: 'WARNING',
       safeForwardDdl: isOracle
         ? 'ALTER TABLE inventory_items ADD CONSTRAINT fk_inventory_warehouse_id FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ENABLE NOVALIDATE;'
-        : 'ALTER TABLE inventory_items ADD CONSTRAINT fk_inventory_warehouse_id FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) NOT VALID;\nALTER TABLE inventory_items VALIDATE CONSTRAINT fk_inventory_warehouse_id;',
+        : isPostgres
+        ? 'ALTER TABLE inventory_items ADD CONSTRAINT fk_inventory_warehouse_id FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) NOT VALID;\nALTER TABLE inventory_items VALIDATE CONSTRAINT fk_inventory_warehouse_id;'
+        : 'ALTER TABLE inventory_items ADD CONSTRAINT fk_inventory_warehouse_id FOREIGN KEY (warehouse_id) REFERENCES warehouses(id);',
       rollbackDdl: 'ALTER TABLE inventory_items DROP CONSTRAINT fk_inventory_warehouse_id;',
       description: 'Adds strict foreign key constraint between inventory and warehouses without table lock.',
     }
   ];
 }
 
-function getHealthcareHipaaPresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
-  const isPostgres = isPostgresEngine(engine);
+function getHealthcareHipaaPresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -736,7 +781,9 @@ function getHealthcareHipaaPresetChanges(engine: string, isMySQL: boolean, isOra
       impactLevel: 'SAFE',
       safeForwardDdl: isPostgres
         ? 'ALTER TABLE patients ADD COLUMN IF NOT EXISTS medical_record_hash VARCHAR(64) NULL;'
-        : 'ALTER TABLE patients ADD COLUMN medical_record_hash VARCHAR(64) NULL;',
+        : isOracle
+        ? 'ALTER TABLE patients ADD (medical_record_hash VARCHAR2(64) NULL);'
+        : 'ALTER TABLE patients ADD COLUMN IF NOT EXISTS medical_record_hash VARCHAR(64) NULL;',
       rollbackDdl: 'ALTER TABLE patients DROP COLUMN medical_record_hash;',
       description: 'SHA-256 pseudonymized token for HIPAA-compliant research data sharing.',
     },
@@ -750,8 +797,14 @@ function getHealthcareHipaaPresetChanges(engine: string, isMySQL: boolean, isOra
       impactLevel: 'SAFE',
       safeForwardDdl: isPostgres
         ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_access_logs_patient_doctor ON access_logs (patient_id, doctor_id, accessed_at DESC);'
-        : 'CREATE INDEX idx_access_logs_patient_doctor ON access_logs (patient_id, doctor_id, accessed_at DESC);',
-      rollbackDdl: 'DROP INDEX IF EXISTS idx_access_logs_patient_doctor;',
+        : isOracle
+        ? 'CREATE INDEX idx_access_logs_patient_doctor ON access_logs (patient_id, doctor_id, accessed_at DESC) ONLINE;'
+        : isMSSQL
+        ? 'CREATE NONCLUSTERED INDEX idx_access_logs_patient_doctor ON access_logs (patient_id, doctor_id, accessed_at DESC) WITH (ONLINE = ON);'
+        : isMySQL
+        ? 'CREATE INDEX idx_access_logs_patient_doctor ON access_logs (patient_id, doctor_id, accessed_at DESC) ALGORITHM=INPLACE, LOCK=NONE;'
+        : profile.onlineDdl.createIndexSql('idx_access_logs_patient_doctor', 'access_logs', 'patient_id, doctor_id, accessed_at DESC'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_access_logs_patient_doctor', 'access_logs'),
       description: 'Mandatory patient chart access auditing index for OCR compliance inspections.',
     },
     {
@@ -762,14 +815,21 @@ function getHealthcareHipaaPresetChanges(engine: string, isMySQL: boolean, isOra
       sourceDef: 'CREATE TABLE hipaa_audit_trail (audit_id BIGSERIAL PRIMARY KEY, phi_viewed BOOLEAN, ip_address INET, logged_at TIMESTAMPTZ)',
       targetDef: '<Table Not Found in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'CREATE TABLE IF NOT EXISTS hipaa_audit_trail (audit_id BIGSERIAL PRIMARY KEY, user_id BIGINT, phi_viewed BOOLEAN DEFAULT TRUE, ip_address VARCHAR(45), logged_at TIMESTAMPTZ DEFAULT NOW());',
-      rollbackDdl: 'DROP TABLE IF EXISTS hipaa_audit_trail;',
+      safeForwardDdl: isPostgres
+        ? 'CREATE TABLE IF NOT EXISTS hipaa_audit_trail (audit_id BIGSERIAL PRIMARY KEY, user_id BIGINT, phi_viewed BOOLEAN DEFAULT TRUE, ip_address INET, logged_at TIMESTAMPTZ DEFAULT NOW());'
+        : isOracle
+        ? 'CREATE TABLE hipaa_audit_trail (audit_id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, user_id NUMBER, phi_viewed NUMBER(1) DEFAULT 1, ip_address VARCHAR2(45), logged_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);'
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[hipaa_audit_trail] (audit_id BIGINT IDENTITY(1,1) PRIMARY KEY, user_id BIGINT, phi_viewed BIT DEFAULT 1, ip_address VARCHAR(45), logged_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET());'
+        : `CREATE TABLE IF NOT EXISTS hipaa_audit_trail (${profile.syntax.identityColumn}, user_id BIGINT, phi_viewed BOOLEAN DEFAULT TRUE, ip_address VARCHAR(45), logged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`,
+      rollbackDdl: isOracle ? 'DROP TABLE hipaa_audit_trail CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS hipaa_audit_trail;',
       description: 'Immutable electronic health record PHI access trail.',
     }
   ];
 }
 
-function getMultiTenantPresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+function getMultiTenantPresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -779,7 +839,9 @@ function getMultiTenantPresetChanges(engine: string, isMySQL: boolean, isOracle:
       sourceDef: 'isolation_tier VARCHAR(32) DEFAULT \'shared\'',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS isolation_tier VARCHAR(32) DEFAULT \'shared\';',
+      safeForwardDdl: isOracle
+        ? 'ALTER TABLE tenants ADD (isolation_tier VARCHAR2(32) DEFAULT \'shared\');'
+        : 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS isolation_tier VARCHAR(32) DEFAULT \'shared\';',
       rollbackDdl: 'ALTER TABLE tenants DROP COLUMN IF EXISTS isolation_tier;',
       description: 'Distinguishes between shared pool vs dedicated tenant shard cluster.',
     },
@@ -791,8 +853,16 @@ function getMultiTenantPresetChanges(engine: string, isMySQL: boolean, isOracle:
       sourceDef: 'CREATE INDEX idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC)',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC);',
-      rollbackDdl: 'DROP INDEX CONCURRENTLY IF EXISTS idx_tenant_events_created_at;',
+      safeForwardDdl: isPostgres
+        ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC);'
+        : isOracle
+        ? 'CREATE INDEX idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC) ONLINE;'
+        : isMSSQL
+        ? 'CREATE NONCLUSTERED INDEX idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC) WITH (ONLINE = ON);'
+        : isMySQL
+        ? 'CREATE INDEX idx_tenant_events_created_at ON tenant_events (tenant_id, created_at DESC) ALGORITHM=INPLACE, LOCK=NONE;'
+        : profile.onlineDdl.createIndexSql('idx_tenant_events_created_at', 'tenant_events', 'tenant_id, created_at DESC'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_tenant_events_created_at', 'tenant_events'),
       description: 'Partition pruning index for tenant data isolation.',
     },
     {
@@ -803,14 +873,21 @@ function getMultiTenantPresetChanges(engine: string, isMySQL: boolean, isOracle:
       sourceDef: 'CREATE TABLE tenant_shards_routing (tenant_id UUID PRIMARY KEY, connection_uri VARCHAR(512))',
       targetDef: '<Table Not Found in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'CREATE TABLE IF NOT EXISTS tenant_shards_routing (tenant_id UUID PRIMARY KEY, connection_uri VARCHAR(512) NOT NULL, active BOOLEAN DEFAULT TRUE);',
-      rollbackDdl: 'DROP TABLE IF EXISTS tenant_shards_routing;',
+      safeForwardDdl: isPostgres
+        ? 'CREATE TABLE IF NOT EXISTS tenant_shards_routing (tenant_id UUID PRIMARY KEY, connection_uri VARCHAR(512) NOT NULL, active BOOLEAN DEFAULT TRUE);'
+        : isOracle
+        ? 'CREATE TABLE tenant_shards_routing (tenant_id VARCHAR2(36) PRIMARY KEY, connection_uri VARCHAR2(512) NOT NULL, active NUMBER(1) DEFAULT 1);'
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[tenant_shards_routing] (tenant_id UNIQUEIDENTIFIER PRIMARY KEY, connection_uri NVARCHAR(512) NOT NULL, active BIT DEFAULT 1);'
+        : 'CREATE TABLE IF NOT EXISTS tenant_shards_routing (tenant_id VARCHAR(36) PRIMARY KEY, connection_uri VARCHAR(512) NOT NULL, active BOOLEAN DEFAULT TRUE);',
+      rollbackDdl: isOracle ? 'DROP TABLE tenant_shards_routing CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS tenant_shards_routing;',
       description: 'Dynamic connection pool router for cross-region tenant shards.',
     }
   ];
 }
 
-function getFintechLedgerPresetChanges(engine: string, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+function getFintechLedgerPresetChanges(profile: EngineProfile, isMySQL: boolean, isOracle: boolean, isMSSQL: boolean, isClickHouse: boolean, isSnowflake: boolean, isMongoDB: boolean): SchemaDiffChange[] {
+  const isPostgres = profile.isPostgresFamily;
   return [
     {
       id: 'diff-1',
@@ -820,7 +897,9 @@ function getFintechLedgerPresetChanges(engine: string, isMySQL: boolean, isOracl
       sourceDef: 'settlement_currency VARCHAR(8) DEFAULT \'USD\'',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'ALTER TABLE wallets ADD COLUMN IF NOT EXISTS settlement_currency VARCHAR(8) DEFAULT \'USD\';',
+      safeForwardDdl: isOracle
+        ? 'ALTER TABLE wallets ADD (settlement_currency VARCHAR2(8) DEFAULT \'USD\');'
+        : 'ALTER TABLE wallets ADD COLUMN IF NOT EXISTS settlement_currency VARCHAR(8) DEFAULT \'USD\';',
       rollbackDdl: 'ALTER TABLE wallets DROP COLUMN IF EXISTS settlement_currency;',
       description: 'Multi-currency settlement balance denominator.',
     },
@@ -832,8 +911,16 @@ function getFintechLedgerPresetChanges(engine: string, isMySQL: boolean, isOracl
       sourceDef: 'CREATE INDEX idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC)',
       targetDef: '<Missing in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC);',
-      rollbackDdl: 'DROP INDEX CONCURRENTLY IF EXISTS idx_ledger_account_tx_date;',
+      safeForwardDdl: isPostgres
+        ? 'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC);'
+        : isOracle
+        ? 'CREATE INDEX idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC) ONLINE;'
+        : isMSSQL
+        ? 'CREATE NONCLUSTERED INDEX idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC) WITH (ONLINE = ON);'
+        : isMySQL
+        ? 'CREATE INDEX idx_ledger_account_tx_date ON ledger_entries (account_id, posted_at DESC) ALGORITHM=INPLACE, LOCK=NONE;'
+        : profile.onlineDdl.createIndexSql('idx_ledger_account_tx_date', 'ledger_entries', 'account_id, posted_at DESC'),
+      rollbackDdl: profile.onlineDdl.dropIndexSql('idx_ledger_account_tx_date', 'ledger_entries'),
       description: 'Account balance roll-forward transaction scan accelerator.',
     },
     {
@@ -844,22 +931,17 @@ function getFintechLedgerPresetChanges(engine: string, isMySQL: boolean, isOracl
       sourceDef: 'CREATE TABLE immutable_transaction_proofs (tx_id BIGINT PRIMARY KEY, merkle_root VARCHAR(64), signature BYTEA)',
       targetDef: '<Table Not Found in Target>',
       impactLevel: 'SAFE',
-      safeForwardDdl: 'CREATE TABLE IF NOT EXISTS immutable_transaction_proofs (tx_id BIGSERIAL PRIMARY KEY, merkle_root VARCHAR(64) NOT NULL, signature BYTEA NOT NULL, verified_at TIMESTAMPTZ DEFAULT NOW());',
-      rollbackDdl: 'DROP TABLE IF EXISTS immutable_transaction_proofs;',
+      safeForwardDdl: isPostgres
+        ? 'CREATE TABLE IF NOT EXISTS immutable_transaction_proofs (tx_id BIGSERIAL PRIMARY KEY, merkle_root VARCHAR(64) NOT NULL, signature BYTEA NOT NULL, verified_at TIMESTAMPTZ DEFAULT NOW());'
+        : isOracle
+        ? 'CREATE TABLE immutable_transaction_proofs (tx_id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY, merkle_root VARCHAR2(64) NOT NULL, signature BLOB NOT NULL, verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);'
+        : isMSSQL
+        ? 'CREATE TABLE [dbo].[immutable_transaction_proofs] (tx_id BIGINT IDENTITY(1,1) PRIMARY KEY, merkle_root NVARCHAR(64) NOT NULL, signature VARBINARY(MAX) NOT NULL, verified_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET());'
+        : isMySQL
+        ? 'CREATE TABLE IF NOT EXISTS immutable_transaction_proofs (tx_id BIGINT AUTO_INCREMENT PRIMARY KEY, merkle_root VARCHAR(64) NOT NULL, signature BLOB NOT NULL, verified_at DATETIME DEFAULT CURRENT_TIMESTAMP);'
+        : `CREATE TABLE IF NOT EXISTS immutable_transaction_proofs (${profile.syntax.identityColumn}, merkle_root VARCHAR(64) NOT NULL, signature BLOB NOT NULL, verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`,
+      rollbackDdl: isOracle ? 'DROP TABLE immutable_transaction_proofs CASCADE CONSTRAINTS;' : 'DROP TABLE IF EXISTS immutable_transaction_proofs;',
       description: 'Cryptographic Merkle proof table for transaction immutability.',
     }
   ];
-}
-
-function isPostgresEngine(engine: string): boolean {
-  return [
-    'postgres',
-    'postgresql',
-    'cockroachdb',
-    'timescaledb',
-    'yugabytedb',
-    'amazon_aurora',
-    'supabase',
-    'neon',
-  ].includes(engine.toLowerCase());
 }

@@ -1,4 +1,6 @@
-import { DATABASE_CATALOG } from '../types/db-catalog.data';
+import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export interface LogInspectRequest {
   engine: string;
@@ -27,22 +29,6 @@ export interface LogInspectResult {
   groups: SlowQueryGroup[];
   diagnosticSummary: string;
   recommendations: string[];
-}
-
-function getEngineMeta(engineId: string) {
-  const found = DATABASE_CATALOG.find(db => db.id === engineId.toLowerCase());
-  if (found) return found;
-  return {
-    id: engineId,
-    name: engineId.charAt(0).toUpperCase() + engineId.slice(1),
-    category: 'relational',
-    categoryLabel: 'Relational (SQL)',
-    icon: '🗄️',
-    rank: 999,
-    popularityScore: 10,
-    commandHint: 'EXPLAIN <query>',
-    description: 'Database Engine'
-  };
 }
 
 function normalizeFingerprint(query: string): string {
@@ -95,30 +81,41 @@ function extractTableAndColumns(query: string): { table: string; columns: string
   return { table, columns: columns.slice(0, 3) };
 }
 
-function generateIndexRemediation(engineId: string, table: string, columns: string[]): string {
-  const norm = engineId.toLowerCase();
+function generateIndexRemediation(profile: EngineProfile, table: string, columns: string[]): string {
   const cols = columns.length > 0 ? columns : ['status', 'created_at'];
   const colList = cols.join(', ');
   const colSlug = cols.join('_');
 
-  if (norm === 'mysql' || norm === 'mariadb') {
+  if (profile.dialect === 'mysql') {
     return `ALTER TABLE ${table} ADD INDEX idx_${table}_${colSlug}(${colList}), ALGORITHM=INPLACE, LOCK=NONE;`;
-  } else if (norm === 'mongodb') {
+  } else if (profile.family === 'document' || profile.engineId.includes('mongo')) {
     const obj = cols.map(c => `"${c}": 1`).join(', ');
     return `db.${table}.createIndex({ ${obj} }, { background: true });`;
-  } else if (norm === 'redis' || norm === 'valkey') {
+  } else if (profile.family === 'keyvalue') {
     return `Replace O(N) blocking full keyspace scans with pipelined HSCAN / SCAN batches and secondary index hashes.`;
-  } else if (norm === 'clickhouse') {
+  } else if (profile.family === 'columnar_olap' || profile.engineId === 'clickhouse') {
     return `ALTER TABLE ${table} ADD INDEX idx_${table}_${colSlug} (${colList}) TYPE minmax GRANULARITY 4;`;
-  } else {
-    
+  } else if (profile.isPostgresFamily) {
     return `CREATE INDEX CONCURRENTLY idx_${table}_${colSlug} ON ${table}(${colList});`;
+  } else {
+    return profile.onlineDdl.createIndexSql(`idx_${table}_${colSlug}`, table, colList);
   }
 }
 
 export class LogInspector {
   public inspect(req: LogInspectRequest): LogInspectResult {
-    const meta = getEngineMeta(req.engine);
+    const profile = getEngineProfile(req.engine);
+    const meta = getEngineMetadata(req.engine) || {
+      id: profile.engineId,
+      name: profile.name,
+      category: 'relational',
+      categoryLabel: 'Relational (SQL)',
+      icon: '🗄️',
+      rank: 999,
+      popularityScore: 10,
+      commandHint: profile.planCommand,
+      description: profile.description,
+    };
     const rawContent = (req.logContent || '').trim();
 
     const parsedEntries: { query: string; durationMs: number }[] = [];
@@ -210,7 +207,7 @@ export class LogInspector {
       const pct = totalDbTimeMs > 0 ? +((groupTotalMs / totalDbTimeMs) * 100).toFixed(1) : 100;
 
       const { table, columns } = extractTableAndColumns(data.sample);
-      const recommendedIndex = generateIndexRemediation(meta.id, table, columns);
+      const recommendedIndex = generateIndexRemediation(profile, table, columns);
 
       groups.push({
         fingerprint,
@@ -231,6 +228,16 @@ export class LogInspector {
     const totalDurationSec = +(totalDbTimeMs / 1000).toFixed(1);
     const maxMs = groups.length > 0 ? Math.max(...groups.map(g => g.maxTimeMs)) : 0;
 
+    const slowLogRecommendation = profile.isPostgresFamily
+      ? 'Set server threshold `log_min_duration_statement = 200` to continuously track query latency spikes in production.'
+      : profile.dialect === 'mysql'
+      ? 'Enable `slow_query_log = ON` with `long_query_time = 0.2` to capture statements exceeding 200ms.'
+      : profile.dialect === 'oracle'
+      ? 'Inspect slow executions via `V$SQL` / AWR or enable DBMS_MONITOR / SQL Trace for slow sessions.'
+      : profile.dialect === 'sqlserver'
+      ? 'Configure SQL Server Extended Events (XEvents) or Query Store to capture queries taking > 200ms.'
+      : `Enable query logging or performance telemetry in ${profile.name} to capture statement execution times > 200ms.`;
+
     return {
       engine: meta.id,
       engineName: meta.name,
@@ -242,7 +249,7 @@ export class LogInspector {
       diagnosticSummary: `Parsed ${totalParsed.toLocaleString()} telemetry execution events for ${meta.name}. Identified ${groups.length} distinct query shapes accounting for ${totalDurationSec}s of cumulative server latency. Highest impact query consumes ${groups[0]?.percentOfTotalTime || 0}% of total execution capacity.`,
       recommendations: [
         `Execute the targeted index remediation for the top query shape (${groups[0]?.fingerprint.slice(0, 45)}...) to eliminate table scans.`,
-        `Set server threshold \`log_min_duration_statement = 200\` to continuously track query latency spikes in production.`,
+        slowLogRecommendation,
         `Use connection pooling to prevent CPU spikes and buffer contention during high-concurrency analytical bursts.`,
       ],
     };

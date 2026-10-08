@@ -379,7 +379,7 @@ const ORACLE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   planCommand: 'EXPLAIN PLAN FOR <QUERY>; SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);',
   onlineDdl: {
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
-    dropIndexSql: (idx) => `DROP INDEX ${idx} ONLINE;`,
+    dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
@@ -673,7 +673,7 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   planCommand: 'EXPLAIN PLAN FOR <QUERY>; SELECT * FROM EXPLAIN_PLAN_TABLE;',
   onlineDdl: {
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
-    dropIndexSql: (idx) => `DROP INDEX ${idx} ONLINE;`,
+    dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',

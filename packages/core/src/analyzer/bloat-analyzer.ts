@@ -1,4 +1,6 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export interface BloatAnalyzeRequest {
   engine: string;
@@ -41,7 +43,8 @@ export interface BloatAnalyzeResult {
   averageBloatPercentage: number;
   findings: BloatFinding[];
   repackScript: string;
-  autovacuumTuningDdl: string;
+  maintenanceTuningDdl: string;
+  autovacuumTuningDdl?: string;
   hygieneCheckQuery: string;
   expertRecommendations: string[];
   vacuumMetrics: VacuumExecutionPlan;
@@ -49,8 +52,19 @@ export interface BloatAnalyzeResult {
 
 export class BloatAnalyzer {
   public analyze(req: BloatAnalyzeRequest): BloatAnalyzeResult {
-    const raw = (req.engine || 'postgresql').toLowerCase();
-    const meta = getEngineMetadata(req.engine);
+    const profile = getEngineProfile(req.engine);
+    const meta = getEngineMetadata(req.engine) || {
+      id: profile.engineId,
+      name: profile.name,
+      category: 'relational',
+      categoryLabel: 'Relational (SQL)',
+      icon: '🗄️',
+      rank: 999,
+      popularityScore: 10,
+      commandHint: profile.planCommand,
+      description: profile.description,
+    };
+    const raw = (req.engine || '').toLowerCase();
     const table = req.tableName?.trim() || 'orders';
     const sizeGb = Math.max(0.1, req.totalTableSizeGb !== undefined ? req.totalTableSizeGb : 120);
     const deadPct = Math.max(1, Math.min(95, req.deadTuplePercentage !== undefined ? req.deadTuplePercentage : 38));
@@ -70,40 +84,46 @@ export class BloatAnalyzer {
     const autovacuumUrgency: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' =
       deadPct >= 40 ? 'CRITICAL' : deadPct >= 25 ? 'HIGH' : deadPct >= 15 ? 'MODERATE' : 'LOW';
 
-    let engineFamily = 'postgres';
+    let engineFamily: string = 'generic';
     let engineName = meta.name;
-    if (meta.category === 'search' || raw.includes('elastic') || raw.includes('opensearch') || raw.includes('solr') || raw.includes('meili')) {
+    if (profile.isPostgresFamily) {
+      engineFamily = 'postgres';
+    } else if (profile.dialect === 'mysql') {
+      engineFamily = 'mysql';
+    } else if (profile.dialect === 'oracle') {
+      engineFamily = 'oracle';
+    } else if (profile.dialect === 'sqlserver') {
+      engineFamily = 'mssql';
+    } else if (profile.dialect === 'sqlite') {
+      engineFamily = 'sqlite';
+    } else if (profile.dialect === 'db2') {
+      engineFamily = 'db2';
+    } else if (profile.dialect === 'hana') {
+      engineFamily = 'sap_hana';
+    } else if (profile.family === 'columnar_olap' || raw.includes('snow') || raw.includes('bigquery') || raw.includes('redshift') || raw.includes('databricks')) {
+      engineFamily = (raw.includes('snow') || raw.includes('bigquery') || raw.includes('redshift') || raw.includes('databricks')) ? 'snowflake' : 'clickhouse';
+    } else if (profile.family === 'document') {
+      engineFamily = 'mongodb';
+    } else if (profile.family === 'wide_column') {
+      engineFamily = 'cassandra';
+    } else if (profile.family === 'keyvalue') {
+      engineFamily = 'redis';
+    } else if (profile.family === 'search') {
       engineFamily = 'search';
-    } else if (meta.category === 'graph' || raw.includes('neo4j') || raw.includes('memgraph') || raw.includes('tiger') || raw.includes('neptune')) {
+    } else if (profile.family === 'graph') {
       engineFamily = 'graph';
-    } else if (meta.category === 'timeseries' || raw.includes('timescale') || raw.includes('influx') || raw.includes('quest') || raw.includes('tdengine')) {
+    } else if (profile.family === 'timeseries') {
       engineFamily = 'timeseries';
-    } else if (meta.category === 'vector' || raw.includes('milvus') || raw.includes('pinecone') || raw.includes('qdrant') || raw.includes('chroma') || raw.includes('weaviate')) {
+    } else if (profile.family === 'vector') {
       engineFamily = 'vector';
     } else if (raw.includes('cockroach') || raw.includes('yugabyte') || raw.includes('spanner')) {
       engineFamily = 'cockroach';
-    } else if (meta.category === 'streaming_ledger' || raw.includes('kafka') || raw.includes('redpanda') || raw.includes('pulsar') || raw.includes('immudb')) {
+    } else if (meta.category === 'streaming_ledger' || raw.includes('kafka') || raw.includes('redpanda')) {
       engineFamily = 'streaming_ledger';
-    } else if (meta.category === 'geo_spatial' || raw.includes('tile38') || raw.includes('postgis')) {
+    } else if (meta.category === 'geo_spatial') {
       engineFamily = 'geo_spatial';
-    } else if (raw.includes('mysql') || raw.includes('maria') || raw.includes('tidb') || raw.includes('percona') || raw.includes('planetscale')) {
-      engineFamily = 'mysql';
-    } else if (raw.includes('oracle') || raw.includes('db2')) {
-      engineFamily = 'oracle';
-    } else if (raw.includes('sqlserver') || raw.includes('mssql') || raw.includes('azure_sql')) {
-      engineFamily = 'mssql';
-    } else if (raw.includes('sqlite') || raw.includes('turso') || raw.includes('libsql') || raw.includes('d1')) {
-      engineFamily = 'sqlite';
-    } else if (raw.includes('click') || raw.includes('duck') || raw.includes('starrocks') || raw.includes('trino') || meta.category === 'olap') {
-      engineFamily = 'clickhouse';
-    } else if (raw.includes('mongo') || raw.includes('document') || raw.includes('couch') || meta.category === 'document') {
-      engineFamily = 'mongodb';
-    } else if (raw.includes('cassandra') || raw.includes('scylla') || raw.includes('hbase') || meta.category === 'wide_column') {
-      engineFamily = 'cassandra';
-    } else if (raw.includes('redis') || raw.includes('keydb') || raw.includes('dragonfly') || raw.includes('valkey') || raw.includes('memcached') || meta.category === 'keyvalue') {
-      engineFamily = 'redis';
-    } else if (raw.includes('snow') || raw.includes('bigquery') || raw.includes('redshift') || raw.includes('databricks')) {
-      engineFamily = 'snowflake';
+    } else {
+      engineFamily = 'generic';
     }
 
     let findings: BloatFinding[] = [];
@@ -909,7 +929,82 @@ VACUUM ANALYZE ${table};
         'Use `REINDEX INDEX CONCURRENTLY` to avoid blocking GIS API endpoints.',
       ];
 
-    // --- 17. PostgreSQL Family (Default) ---
+    // --- 17. IBM DB2 ---
+    } else if (engineFamily === 'db2') {
+      lockLevel = 'ONLINE (REORG TABLE & INDEX)';
+      recommendedCommand = `CALL SYSPROC.ADMIN_CMD('REORG TABLE ${table}');`;
+      findings = [
+        {
+          objectName: `${table} (Overflow Record Pages & Fragmented Extents)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Pointer chains to overflow records cause additional disk reads',
+          remedyAction: "CALL SYSPROC.ADMIN_CMD('REORG TABLE ...') to remove overflow records",
+        },
+      ];
+      repackScript = `-- IBM DB2 Table and Index Reorganization\nCALL SYSPROC.ADMIN_CMD('REORG TABLE ${table}');\nCALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE ${table} WITH DISTRIBUTION AND DETAILED INDEXES ALL');\n`;
+      autovacuumDdl = `-- IBM DB2 Table Maintenance\nCALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE ${table}');\n`;
+      hygieneQuery = `SELECT TABNAME, CARD, NPAGES, FPAGES, OVERFLOW FROM SYSCAT.TABLES WHERE TABNAME = UPPER('${table}');`;
+      expertRecommendations = [
+        'In DB2, extensive updates and deletes leave overflow records; run `REORG TABLE` to repack pages.',
+        'Always execute `RUNSTATS` following a reorganization so the DB2 optimizer has current page metrics.',
+        'Monitor `OVERFLOW` counts in `SYSCAT.TABLES` to determine reorg scheduling.',
+      ];
+
+    // --- 18. SAP HANA ---
+    } else if (engineFamily === 'sap_hana') {
+      lockLevel = 'NONE (Online Delta Merge)';
+      recommendedCommand = `MERGE DELTA OF "${table.toUpperCase()}";`;
+      findings = [
+        {
+          objectName: `${table} (Unmerged Columnar Delta Storage)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Delta storage growth increases dictionary lookup overhead',
+          remedyAction: 'Trigger asynchronous Delta Merge into Main storage',
+        },
+      ];
+      repackScript = `-- SAP HANA Delta Merge & Memory Optimization\nMERGE DELTA OF "${table.toUpperCase()}";\n`;
+      autovacuumDdl = `-- SAP HANA Auto-Merge Verification\nALTER TABLE "${table.toUpperCase()}" ENABLE AUTOMATIC MERGE;\n`;
+      hygieneQuery = `SELECT TABLE_NAME, MEMORY_SIZE_IN_TOTAL, RAW_RECORD_COUNT_IN_MAIN, RAW_RECORD_COUNT_IN_DELTA FROM M_CS_TABLES WHERE TABLE_NAME = UPPER('${table}');`;
+      expertRecommendations = [
+        'HANA columnar tables store writes in the Delta store; a Delta Merge packs rows into compressed Main storage.',
+        'Verify that auto-merge is active to maintain optimal memory consumption.',
+        'Check `M_CS_TABLES` delta record metrics to spot tables requiring manual delta merge intervention.',
+      ];
+
+    // --- 19. Generic Engine Profile ---
+    } else if (engineFamily === 'generic') {
+      lockLevel = 'ONLINE / Scheduled Maintenance Window';
+      recommendedCommand = profile.maintenance.spaceReclaimCommand.replace('{table}', table);
+      findings = [
+        {
+          objectName: `${table} (Dead Storage & Internal Fragmentation)`,
+          objectType: 'table',
+          totalSizeBytes,
+          bloatSizeBytes: tableBloatBytes,
+          bloatPercentage: deadPct,
+          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+          diskRandomSeekPenalty: 'Unclaimed dead space causes read amplification and buffer waste',
+          remedyAction: profile.maintenance.spaceReclaimConcept,
+        },
+      ];
+      repackScript = `-- ${profile.name} Space Reclaim & Defragmentation\n${profile.maintenance.spaceReclaimCommand.replace('{table}', table)}\n`;
+      autovacuumDdl = profile.maintenance.tuningDdlTemplate(table, sizeGb);
+      hygieneQuery = `-- ${profile.name} Storage Diagnostics\nSELECT '${table}' AS table_name, ${sizeGb} AS total_gb, ${deadPct} AS bloat_pct;`;
+      expertRecommendations = [
+        `Schedule periodic maintenance for ${profile.name} during off-peak traffic windows.`,
+        `Monitor table fragmentation and segment allocation before and after space reclamation.`,
+        `Ensure sufficient temporary disk headroom is available during reorganization operations.`,
+      ];
+
+    // --- 20. PostgreSQL Family (Default) ---
     } else {
       lockLevel = 'NONE (Zero-Downtime Online Repack via pg_repack / REINDEX CONCURRENTLY)';
       recommendedCommand = `REINDEX TABLE CONCURRENTLY ${table};`;
@@ -991,6 +1086,7 @@ ORDER BY n_dead_tup DESC;`;
       averageBloatPercentage: deadPct,
       findings,
       repackScript,
+      maintenanceTuningDdl: autovacuumDdl,
       autovacuumTuningDdl: autovacuumDdl,
       hygieneCheckQuery: hygieneQuery,
       expertRecommendations,
