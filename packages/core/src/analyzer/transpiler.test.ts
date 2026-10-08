@@ -508,4 +508,61 @@ describe('SqlTranspiler Engine & Dialect Conversion Tests', () => {
       expect(res.transpiledCode).toContain("status = 'active'");
     });
   });
+
+  describe('15. Target Family Transformations (PostgreSQL to MySQL, Oracle, SQL Server, ClickHouse, SQLite)', () => {
+    test('transpiles PostgreSQL to MySQL target dialect', () => {
+      const pgSql = `CREATE TABLE users (id SERIAL PRIMARY KEY, info JSONB, created_at TIMESTAMPTZ);`;
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'mysql',
+        sourceCode: pgSql,
+      });
+      expect(res.targetEngineName).toContain('MySQL');
+      expect(res.transpiledCode).toBeDefined();
+    });
+
+    test('transpiles PostgreSQL to Oracle target dialect', () => {
+      const pgSql = `SELECT id, name FROM users LIMIT 10;`;
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'oracle',
+        sourceCode: pgSql,
+      });
+      expect(res.targetEngineName).toContain('Oracle');
+      expect(res.transpiledCode).toBeDefined();
+    });
+
+    test('transpiles PostgreSQL to SQL Server (MSSQL) target dialect', () => {
+      const pgSql = `SELECT id, name FROM users WHERE id = 1 LIMIT 5;`;
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'microsoft_sql_server',
+        sourceCode: pgSql,
+      });
+      expect(res.targetEngineName).toContain('SQL Server');
+      expect(res.transpiledCode).toBeDefined();
+    });
+
+    test('transpiles PostgreSQL to ClickHouse target dialect', () => {
+      const pgSql = `CREATE TABLE metrics (id INT, value FLOAT);`;
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'clickhouse',
+        sourceCode: pgSql,
+      });
+      expect(res.targetEngineName).toContain('ClickHouse');
+      expect(res.transpiledCode).toBeDefined();
+    });
+
+    test('transpiles PostgreSQL to SQLite target dialect', () => {
+      const pgSql = `CREATE TABLE items (id SERIAL PRIMARY KEY, name VARCHAR(100));`;
+      const res = transpiler.transpile({
+        sourceEngine: 'postgres',
+        targetEngine: 'sqlite',
+        sourceCode: pgSql,
+      });
+      expect(res.targetEngineName).toContain('SQLite');
+      expect(res.transpiledCode).toBeDefined();
+    });
+  });
 });

@@ -450,6 +450,7 @@ export const diffSchema = async (params: {
 };
 
 export const profileOrm = async (params: {
+  engine?: string;
   framework: string;
   rawQueryOrCode?: string;
   batchSize?: number;

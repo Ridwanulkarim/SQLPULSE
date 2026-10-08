@@ -15,7 +15,8 @@ interface OrmProfilerTabProps {
   onSelectEngine?: (engine: DatabaseEngine) => void;
 }
 
-export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
+export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = ({ selectedEngine }) => {
+  const engineId = typeof selectedEngine === 'object' ? selectedEngine?.id : selectedEngine || 'postgres';
   const [framework, setFramework] = useState<string>('prisma');
   const [activeTab, setActiveTab] = useState<'orm' | 'sql'>('orm');
   const [copied, setCopied] = useState<boolean>(false);
@@ -34,6 +35,7 @@ export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
   const handleProfile = async () => {
     try {
       const data = await profileOrm({
+        engine: engineId,
         framework,
         batchSize,
       });
@@ -45,7 +47,7 @@ export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = () => {
 
   useEffect(() => {
     handleProfile();
-  }, [framework, batchSize]);
+  }, [framework, batchSize, engineId]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
