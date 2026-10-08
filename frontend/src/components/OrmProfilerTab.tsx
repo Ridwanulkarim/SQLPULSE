@@ -16,7 +16,7 @@ interface OrmProfilerTabProps {
 }
 
 export const OrmProfilerTab: React.FC<OrmProfilerTabProps> = ({ selectedEngine }) => {
-  const engineId = typeof selectedEngine === 'object' ? selectedEngine?.id : selectedEngine || 'postgres';
+  const engineId = (typeof selectedEngine === 'object' && selectedEngine !== null ? (selectedEngine as any).id : selectedEngine) || 'postgres';
   const [framework, setFramework] = useState<string>('prisma');
   const [activeTab, setActiveTab] = useState<'orm' | 'sql'>('orm');
   const [copied, setCopied] = useState<boolean>(false);

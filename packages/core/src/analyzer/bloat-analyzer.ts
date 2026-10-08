@@ -28,7 +28,8 @@ export interface VacuumExecutionPlan {
   postVacuumTableSizeGb: number;
   lockLevel: string;
   recommendedCommand: string;
-  autovacuumUrgency: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  maintenanceUrgency: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  autovacuumUrgency?: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
   dailyBloatGrowthMb: number;
   triggerThresholdDeadTuples: number;
   ioThroughputAssumedMbSec: number;
@@ -726,22 +727,23 @@ dbms.memory.pagecache.size=${Math.round(sizeGb * 0.6)}g
 
     // --- 12. Time-Series (TimescaleDB / InfluxDB / QuestDB) ---
     } else if (engineFamily === 'timeseries') {
-      lockLevel = 'NONE (Background Columnar Chunk Compression)';
-      recommendedCommand = `SELECT compress_chunk(c) FROM show_chunks('${table}') c;`;
-      findings = [
-        {
-          objectName: `${table} (Uncompressed Row-Store Chunks)`,
-          objectType: 'table',
-          totalSizeBytes,
-          bloatSizeBytes: tableBloatBytes,
-          bloatPercentage: deadPct,
-          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
-          diskRandomSeekPenalty: 'Older chunks remaining in uncompressed row format consume 90% more disk bandwidth',
-          remedyAction: `Convert aged chunks to columnar format via compress_chunk()`,
-        },
-      ];
+      if (raw.includes('timescale') || profile.isPostgresFamily) {
+        lockLevel = 'NONE (Background Columnar Chunk Compression)';
+        recommendedCommand = `SELECT compress_chunk(c) FROM show_chunks('${table}') c;`;
+        findings = [
+          {
+            objectName: `${table} (Uncompressed Row-Store Chunks)`,
+            objectType: 'table',
+            totalSizeBytes,
+            bloatSizeBytes: tableBloatBytes,
+            bloatPercentage: deadPct,
+            wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+            diskRandomSeekPenalty: 'Older chunks remaining in uncompressed row format consume 90% more disk bandwidth',
+            remedyAction: `Convert aged chunks to columnar format via compress_chunk()`,
+          },
+        ];
 
-      repackScript = `-- TimescaleDB Hypertable Chunk Compression & Data Defragmentation
+        repackScript = `-- TimescaleDB Hypertable Chunk Compression & Data Defragmentation
 -- 1. Enable compression policy on hypertable:
 ALTER TABLE ${table} SET (
     timescaledb.compress,
@@ -756,11 +758,11 @@ SELECT add_compression_policy('${table}', INTERVAL '7 days');
 SELECT compress_chunk(i) FROM show_chunks('${table}', older_than => INTERVAL '7 days') i;
 `;
 
-      autovacuumDdl = `-- TimescaleDB Automated Data Retention & Chunk Drop Policy
+        autovacuumDdl = `-- TimescaleDB Automated Data Retention & Chunk Drop Policy
 SELECT add_retention_policy('${table}', INTERVAL '90 days');
 `;
 
-      hygieneQuery = `SELECT 
+        hygieneQuery = `SELECT 
     hypertable_name, 
     chunk_name, 
     is_compressed, 
@@ -769,11 +771,48 @@ SELECT add_retention_policy('${table}', INTERVAL '90 days');
 FROM timescaledb_information.chunks
 WHERE hypertable_name = '${table}';`;
 
-      expertRecommendations = [
-        'TimescaleDB columnar compression achieves 90-95% disk reduction while maintaining queryability.',
-        'Always segment compression by high-cardinality lookup keys (e.g., `device_id`, `tenant_id`) and order by timestamp.',
-        'Drop old chunks via `drop_chunks()` instead of running `DELETE`; dropping a chunk is an instant metadata operation without MVCC bloat.',
-      ];
+        expertRecommendations = [
+          'TimescaleDB columnar compression achieves 90-95% disk reduction while maintaining queryability.',
+          'Always segment compression by high-cardinality lookup keys (e.g., `device_id`, `tenant_id`) and order by timestamp.',
+          'Drop old chunks via `drop_chunks()` instead of running `DELETE`; dropping a chunk is an instant metadata operation without MVCC bloat.',
+        ];
+      } else {
+        lockLevel = 'NONE (Partition Compaction / Retention Policy)';
+        recommendedCommand = `ALTER RETENTION POLICY "autogen" ON "${table}" DURATION 90d REPLICATION 1;`;
+        findings = [
+          {
+            objectName: `${table} (Expired Time-Series Partitions & Uncompacted Shards)`,
+            objectType: 'table',
+            totalSizeBytes,
+            bloatSizeBytes: tableBloatBytes,
+            bloatPercentage: deadPct,
+            wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+            diskRandomSeekPenalty: 'Uncompacted time partitions increase scan latency and memory consumption',
+            remedyAction: 'Enforce shard retention policies and trigger background partition compaction',
+          },
+        ];
+
+        repackScript = `-- Time-Series Automated Retention & Compaction Policy
+-- Expire raw partitions older than 90 days:
+ALTER RETENTION POLICY "autogen" ON "${table}" DURATION 90d REPLICATION 1;
+
+-- Trigger background LSM shard compaction:
+OPTIMIZE TABLE ${table} COMPACT;
+`;
+
+        autovacuumDdl = `-- Time-Series Downsampling & Retention Configuration
+-- Retain rollup aggregations for long-term historical analysis
+CREATE CONTINUOUS QUERY cq_1h ON "${table}" BEGIN SELECT mean(value) INTO "${table}_1h" FROM "${table}" GROUP BY time(1h) END;
+`;
+
+        hygieneQuery = `SHOW RETENTION POLICIES ON "${table}";`;
+
+        expertRecommendations = [
+          'Enforce strict time-based TTL/retention policies to drop expired shards automatically.',
+          'Downsample high-frequency telemetry into rollups for efficient long-term analysis.',
+          'Schedule partition merges during low-traffic windows to limit compaction I/O.',
+        ];
+      }
 
     // --- 13. Vector AI Engines (Milvus / Pinecone / Qdrant / pgvector) ---
     } else if (engineFamily === 'vector') {
@@ -899,35 +938,68 @@ log.cleaner.dedupe.buffer.size=134217728
 
     // --- 16. Spatial & Geo (PostGIS / Tile38 / SpatiaLite) ---
     } else if (engineFamily === 'geo_spatial') {
-      lockLevel = 'CONCURRENT (Spatial GiST / R-Tree Bounding Box Repack)';
-      recommendedCommand = `CLUSTER ${table} USING idx_${table}_geom;`;
-      findings = [
-        {
-          objectName: `${table} (Fragmented Spatial Geometries & GiST Index Bounding Boxes)`,
-          objectType: 'table',
-          totalSizeBytes,
-          bloatSizeBytes: tableBloatBytes,
-          bloatPercentage: deadPct,
-          wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
-          diskRandomSeekPenalty: 'Overlapping spatial bounding boxes in GiST index cause redundant tree traversals',
-          remedyAction: `Re-cluster table along spatial Hilbert curve and reindex GiST concurrently`,
-        },
-      ];
+      if (raw.includes('postgis') || profile.isPostgresFamily) {
+        lockLevel = 'CONCURRENT (Spatial GiST / R-Tree Bounding Box Repack)';
+        recommendedCommand = `CLUSTER ${table} USING idx_${table}_geom;`;
+        findings = [
+          {
+            objectName: `${table} (Fragmented Spatial Geometries & GiST Index Bounding Boxes)`,
+            objectType: 'table',
+            totalSizeBytes,
+            bloatSizeBytes: tableBloatBytes,
+            bloatPercentage: deadPct,
+            wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+            diskRandomSeekPenalty: 'Overlapping spatial bounding boxes in GiST index cause redundant tree traversals',
+            remedyAction: `Re-cluster table along spatial Hilbert curve and reindex GiST concurrently`,
+          },
+        ];
 
-      repackScript = `-- Spatial Table & R-Tree / GiST Defragmentation
+        repackScript = `-- Spatial Table & R-Tree / GiST Defragmentation
 CLUSTER ${table} USING idx_${table}_geom;
 REINDEX INDEX CONCURRENTLY idx_${table}_geom;
 VACUUM ANALYZE ${table};
 `;
 
-      autovacuumDdl = `ALTER TABLE ${table} SET (autovacuum_vacuum_scale_factor = 0.05);`;
-      hygieneQuery = `SELECT relname, n_dead_tup, round(n_dead_tup::numeric / (n_live_tup + 1) * 100, 2) AS dead_pct FROM pg_stat_user_tables WHERE relname = '${table}';`;
+        autovacuumDdl = `ALTER TABLE ${table} SET (autovacuum_vacuum_scale_factor = 0.05);`;
+        hygieneQuery = `SELECT relname, n_dead_tup, round(n_dead_tup::numeric / (n_live_tup + 1) * 100, 2) AS dead_pct FROM pg_stat_user_tables WHERE relname = '${table}';`;
 
-      expertRecommendations = [
-        'Spatial GiST indexes degrade in efficiency as bounding boxes become fragmented from non-spatial updates.',
-        'Reclustering on a spatial index physically orders geometries along a Hilbert curve for optimal disk locality.',
-        'Use `REINDEX INDEX CONCURRENTLY` to avoid blocking GIS API endpoints.',
-      ];
+        expertRecommendations = [
+          'Spatial GiST indexes degrade in efficiency as bounding boxes become fragmented from non-spatial updates.',
+          'Reclustering on a spatial index physically orders geometries along a Hilbert curve for optimal disk locality.',
+          'Use `REINDEX INDEX CONCURRENTLY` to avoid blocking GIS API endpoints.',
+        ];
+      } else {
+        lockLevel = 'ONLINE (Spatial R-Tree Index Rebuild)';
+        recommendedCommand = `REBUILD SPATIAL INDEX ON ${table};`;
+        findings = [
+          {
+            objectName: `${table} (Fragmented Spatial Geometries & R-Tree Bounding Boxes)`,
+            objectType: 'table',
+            totalSizeBytes,
+            bloatSizeBytes: tableBloatBytes,
+            bloatPercentage: deadPct,
+            wastedStorageFormatted: `${(tableBloatBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`,
+            diskRandomSeekPenalty: 'Overlapping spatial bounding boxes degrade spatial bounding queries',
+            remedyAction: `Rebuild spatial R-tree index and optimize table storage`,
+          },
+        ];
+
+        repackScript = `-- Spatial Table & R-Tree Defragmentation
+OPTIMIZE TABLE ${table};
+`;
+
+        autovacuumDdl = `-- Spatial Index Optimization Settings
+-- Maintain balanced spatial tree structures and bounding geometries
+`;
+
+        hygieneQuery = `SELECT count(*) AS total_spatial_records FROM ${table};`;
+
+        expertRecommendations = [
+          'Spatial indexes degrade when object boundaries are updated frequently without index rebuilding.',
+          'Rebuild spatial indexes periodically to maintain tight bounding boxes and index selectivity.',
+          'Archive or purge stale tracking entities to recover disk capacity.',
+        ];
+      }
 
     // --- 17. IBM DB2 ---
     } else if (engineFamily === 'db2') {
@@ -1077,6 +1149,7 @@ ORDER BY n_dead_tup DESC;`;
       ? `${(sizeGb / 1024).toFixed(1)} TB`
       : `${sizeGb} GB`;
 
+    const isPg = profile.isPostgresFamily;
     return {
       engine: meta.id,
       engineName: engineName || meta.name,
@@ -1087,7 +1160,7 @@ ORDER BY n_dead_tup DESC;`;
       findings,
       repackScript,
       maintenanceTuningDdl: autovacuumDdl,
-      autovacuumTuningDdl: autovacuumDdl,
+      ...(isPg ? { autovacuumTuningDdl: autovacuumDdl } : {}),
       hygieneCheckQuery: hygieneQuery,
       expertRecommendations,
       vacuumMetrics: {
@@ -1096,7 +1169,8 @@ ORDER BY n_dead_tup DESC;`;
         postVacuumTableSizeGb: postVacuumSizeGb,
         lockLevel,
         recommendedCommand,
-        autovacuumUrgency,
+        maintenanceUrgency: autovacuumUrgency,
+        ...(isPg ? { autovacuumUrgency } : {}),
         dailyBloatGrowthMb,
         triggerThresholdDeadTuples,
         ioThroughputAssumedMbSec: ioSpeed,

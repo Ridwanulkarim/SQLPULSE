@@ -142,7 +142,7 @@ LIMIT 10;
       `Enable int8 or byte scalar quantization to cut Lucene memory usage by 75%.`
     ];
   } else if (profile.capabilities['vector-tune'] === 'unsupported') {
-    vectorIndexDdl = `-- Note: Vector similarity indexing is not natively supported in ${profile.name}.\n-- Recommended alternative: use an external vector store (Pinecone, Milvus, Qdrant) or pgvector.`;
+    vectorIndexDdl = `-- Note: Vector similarity indexing is not natively supported in ${profile.name}.\n-- Recommended alternative: use a dedicated vector database (Pinecone, Milvus, Qdrant) or external vector search service.`;
     hybridSearchQuery = `-- Vector similarity search is not supported in ${profile.name}.\n-- Connect via an external vector index service or hybrid search engine.`;
     bestPractices = [
       `${profile.name} does not natively support vector indexing.`,

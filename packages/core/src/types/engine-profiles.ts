@@ -103,10 +103,11 @@ export function isPostgresFamilyEngine(engineId?: string): boolean {
     'amazon_aurora', // Aurora PostgreSQL variant
     'neon',
     'alloydb',
+    'postgis',
   ]);
 
   if (pgIds.has(canonical) || pgIds.has(norm)) return true;
-  return norm.includes('postgres');
+  return norm.includes('postgres') || norm.includes('postgis');
 }
 
 // Helper to build full capability records

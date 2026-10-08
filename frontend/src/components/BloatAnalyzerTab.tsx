@@ -421,15 +421,15 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Autovacuum Urgency:</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Maintenance Urgency:</span>
                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold uppercase mt-0.5 ${
-                  result.vacuumMetrics?.autovacuumUrgency === 'CRITICAL'
+                  (result.vacuumMetrics?.maintenanceUrgency || result.vacuumMetrics?.autovacuumUrgency) === 'CRITICAL'
                     ? 'bg-rose-500/30 text-rose-300 border border-rose-400/40 animate-pulse'
-                    : result.vacuumMetrics?.autovacuumUrgency === 'HIGH'
+                    : (result.vacuumMetrics?.maintenanceUrgency || result.vacuumMetrics?.autovacuumUrgency) === 'HIGH'
                     ? 'bg-amber-500/30 text-amber-300 border border-amber-400/40'
                     : 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40'
                 }`}>
-                  {result.vacuumMetrics?.autovacuumUrgency || 'HIGH'} URGENCY
+                  {result.vacuumMetrics?.maintenanceUrgency || result.vacuumMetrics?.autovacuumUrgency || 'HIGH'} URGENCY
                 </span>
               </div>
             </div>

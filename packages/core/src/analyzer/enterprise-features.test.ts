@@ -140,7 +140,7 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     });
     expect(res.findings.length).toBeGreaterThan(0);
     expect(res.repackScript).toContain('REINDEX TABLE CONCURRENTLY');
-    expect(res.autovacuumTuningDdl).toContain('autovacuum_vacuum_scale_factor');
+    expect(res.maintenanceTuningDdl).toContain('autovacuum_vacuum_scale_factor');
   });
 
   test('10. ReplicationTopologyAnalyzer generates cluster nodes and Patroni HA config', () => {
@@ -498,7 +498,7 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     });
     expect(sqlite.engineName).toBe('SQLite');
     expect(sqlite.repackScript).toContain('VACUUM INTO');
-    expect(sqlite.autovacuumTuningDdl).toContain('PRAGMA incremental_vacuum');
+    expect(sqlite.maintenanceTuningDdl).toContain('PRAGMA incremental_vacuum');
     expect(sqlite.hygieneCheckQuery).toContain('freelist_count');
 
     // 5. Cassandra nodetool garbagecollect & tombstone thresholds
@@ -510,7 +510,7 @@ describe('Enterprise Multi-Engine Database Features Test Suite', () => {
     });
     expect(cassandra.engineName).toBe('Apache Cassandra');
     expect(cassandra.repackScript).toContain('nodetool garbagecollect');
-    expect(cassandra.autovacuumTuningDdl).toContain('LeveledCompactionStrategy');
+    expect(cassandra.maintenanceTuningDdl).toContain('LeveledCompactionStrategy');
 
     // 6. Redis active defragmentation
     const redis = bloatAnalyzer.analyze({

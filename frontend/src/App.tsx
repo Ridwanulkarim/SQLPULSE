@@ -6,8 +6,47 @@ import { PlanInput } from './components/PlanInput';
 import { VisualPlanGraph } from './components/VisualPlanGraph';
 import { BottlenecksList } from './components/BottlenecksList';
 import { analyzeQueryPlan, fetchSamples, saveReportPermalink } from './services/api';
-import { PlanAnalysisResult, DatabaseEngine, DATABASE_CATALOG } from './types';
+import { PlanAnalysisResult, DatabaseEngine, DATABASE_CATALOG, getEngineProfile, StudioId } from './types';
 import { GitCompare, Database, Search, AlertTriangle } from 'lucide-react';
+
+const TAB_TO_STUDIO_MAP: Partial<Record<AppTabId, StudioId>> = {
+  plan: 'plan',
+  migration: 'migration',
+  advisor: 'query-advise',
+  sandbox: 'query-advise',
+  transpiler: 'transpile',
+  tuner: 'config-tuner',
+  deadlock: 'deadlock-simulate',
+  disaster: 'disaster-recovery',
+  synthesizer: 'synthesize-query',
+  connect: 'connect-hub',
+  partition: 'partition-plan',
+  logs: 'inspect-logs',
+  bloat: 'bloat',
+  replication: 'replication',
+  security: 'security-rbac',
+  mock: 'mock-data',
+  finops: 'finops',
+  doctor: 'index-doctor',
+  sanitizer: 'pii-sanitizer',
+  rewriter: 'query-rewriter',
+  schema_diff: 'schema-diff',
+  orm_profiler: 'orm-profile',
+  production_readiness: 'production-readiness',
+  chaos_simulator: 'chaos-simulate',
+  cdc_outbox: 'cdc-outbox',
+  vector_tuner: 'vector-tune',
+};
+
+const SIMULATION_STUDIOS: Set<AppTabId> = new Set([
+  'plan',
+  'deadlock',
+  'disaster',
+  'chaos_simulator',
+  'finops',
+  'replication',
+  'sandbox',
+]);
 
 const MigrationLinterTab = lazy(() => import('./components/MigrationLinterTab').then((m) => ({ default: m.MigrationLinterTab })));
 const QueryAdvisorTab = lazy(() => import('./components/QueryAdvisorTab').then((m) => ({ default: m.QueryAdvisorTab })));
@@ -68,6 +107,13 @@ export function App() {
   }, [currentTheme]);
 
   const [selectedEngine, setSelectedEngine] = useState<DatabaseEngine>('postgres');
+  const currentEngineId = typeof selectedEngine === 'object' ? (selectedEngine as any)?.id : selectedEngine;
+  const currentProfile = getEngineProfile(currentEngineId);
+  const currentStudioId = TAB_TO_STUDIO_MAP[activeTab];
+  const currentCapability = currentStudioId ? currentProfile.capabilities[currentStudioId] : 'native';
+  const unsupportedReason = currentStudioId ? currentProfile.unsupportedReason?.[currentStudioId] : undefined;
+  const isSimulation = SIMULATION_STUDIOS.has(activeTab);
+
   const [analysisResult, setAnalysisResult] = useState<PlanAnalysisResult | null>(null);
   const [rawPlanInput, setRawPlanInput] = useState<any>(null);
   const [rawQuery, setRawQuery] = useState<string>('');
@@ -265,6 +311,56 @@ export function App() {
             </button>
           </div>
         </div>
+
+        {currentStudioId && (
+          <div className="space-y-3 mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Analyzing for:</span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <span className="text-base leading-none">🗄️</span>
+                  {currentProfile.name}
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/50 dark:border-slate-700/50">
+                  dialect: {currentProfile.dialect}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  currentCapability === 'native'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                    : currentCapability === 'adapted'
+                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                }`}>
+                  {currentCapability === 'native' ? '● Native Engine Support' : currentCapability === 'adapted' ? '◈ Adapted Family Profile' : '▲ Not Applicable / Preview'}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                {isSimulation && (
+                  <span className="px-2.5 py-0.5 rounded-full font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center gap-1">
+                    <span>⚡ Simulation / Estimate Model</span>
+                  </span>
+                )}
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] hidden lg:inline">
+                  Review all generated SQL &amp; scripts before running in production
+                </span>
+              </div>
+            </div>
+
+            {currentCapability === 'unsupported' && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3.5 shadow-xs">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1.5">
+                  <h4 className="font-bold text-sm text-amber-900 dark:text-amber-100">
+                    Not applicable for {currentProfile.name}
+                  </h4>
+                  <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                    {unsupportedReason || `The "${activeTab}" studio features do not directly apply to ${currentProfile.name} (${currentProfile.family}). Equivalent architectural concepts and alternatives are detailed in the engine profile documentation.`}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <Suspense fallback={<StudioLoadingFallback />}>
           {activeTab === 'plan' && (

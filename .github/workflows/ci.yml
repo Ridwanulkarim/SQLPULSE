@@ -30,6 +30,12 @@ jobs:
       - name: Build core workspace package
         run: npm run build:core
 
+      - name: Typecheck backend
+        run: npx tsc -p backend/tsconfig.json --noEmit
+
+      - name: Typecheck frontend
+        run: npx tsc -p frontend/tsconfig.json --noEmit
+
       - name: Run automated test suite
         run: npm test
 
@@ -38,4 +44,12 @@ jobs:
 
       - name: Build frontend bundle
         run: npm run build:frontend
+
+      - name: Smoke test backend health check
+        run: |
+          node backend/dist/server.js &
+          SERVER_PID=$!
+          sleep 3
+          curl -f http://localhost:4000/health || (kill $SERVER_PID && exit 1)
+          kill $SERVER_PID
 

@@ -34,7 +34,7 @@ export const saveReport = async (req: Request, res: Response): Promise<void> => 
 
     const saved = await reportRepository.saveReport({
       id: reportId,
-      title: title || 'PostgreSQL Query Analysis',
+      title: title || 'Query Analysis',
       raw_query: raw_query || null,
       raw_plan: raw_plan,
       performance_score: analysisResult.performanceScore,

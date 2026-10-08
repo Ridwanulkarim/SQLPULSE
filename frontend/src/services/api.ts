@@ -39,15 +39,9 @@ async function safeRequest<T>(
     const res = await fetch(url, options);
     const contentType = res.headers.get('content-type') || '';
 
-    // If static hosting returns 404 or an HTML page (Vercel/Netlify SPA fallback) or 502/503/504:
+    // If static hosting returned non-JSON (e.g. HTML from Vercel/Netlify SPA rewrite):
     // This indicates no backend API is running on this route -> run in-browser client-side heuristic engine
-    if (
-      res.status === 404 ||
-      res.status === 502 ||
-      res.status === 503 ||
-      res.status === 504 ||
-      !contentType.includes('application/json')
-    ) {
+    if (!contentType.includes('application/json')) {
       return fallbackFn();
     }
 
@@ -69,8 +63,10 @@ async function safeRequest<T>(
     let errorMsg = `Server error (HTTP ${res.status}): ${res.statusText}`;
     try {
       const errJson = await res.json();
-      if (errJson && errJson.error) {
+      if (errJson && typeof errJson.error === 'string') {
         errorMsg = errJson.error;
+      } else if (errJson && typeof errJson.message === 'string') {
+        errorMsg = errJson.message;
       }
     } catch (_) {}
 

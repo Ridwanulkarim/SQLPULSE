@@ -237,11 +237,12 @@ npm test
 ```
 
 Test coverage includes:
-* `backend/src/api-integration.test.ts` — API endpoint integration tests, Zod validation, UUID format checks, constant-time timingSafe admin key verification, malformed JSON 400 bad request handling, pagination capping (max 50), and bounded LRU memory store eviction (max 500).
-* `packages/core/src/analyzer/plan-analyzer.test.ts` — PostgreSQL sequential scan, disk sort spill, I/O buffer calculation, multi-engine category routing, and dynamic unknown engine metadata resolution.
-* `packages/core/src/analyzer/migration-linter.test.ts` — DDL lock hazard rules, non-concurrent index detection, and safe alternative generation.
+* `backend/src/api-integration.test.ts` — API endpoint integration tests using direct controller execution and mock request/response harnesses (without Supertest network dependencies), Zod schema validation, unknown engine HTTP 400 rejection, UUID permalink format checks, constant-time `timingSafeEqual` admin key verification, malformed JSON 400 error handling, pagination capping (max 50), and bounded in-memory store eviction.
+* `backend/src/all-engines-catalog.test.ts` — Comprehensive 447-engine catalog verification across all 25 studios (11,175 checks), verifying engine family profile routing and asserting 0 leaks of PostgreSQL-only tokens for non-Postgres engines.
+* `packages/core/src/analyzer/plan-analyzer.test.ts` — PostgreSQL sequential scan, disk sort spill, I/O buffer calculation, multi-engine category routing, and dynamic engine metadata resolution.
+* `packages/core/src/analyzer/migration-linter.test.ts` — Dialect-aware DDL lock hazard rules, safe online index and DDL generation across all database families.
 * `packages/core/src/analyzer/transpiler.test.ts` — Cross-engine SQL transpilation across Oracle, MSSQL, MySQL, ClickHouse, Snowflake, MongoDB, Milvus, Pinecone, and Neo4j Cypher.
-* `packages/core/src/analyzer/enterprise-features.test.ts` — Multi-engine routing, FinOps pricing calculators, PII masking, and engineering studio tests.
+* `packages/core/src/analyzer/enterprise-features.test.ts` — Multi-engine routing, FinOps pricing calculators, PII masking, bloat space reclaim, and engineering studio tests.
 
 ---
 

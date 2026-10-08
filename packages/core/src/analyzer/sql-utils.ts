@@ -1,7 +1,7 @@
 import { EngineFamily } from '../types/engine-profile';
 import { resolveEngineFamily as resolveCanonicalFamily, getEngineProfile } from '../types/engine-profiles';
 
-export { EngineFamily } from '../types/engine-profile';
+export type { EngineFamily } from '../types/engine-profile';
 
 /**
  * Utility functions for validating and sanitizing SQL identifiers.
