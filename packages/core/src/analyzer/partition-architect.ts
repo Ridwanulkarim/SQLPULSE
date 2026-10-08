@@ -1,6 +1,7 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
 import { sanitizeSqlIdentifier } from './sql-utils';
 import { getEngineProfile } from '../types/engine-profiles';
+import { EngineProfile } from '../types/engine-profile';
 
 export interface PartitionRequest {
   engine: string;
@@ -973,7 +974,7 @@ PARTITION BY RANGE (${col}) (
     };
   }
 
-  private planGeneric(profile: any, meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+  private planGeneric(profile: EngineProfile, meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
     const ddl = `-- Generic ANSI SQL Range Partitioning Architecture for ${meta.name}
 CREATE TABLE ${table} (
     id BIGINT NOT NULL,
@@ -990,6 +991,8 @@ PARTITION BY RANGE (${col}) (
 );
 `;
 
+    const statsSql = (profile.maintenance?.statsCommand || 'ANALYZE TABLE {table};').replace('{table}', table);
+
     return {
       engine: meta.id,
       engineName: meta.name,
@@ -998,7 +1001,7 @@ PARTITION BY RANGE (${col}) (
       tableName: table,
       partitionColumn: col,
       partitionDdl: ddl,
-      maintenanceAutomation: `-- Maintenance Automation for ${meta.name}:\n-- Drop expired partition slices to prune historical data:\nALTER TABLE ${table} DROP PARTITION p_old;\n-- Gather optimizer statistics:\n${profile.maintenance.statsCommand(table)};`,
+      maintenanceAutomation: `-- Maintenance Automation for ${meta.name}:\n-- Drop expired partition slices to prune historical data:\nALTER TABLE ${table} DROP PARTITION p_old;\n-- Gather optimizer statistics:\n${statsSql}`,
       pruningSimulation: {
         sampleQuery: `SELECT * FROM ${table} WHERE ${col} >= '2026-10-01' AND ${col} < '2026-11-01';`,
         partitionsScanned: '1 partition slice (Targeted scan)',
@@ -1016,16 +1019,17 @@ PARTITION BY RANGE (${col}) (
     };
   }
 
-  private planUnsupported(profile: any, meta: any, table: string, col: string, strategy: string): PartitionResult {
-    const concept = profile.family === 'embedded'
-      ? `${meta.name} is a serverless/embedded single-file database engine that does not support server-side table partitioning.`
-      : profile.family === 'key_value'
-      ? `${meta.name} is an in-memory key-value data store. Data distribution is handled via cluster sharding/hash slots rather than relational table partitioning.`
-      : profile.family === 'graph'
-      ? `${meta.name} is a graph database. Nodes and relationships are distributed across label indexes and cluster fabric rather than table partitions.`
-      : profile.family === 'vector'
-      ? `${meta.name} is a specialized vector database. Data organization is managed via vector index segments and namespaces rather than SQL partitioning.`
-      : `${meta.name} does not use traditional table partitioning.`;
+  private planUnsupported(profile: EngineProfile, meta: any, table: string, col: string, strategy: string): PartitionResult {
+    const concept = profile.unsupportedReason?.['partition-plan'] ||
+      (profile.family === 'embedded'
+        ? `${meta.name} is an embedded database engine that does not support declarative table partitioning.`
+        : profile.family === 'keyvalue'
+        ? `${meta.name} is an in-memory key-value data store. Data distribution is handled via cluster sharding/hash slots rather than relational table partitioning.`
+        : profile.family === 'graph'
+        ? `${meta.name} is a graph database. Nodes and relationships are distributed across label indexes and cluster fabric rather than table partitions.`
+        : profile.family === 'vector'
+        ? `${meta.name} is a specialized vector database. Data organization is managed via vector index segments and namespaces rather than SQL partitioning.`
+        : `${meta.name} does not use declarative SQL table partitioning.`);
 
     return {
       engine: meta.id,

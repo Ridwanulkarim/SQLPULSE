@@ -87,7 +87,11 @@ export class FinOpsCalculatorAnalyzer {
 
     switch (provider) {
       case 'aws_aurora':
-        providerName = 'AWS Aurora PostgreSQL / MySQL (Multi-AZ)';
+        providerName = profile.isPostgresFamily
+          ? 'AWS Aurora PostgreSQL (Multi-AZ)'
+          : profile.dialect === 'mysql'
+          ? 'AWS Aurora MySQL (Multi-AZ)'
+          : `AWS Cloud Managed ${meta.name} (Multi-AZ)`;
         computeCostPerHour = 0.28 * (vCpu / 2);
         storageRatePerGb = 0.10; 
         iopsCost = (readsM + writesM) * 0.20; 

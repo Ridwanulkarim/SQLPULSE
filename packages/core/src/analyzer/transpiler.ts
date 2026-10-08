@@ -100,7 +100,7 @@ export function isHiveFamily(e: string): boolean {
 
 export function isPostgresFamily(e: string): boolean {
   const l = (e || '').toLowerCase();
-  return l.includes('postgres') || l.includes('cockroach') || l.includes('yugabyte') || l.includes('timescale') || l.includes('neon') || l.includes('supabase') || l.includes('redshift') || l === 'pg';
+  return l.includes('postgres') || l.includes('cockroach') || l.includes('yugabyte') || l.includes('timescale') || l.includes('neon') || l.includes('supabase') || l === 'pg';
 }
 
 export function isMySqlFamily(e: string): boolean {

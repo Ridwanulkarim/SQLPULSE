@@ -73,6 +73,29 @@ const indexDoctorAnalyzer = new IndexDoctorAnalyzer();
 const piiSanitizerAnalyzer = new PiiSanitizerAnalyzer();
 const queryRewriterAnalyzer = new QueryRewriterAnalyzer();
 
+function sendSafeError(res: Response, err: unknown, defaultMessage: string, statusCode = 422): void {
+  console.error('[Analyzer Error]:', err);
+  if (err instanceof TypeError || err instanceof ReferenceError || err instanceof RangeError) {
+    res.status(statusCode).json({
+      success: false,
+      error: defaultMessage,
+    });
+    return;
+  }
+  const message = (err instanceof Error && err.message) ? err.message : defaultMessage;
+  if (/is not a function|cannot read propert/i.test(message)) {
+    res.status(statusCode).json({
+      success: false,
+      error: defaultMessage,
+    });
+    return;
+  }
+  res.status(statusCode).json({
+    success: false,
+    error: message,
+  });
+}
+
 export const analyzePlan = (req: Request, res: Response): void => {
   try {
     const parse = analyzePlanSchema.safeParse(req.body);
@@ -88,11 +111,8 @@ export const analyzePlan = (req: Request, res: Response): void => {
       query: query || null,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to analyze query execution plan.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to analyze query execution plan.');
   }
 };
 
@@ -110,11 +130,8 @@ export const lintMigration = (req: Request, res: Response): void => {
       engine,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to lint migration script.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to lint migration script.');
   }
 };
 
@@ -132,11 +149,8 @@ export const adviseQuery = (req: Request, res: Response): void => {
       engine,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to analyze query anti-patterns.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to analyze query anti-patterns.');
   }
 };
 
@@ -168,11 +182,8 @@ export const transpileSql = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to transpile code.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to transpile code.');
   }
 };
 
@@ -188,11 +199,8 @@ export const tuneConfig = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate tuned database configuration.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate tuned database configuration.');
   }
 };
 
@@ -208,11 +216,8 @@ export const simulateDeadlock = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to simulate deadlock scenario.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to simulate deadlock scenario.');
   }
 };
 
@@ -228,11 +233,8 @@ export const calculateDisasterRecovery = (req: Request, res: Response): void => 
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to calculate disaster recovery metrics.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to calculate disaster recovery metrics.');
   }
 };
 
@@ -248,11 +250,8 @@ export const synthesizeQuery = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to synthesize multi-engine query.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to synthesize multi-engine query.');
   }
 };
 
@@ -268,11 +267,8 @@ export const generateConnectHub = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate connection parameters.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate connection parameters.');
   }
 };
 
@@ -288,11 +284,8 @@ export const planPartitionStrategy = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate partitioning plan.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate partitioning plan.');
   }
 };
 
@@ -308,11 +301,8 @@ export const inspectSlowLogs = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to analyze slow query logs.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to analyze slow query logs.');
   }
 };
 
@@ -328,11 +318,8 @@ export const analyzeBloat = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to analyze table bloat and vacuum requirements.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to analyze table bloat and vacuum requirements.');
   }
 };
 
@@ -348,11 +335,8 @@ export const simulateReplicationTopology = (req: Request, res: Response): void =
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to simulate replication topology and failover scenarios.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to simulate replication topology and failover scenarios.');
   }
 };
 
@@ -368,11 +352,8 @@ export const generateSecurityRbac = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate security matrix, RLS and RBAC policies.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate security matrix, RLS and RBAC policies.');
   }
 };
 
@@ -388,11 +369,8 @@ export const generateMockData = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate synthetic mock dataset and load scripts.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate synthetic mock dataset and load scripts.');
   }
 };
 
@@ -408,11 +386,8 @@ export const calculateFinOps = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to calculate cloud database FinOps pricing.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to calculate cloud database FinOps pricing.');
   }
 };
 
@@ -428,11 +403,8 @@ export const auditIndexDoctor = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to audit index redundancy and write amplification.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to audit index redundancy and write amplification.');
   }
 };
 
@@ -448,11 +420,8 @@ export const sanitizePii = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to generate PII masking and data anonymization rules.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to generate PII masking and data anonymization rules.');
   }
 };
 
@@ -468,11 +437,8 @@ export const rewriteQuery = (req: Request, res: Response): void => {
       success: true,
       data: result,
     });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to rewrite and optimize query sargability.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to rewrite and optimize query sargability.');
   }
 };
 
@@ -485,11 +451,8 @@ export const diffSchema = (req: Request, res: Response): void => {
     }
     const result = analyzeSchemaDiff(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to compute schema difference.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to compute schema difference.');
   }
 };
 
@@ -502,11 +465,8 @@ export const profileOrm = (req: Request, res: Response): void => {
     }
     const result = profileOrmQuery(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to profile ORM queries.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to profile ORM queries.');
   }
 };
 
@@ -519,11 +479,8 @@ export const auditReadiness = (req: Request, res: Response): void => {
     }
     const result = auditProductionReadiness(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to audit production readiness.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to audit production readiness.');
   }
 };
 
@@ -536,11 +493,8 @@ export const simulateChaos = (req: Request, res: Response): void => {
     }
     const result = simulateChaosScenario(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to simulate chaos scenario.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to simulate chaos scenario.');
   }
 };
 
@@ -553,11 +507,8 @@ export const buildCdcOutbox = (req: Request, res: Response): void => {
     }
     const result = generateCdcOutboxArchitecture(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to build CDC outbox architecture.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to build CDC outbox architecture.');
   }
 };
 
@@ -570,10 +521,7 @@ export const tuneVector = (req: Request, res: Response): void => {
     }
     const result = tuneVectorIndex(parse.data as any);
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(422).json({
-      success: false,
-      error: err.message || 'Failed to tune vector index.',
-    });
+  } catch (err: unknown) {
+    sendSafeError(res, err, 'Failed to tune vector index.');
   }
 };

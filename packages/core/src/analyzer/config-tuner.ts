@@ -777,7 +777,7 @@ vm.swappiness = 10                                # Aggressively avoid swapping 
 vm.dirty_background_ratio = 3                     # Start background flushing when dirty pages reach 3%
 vm.dirty_ratio = 10                               # Force synchronous flush when dirty pages reach 10%
 vm.dirty_expire_centisecs = 500                   # Flush dirty memory every 5 seconds
-vm.max_map_count = 262144                         # Required for high mmap instances (ES/Mongo/Postgres)
+vm.max_map_count = 262144                         # Required for memory-mapped database page caches
 ${isRedis ? 'vm.overcommit_memory = 1                         # Required for non-blocking Redis BGSAVE forks' : 'vm.overcommit_memory = 2\nvm.overcommit_ratio = 80'}
 
 # --- NETWORK SOCKET & CONNECTION SCALING ---

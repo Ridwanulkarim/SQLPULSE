@@ -1346,7 +1346,7 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     'disaster-recovery': 'native',
     'synthesize-query': 'native',
     'connect-hub': 'native',
-    'partition-plan': 'adapted',
+    'partition-plan': 'unsupported',
     'inspect-logs': 'native',
     bloat: 'native',
     replication: 'native',
@@ -1368,6 +1368,7 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     migration: 'Dedicated vector databases (Pinecone, Milvus, Qdrant) use collection schemas and API calls rather than SQL migration DDL.',
     transpile: 'Vector embeddings and search APIs do not map to relational SQL dialect transpilation.',
     'schema-diff': 'Vector collection schemas are schema-light or dynamic JSON metadata definitions.',
+    'partition-plan': 'Vector databases organize high-dimensional vectors across index segments and namespaces rather than declarative SQL table partitions.',
   },
   memoryParams: {
     sharedBufferParam: 'queryNode.memory.limit',
@@ -2003,8 +2004,21 @@ export function getEngineProfile(engineId?: string): EngineProfile {
       break;
   }
 
+  const capabilities = { ...base.capabilities };
+  const unsupportedReason = { ...(base.unsupportedReason || {}) };
+
+  if (metadata?.category === 'baas_embedded' || canonical === 'microsoft_access') {
+    capabilities['partition-plan'] = 'unsupported';
+    unsupportedReason['partition-plan'] = `${metadata?.name || canonical} is an embedded/desktop database that does not support declarative table partitioning.`;
+  } else if (metadata?.category === 'streaming_ledger') {
+    capabilities['partition-plan'] = 'unsupported';
+    unsupportedReason['partition-plan'] = `${metadata?.name || canonical} partitions event log streams and topics rather than relational tables.`;
+  }
+
   return {
     ...base,
+    capabilities,
+    unsupportedReason,
     engineId: canonical,
     name: metadata?.name || canonical,
     description: metadata?.description || `${metadata?.name || canonical} Engine Profile`,
