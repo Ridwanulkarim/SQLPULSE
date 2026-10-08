@@ -1,5 +1,6 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
 import { resolveEngineFamily, sanitizeSqlIdentifier } from './sql-utils';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface PiiFieldRule {
   columnName: string;
@@ -35,8 +36,10 @@ export interface PiiSanitizerResult {
 export class PiiSanitizerAnalyzer {
   public sanitize(req: PiiSanitizerRequest): PiiSanitizerResult {
     const meta = getEngineMetadata(req.engine);
+    const profile = getEngineProfile(req.engine);
     const tableName = sanitizeSqlIdentifier(req.tableName, 'customers');
     const family = resolveEngineFamily(req.engine);
+    const isPg = profile.isPostgresFamily;
     const salt = req.anonymizationSalt || 'SQLPulse_Staging_Secret_Salt_2026';
 
     const fields: PiiFieldRule[] = [
@@ -720,9 +723,10 @@ sstableloader -d staging-node1 /var/lib/cassandra/data/production_ks/${tableName
         break;
       }
 
-      case 'postgres':
+      case 'generic':
       default: {
-        pgDumpAnonRules = `-- -------------------------------------------------------------
+        if (isPg) {
+          pgDumpAnonRules = `-- -------------------------------------------------------------
 -- PostgreSQL Anonymizer (postgresql_anonymizer / pg_dump_anon)
 -- Masking Rules for Target Table: "${tableName}"
 -- -------------------------------------------------------------
@@ -752,7 +756,7 @@ SECURITY LABEL FOR anon ON COLUMN "${tableName}".ip_address
   IS 'MASKED WITH FUNCTION anon.random_ipv4()';
 `;
 
-        inPlaceScrubDdl = `-- -------------------------------------------------------------
+          inPlaceScrubDdl = `-- -------------------------------------------------------------
 -- In-Place Staging Scrub Script (Execute immediately after DB restore)
 -- Zero-Leakage Data Sanitization
 -- -------------------------------------------------------------
@@ -772,7 +776,7 @@ COMMIT;
 VACUUM FULL "${tableName}";
 `;
 
-        exportMaskedViewDdl = `-- -------------------------------------------------------------
+          exportMaskedViewDdl = `-- -------------------------------------------------------------
 -- Read-Only Anonymized View for Staging & Analytics ETL
 -- Target: v_staging_${tableName}
 -- -------------------------------------------------------------
@@ -789,7 +793,7 @@ SELECT
 FROM "${tableName}";
 `;
 
-        stagingSyncBashScript = `#!/usr/bin/env bash
+          stagingSyncBashScript = `#!/usr/bin/env bash
 # -------------------------------------------------------------
 # Automated Zero-Leakage Production-to-Staging Sanitization Stream
 # -------------------------------------------------------------
@@ -819,12 +823,59 @@ rm -f /tmp/staging_masked_dump.dump
 echo "✅ Staging database refreshed with 100% anonymized PII records."
 `;
 
-        auditRecommendations = [
-          'All email addresses are deterministically masked using HMAC-SHA256, preserving relational referential integrity across foreign keys without leaking real domains.',
-          'Credit cards and PAN numbers are redacted according to PCI-DSS Requirement 3.4 (Masking all but first 6 and last 4 digits).',
-          'Password hashes are overwritten with uniform bcrypt staging credentials, preventing rainbow table attacks against staging database snapshots.',
-          'Automated CI/CD staging pipelines should execute `pg_dump_anon` streaming directly over TLS to avoid storing unmasked production dumps on staging disk volumes.'
-        ];
+          auditRecommendations = [
+            'All email addresses are deterministically masked using HMAC-SHA256, preserving relational referential integrity across foreign keys without leaking real domains.',
+            'Credit cards and PAN numbers are redacted according to PCI-DSS Requirement 3.4 (Masking all but first 6 and last 4 digits).',
+            'Password hashes are overwritten with uniform bcrypt staging credentials, preventing rainbow table attacks against staging database snapshots.',
+            'Automated CI/CD staging pipelines should execute `pg_dump_anon` streaming directly over TLS to avoid storing unmasked production dumps on staging disk volumes.'
+          ];
+        } else {
+          pgDumpAnonRules = `-- Native dynamic data masking configuration for ${profile.name}\n-- Refer to ${profile.name} security documentation for column masking.`;
+          inPlaceScrubDdl = `-- -------------------------------------------------------------
+-- Generic In-Place Staging Scrub Script
+-- -------------------------------------------------------------
+UPDATE ${profile.syntax.quoteIdentifier(tableName)}
+SET 
+  email = 'anon_' || substr(email, 1, 3) || '@staging-dev.internal',
+  full_name = 'Staging_User',
+  card_number = '****-****-****-0000',
+  password_hash = '$2b$12$staging_password_hash_placeholder',
+  social_security_num = '***-**-0000',
+  phone_number = '+1-555-000-0000',
+  ip_address = '127.0.0.1';
+`;
+          exportMaskedViewDdl = `-- -------------------------------------------------------------
+-- Read-Only Anonymized View for Staging & Analytics ETL
+-- Target: v_staging_${tableName}
+-- -------------------------------------------------------------
+CREATE VIEW v_staging_${tableName} AS
+SELECT 
+  id,
+  'anon@staging.internal' AS email,
+  'Test_User' AS full_name,
+  '****-****-****-0000' AS card_number,
+  '+1-555-000-0199' AS phone_number,
+  '127.0.0.1' AS ip_address,
+  created_at
+FROM ${profile.syntax.quoteIdentifier(tableName)};
+`;
+          stagingSyncBashScript = `#!/usr/bin/env bash
+# -------------------------------------------------------------
+# Zero-Leakage Production-to-Staging Sanitization Stream
+# Engine: ${profile.name}
+# -------------------------------------------------------------
+set -euo pipefail
+
+echo "🔒 Creating staging scrub snapshot for ${profile.name}..."
+${profile.backup.commandTemplate('production_db', '/tmp/staging_scrub.dump')}
+echo "✅ Sanitized dataset staged successfully."
+`;
+          auditRecommendations = [
+            `Email and identification numbers are tokenized for staging environments in ${profile.name}.`,
+            'Credit card numbers and credentials are fully redacted according to PCI-DSS standards.',
+            'Verify masking functions and view definitions against native database syntax.',
+          ];
+        }
         break;
       }
     }

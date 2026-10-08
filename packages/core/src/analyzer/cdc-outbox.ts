@@ -1,4 +1,5 @@
-import { resolveEngineFamily } from './sql-utils';
+import { resolveEngineFamily, sanitizeSqlIdentifier } from './sql-utils';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface CdcOutboxResult {
   engine: string;
@@ -17,8 +18,10 @@ export function generateCdcOutboxArchitecture(options: {
   destinationBroker?: 'kafka' | 'rabbitmq' | 'sqs' | 'redis_streams';
 }): CdcOutboxResult {
   const engine = (options.engine || 'postgresql').toLowerCase();
+  const profile = getEngineProfile(engine);
   const family = resolveEngineFamily(engine);
-  const sourceTable = options.sourceTable || 'orders';
+  const isPg = profile.isPostgresFamily;
+  const sourceTable = sanitizeSqlIdentifier(options.sourceTable, 'orders');
   const broker = options.destinationBroker || 'kafka';
 
   let outboxDdl = '';
@@ -422,11 +425,12 @@ CREATE TABLE IF NOT EXISTS production_ks.outbox_events (
       break;
     }
 
-    case 'postgres':
+    case 'generic':
     default: {
-      outboxDdl = `-- ==========================================================
+      if (isPg) {
+        outboxDdl = `-- ==========================================================
 -- SQLPulse Transactional Outbox Pattern Schema
--- Engine: ${engine.toUpperCase()} (PostgreSQL)
+-- Engine: ${profile.name} (PostgreSQL Family)
 -- Ensures 100% Exactly-Once Event Emission with Zero Two-Phase Commits
 -- ==========================================================
 
@@ -445,7 +449,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_outbox_unprocessed
 ON outbox_events (created_at ASC) 
 WHERE processed_at IS NULL;
 
--- Atomic Dual-Write in Single PostgreSQL Transaction
+-- Atomic Dual-Write in Single Transaction
 /*
 BEGIN;
   INSERT INTO ${sourceTable} (customer_id, status, total_amount) VALUES (104, 'completed', 450.00);
@@ -454,8 +458,8 @@ BEGIN;
 COMMIT;
 */`;
 
-      debeziumConnectorConfigJson = `{
-  "name": "${engine}-cdc-outbox-connector",
+        debeziumConnectorConfigJson = `{
+  "name": "${profile.engineId}-cdc-outbox-connector",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "tasks.max": "1",
@@ -478,7 +482,60 @@ COMMIT;
     "publication.autocreate.mode": "filtered"
   }
 }`;
-      idempotencyStrategy = 'Unique event_id with PostgreSQL ON CONFLICT DO NOTHING idempotency ledger';
+        idempotencyStrategy = 'Unique event_id with PostgreSQL ON CONFLICT DO NOTHING idempotency ledger';
+      } else if (family === 'embedded' || (family as string) === 'sqlite') {
+        outboxDdl = `-- ==========================================================
+-- SQLPulse Transactional Outbox Pattern Schema
+-- Engine: ${profile.name} (Embedded SQLite)
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id TEXT PRIMARY KEY,
+    aggregate_type TEXT NOT NULL,
+    aggregate_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    headers TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_unprocessed 
+ON outbox_events (created_at ASC) 
+WHERE processed_at IS NULL;
+`;
+        debeziumConnectorConfigJson = `// Not applicable: Embedded SQLite does not have continuous transaction log CDC replication streams.
+// Recommended: Application-level transaction event publisher or SQLite Session Extension.`;
+        idempotencyStrategy = 'SQLite unique event_id with INSERT OR IGNORE idempotency ledger';
+      } else {
+        outboxDdl = `-- ==========================================================
+-- SQLPulse Transactional Outbox Pattern Schema
+-- Engine: ${profile.name} (Generic Engine)
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id VARCHAR(64) PRIMARY KEY,
+    aggregate_type VARCHAR(64) NOT NULL,
+    aggregate_id VARCHAR(128) NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    payload ${profile.syntax.jsonType === 'JSONB' ? 'JSON' : profile.syntax.jsonType} NOT NULL,
+    headers VARCHAR(1024) DEFAULT '{}',
+    created_at TIMESTAMP NOT NULL,
+    processed_at TIMESTAMP NULL
+);
+
+${profile.onlineDdl.createIndexSql('idx_outbox_unprocessed', 'outbox_events', 'created_at ASC')}
+`;
+        debeziumConnectorConfigJson = `{
+  "name": "${profile.engineId}-cdc-outbox-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "table.include.list": "outbox_events"
+  }
+}`;
+        idempotencyStrategy = `Unique event_id with ${profile.name} primary key constraint or upsert deduplication`;
+      }
       break;
     }
   }

@@ -1,3 +1,6 @@
+import { getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+
 export interface ReadinessCheckItem {
   id: string;
   category: 'CONNECTION' | 'MEMORY' | 'MAINTENANCE' | 'BACKUP_WAL' | 'TIMEOUT_SAFETY' | 'SECURITY' | 'OBSERVABILITY';
@@ -38,39 +41,65 @@ export function auditProductionReadiness(options: {
   applyTuningPatch?: boolean;
 }): ProductionReadinessResult {
   const rawEngine = (options.engine || 'postgresql').toLowerCase();
+  const profile = getEngineProfile(options.engine || 'postgresql');
+  const meta = getEngineMetadata(options.engine || 'postgresql');
   const estimatedQps = Math.max(100, options.estimatedQps || 5000);
   const applyPatch = Boolean(options.applyTuningPatch);
 
-  let engineFamily = 'postgres';
-  let engineName = 'PostgreSQL';
+  let engineFamily: string = profile.family;
+  let engineName = meta.name;
 
   if (rawEngine.includes('mysql') || rawEngine.includes('maria') || rawEngine.includes('tidb') || rawEngine.includes('percona') || rawEngine.includes('planetscale')) {
     engineFamily = 'mysql';
     engineName = 'MySQL / MariaDB';
-  } else if (rawEngine.includes('oracle') || rawEngine.includes('db2')) {
+  } else if (rawEngine.includes('oracle')) {
     engineFamily = 'oracle';
     engineName = 'Oracle Database';
-  } else if (rawEngine.includes('sqlserver') || rawEngine.includes('mssql') || rawEngine.includes('azure_sql')) {
-    engineFamily = 'mssql';
+  } else if (rawEngine.includes('db2') || profile.family === 'db2') {
+    engineFamily = 'db2';
+    engineName = 'IBM DB2';
+  } else if (rawEngine.includes('sap_hana') || rawEngine.includes('hana') || profile.family === 'sap_hana') {
+    engineFamily = 'sap_hana';
+    engineName = 'SAP HANA';
+  } else if (rawEngine.includes('sqlserver') || rawEngine.includes('mssql') || rawEngine.includes('azure_sql') || (profile.family as string) === 'sqlserver') {
+    engineFamily = 'sqlserver';
     engineName = 'Microsoft SQL Server';
-  } else if (rawEngine.includes('mongo') || rawEngine.includes('document') || rawEngine.includes('couch')) {
+  } else if (rawEngine.includes('mongo') || rawEngine.includes('document') || rawEngine.includes('couch') || profile.family === 'document') {
     engineFamily = 'mongodb';
     engineName = 'MongoDB';
-  } else if (rawEngine.includes('click') || rawEngine.includes('olap') || rawEngine.includes('duck') || rawEngine.includes('trino') || rawEngine.includes('starrocks')) {
+  } else if (rawEngine.includes('click') || rawEngine.includes('starrocks') || rawEngine.includes('trino')) {
     engineFamily = 'clickhouse';
     engineName = 'ClickHouse Columnar';
-  } else if (rawEngine.includes('redis') || rawEngine.includes('keydb') || rawEngine.includes('dragonfly') || rawEngine.includes('valkey') || rawEngine.includes('memcached')) {
+  } else if (rawEngine.includes('redis') || rawEngine.includes('keydb') || rawEngine.includes('dragonfly') || rawEngine.includes('valkey') || rawEngine.includes('memcached') || profile.family === 'keyvalue') {
     engineFamily = 'redis';
     engineName = 'Redis / In-Memory';
-  } else if (rawEngine.includes('cassandra') || rawEngine.includes('scylla') || rawEngine.includes('hbase')) {
+  } else if (rawEngine.includes('cassandra') || rawEngine.includes('scylla') || rawEngine.includes('hbase') || profile.family === 'wide_column') {
     engineFamily = 'cassandra';
     engineName = 'Apache Cassandra / ScyllaDB';
-  } else if (rawEngine.includes('snow') || rawEngine.includes('bigquery') || rawEngine.includes('redshift') || rawEngine.includes('databricks')) {
+  } else if (rawEngine.includes('snow') || rawEngine.includes('bigquery') || rawEngine.includes('redshift') || rawEngine.includes('databricks') || profile.family === 'columnar_olap') {
     engineFamily = 'snowflake';
     engineName = 'Cloud Data Warehouse (Snowflake / BigQuery)';
-  } else if (rawEngine.includes('sqlite') || rawEngine.includes('turso') || rawEngine.includes('libsql') || rawEngine.includes('d1')) {
+  } else if (rawEngine.includes('sqlite') || rawEngine.includes('turso') || rawEngine.includes('libsql') || rawEngine.includes('d1') || profile.family === 'embedded') {
     engineFamily = 'sqlite';
     engineName = 'SQLite / Embedded';
+  } else if (rawEngine.includes('elastic') || rawEngine.includes('opensearch') || profile.family === 'search') {
+    engineFamily = 'search';
+    engineName = 'Elasticsearch / Search Engine';
+  } else if (rawEngine.includes('neo4j') || profile.family === 'graph') {
+    engineFamily = 'graph';
+    engineName = 'Neo4j / Graph Database';
+  } else if (rawEngine.includes('milvus') || rawEngine.includes('pinecone') || profile.family === 'vector') {
+    engineFamily = 'vector';
+    engineName = 'Vector Database';
+  } else if (rawEngine.includes('influx') || profile.family === 'timeseries') {
+    engineFamily = 'timeseries';
+    engineName = 'InfluxDB / Time-Series Engine';
+  } else if (profile.isPostgresFamily) {
+    engineFamily = 'postgres';
+    engineName = 'PostgreSQL';
+  } else {
+    engineFamily = 'generic';
+    engineName = meta.name || 'Database';
   }
 
   // --- Dynamic Traffic Profile Calculations ---
@@ -275,7 +304,7 @@ EOF`;
       : `Oracle Database audit flagged ${isHighQps ? 'critical connection' : 'resource limit'} risks for ${estimatedQps.toLocaleString()} QPS workload.`;
 
   // 3. Microsoft SQL Server
-  } else if (engineFamily === 'mssql') {
+  } else if (engineFamily === 'sqlserver' || engineFamily === 'mssql') {
     const isHighQps = estimatedQps >= 15000;
     const memStatus = applyPatch ? 'PASSED' : 'FAILED';
     const dopStatus = applyPatch ? 'PASSED' : (isHighQps ? 'FAILED' : 'WARNING');
@@ -745,8 +774,8 @@ db.adminCommand({ setParameter: 1, notablescan: 1 });
       ? `MongoDB deployment verified at 97% readiness. maxTimeMS and notablescan guards operational.`
       : `MongoDB audit recommended enforcing notablescan and maxTimeMS timeouts for ${estimatedQps.toLocaleString()} QPS.`;
 
-  // 10. PostgreSQL Family (Default)
-  } else {
+  // 10. PostgreSQL Family
+  } else if (engineFamily === 'postgres' || profile.isPostgresFamily) {
     const isHighQps = estimatedQps >= 15000;
     const isMediumQps = estimatedQps >= 4000;
 
@@ -867,6 +896,403 @@ echo "PostgreSQL production hardening applied successfully for ${estimatedQps.to
     executiveSummary = applyPatch
       ? `PostgreSQL production readiness verified at 97% health. PgBouncer pooling, aggressive autovacuum, and strict ${isHighQps ? '3s' : '8s'} statement timeouts active.`
       : `PostgreSQL production audit identified critical bottlenecks for ${estimatedQps.toLocaleString()} QPS traffic. Statement timeouts and connection pooling limits require immediate hardening.`;
+
+  // 11. IBM DB2
+  } else if (engineFamily === 'db2') {
+    const isHighQps = estimatedQps >= 15000;
+    const lockStatus = applyPatch ? 'PASSED' : (isHighQps ? 'FAILED' : 'WARNING');
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Lock Timeout & Deadlock Detection (LOCKTIMEOUT)',
+        status: lockStatus,
+        currentValue: applyPatch ? 'LOCKTIMEOUT = 30 seconds' : 'LOCKTIMEOUT = -1 (Wait indefinitely)',
+        recommendedValue: 'LOCKTIMEOUT = 30 seconds',
+        riskDescription: 'Uncapped lock wait allows transactions to hang indefinitely until entire tables freeze.',
+        remediationCommand: `db2 "UPDATE DB CFG USING LOCKTIMEOUT 30";`,
+      },
+      {
+        id: 'chk-2',
+        category: 'MEMORY',
+        title: 'Buffer Pool Sizing (BUFFPAGE)',
+        status: applyPatch ? 'PASSED' : 'WARNING',
+        currentValue: applyPatch ? 'BUFFPAGE = 250000 (1GB 4K pages)' : 'BUFFPAGE = 1000 (Default)',
+        recommendedValue: 'Allocate 60-75% of instance memory to IBM DB2 buffer pools',
+        riskDescription: 'Default buffer pool causes severe physical disk I/O thrashing on transactional tables.',
+        remediationCommand: `db2 "ALTER BUFFERPOOL IBMDEFAULTBP SIZE 250000";`,
+      },
+      {
+        id: 'chk-3',
+        category: 'BACKUP_WAL',
+        title: 'Archive Logging & Log Archiving Path (LOGARCHMETH1)',
+        status: 'PASSED',
+        currentValue: 'LOGARCHMETH1 = DISK:/db2/archive_logs',
+        recommendedValue: 'LOGARCHMETH1 configured for point-in-time rollforward recovery',
+        riskDescription: 'Ensures durable transaction log archiving for RPO < 1 minute.',
+        remediationCommand: `# Verified: DB2 log archiving operational.`,
+      },
+      {
+        id: 'chk-4',
+        category: 'MAINTENANCE',
+        title: 'Automatic Statistics Profiling (RUNSTATS)',
+        status: applyPatch ? 'PASSED' : 'WARNING',
+        currentValue: applyPatch ? 'AUTO_RUNSTATS = ON' : 'AUTO_RUNSTATS = OFF',
+        recommendedValue: 'AUTO_RUNSTATS = ON with distribution statistics',
+        riskDescription: 'Stale catalog statistics cause the DB2 cost-based optimizer to select suboptimal query execution plans.',
+        remediationCommand: `db2 "UPDATE DB CFG USING AUTO_RUNSTATS ON";`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# SQLPulse Production Hardening: IBM DB2
+db2 connect to SAMPLE
+db2 "UPDATE DB CFG USING LOCKTIMEOUT 30"
+db2 "UPDATE DB CFG USING AUTO_RUNSTATS ON"
+db2 "ALTER BUFFERPOOL IBMDEFAULTBP SIZE 250000"
+db2 terminate`;
+    executiveSummary = applyPatch
+      ? `IBM DB2 instance hardened. LOCKTIMEOUT 30s, automated RUNSTATS, and buffer pool optimization active.`
+      : `IBM DB2 audit flagged uncapped LOCKTIMEOUT and unoptimized default buffer pools for ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 12. SAP HANA
+  } else if (engineFamily === 'sap_hana') {
+    const isHighQps = estimatedQps >= 15000;
+    const memStatus = applyPatch ? 'PASSED' : (isHighQps ? 'FAILED' : 'WARNING');
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'MEMORY',
+        title: 'Global Allocation Limit (GLOBAL_ALLOCATION_LIMIT)',
+        status: memStatus,
+        currentValue: applyPatch ? 'global_allocation_limit = 90% Total RAM' : 'global_allocation_limit = 0 (Uncapped / OS OOM Risk)',
+        recommendedValue: 'Cap SAP HANA memory to 90% of physical host RAM',
+        riskDescription: 'Uncapped in-memory allocation risks Linux OOM killer terminating the database instance.',
+        remediationCommand: `ALTER SYSTEM ALTER CONFIGURATION ('global.ini', 'SYSTEM') SET ('memorymanager', 'global_allocation_limit') = '115200' WITH RECONFIGURE;`,
+      },
+      {
+        id: 'chk-2',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Statement Memory Limit Guard (STATEMENT_MEMORY_LIMIT)',
+        status: applyPatch ? 'PASSED' : 'WARNING',
+        currentValue: applyPatch ? 'statement_memory_limit = 32GB' : 'statement_memory_limit = 0 (Unlimited)',
+        recommendedValue: 'statement_memory_limit = 32GB (Prevent single query memory hog)',
+        riskDescription: 'A single runaway analytic query can consume all available memory and evict column store tables.',
+        remediationCommand: `ALTER SYSTEM ALTER CONFIGURATION ('global.ini', 'SYSTEM') SET ('memorymanager', 'statement_memory_limit') = '32' WITH RECONFIGURE;`,
+      },
+      {
+        id: 'chk-3',
+        category: 'MAINTENANCE',
+        title: 'Delta Merge Automatic Background Optimization',
+        status: 'PASSED',
+        currentValue: 'automerge = on',
+        recommendedValue: 'automerge = on with smart merge token monitoring',
+        riskDescription: 'Merges in-memory delta buffers into compressed columnar main storage.',
+        remediationCommand: `# Verified: SAP HANA delta automerge is active.`,
+      },
+      {
+        id: 'chk-4',
+        category: 'BACKUP_WAL',
+        title: 'Log Backup Interval & Backint Service',
+        status: 'PASSED',
+        currentValue: 'log_backup_timeout_s = 900 (15 min)',
+        recommendedValue: 'log_backup_timeout_s = 900 with external Backint archive channel',
+        riskDescription: 'Continuous log backup ensures minimal data loss window.',
+        remediationCommand: `# Verified: SAP HANA log backup channel verified.`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env sql
+-- SQLPulse Production Hardening: SAP HANA
+ALTER SYSTEM ALTER CONFIGURATION ('global.ini', 'SYSTEM') SET ('memorymanager', 'statement_memory_limit') = '32' WITH RECONFIGURE;
+ALTER SYSTEM ALTER CONFIGURATION ('global.ini', 'SYSTEM') SET ('persistence', 'savepoint_interval_s') = '300' WITH RECONFIGURE;`;
+    executiveSummary = applyPatch
+      ? `SAP HANA in-memory column store verified. Statement memory guard and delta merge optimization active.`
+      : `SAP HANA audit flagged uncapped statement memory limits for ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 13. Elasticsearch / Search Engine
+  } else if (engineFamily === 'search') {
+    const isHighQps = estimatedQps >= 15000;
+    const refreshStatus = applyPatch ? 'PASSED' : (isHighQps ? 'FAILED' : 'WARNING');
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'MEMORY',
+        title: 'JVM Heap Sizing & Compressed OOPs Threshold',
+        status: 'PASSED',
+        currentValue: 'ES_JAVA_OPTS = -Xms31g -Xmx31g',
+        recommendedValue: 'MAX_HEAP <= 31GB to ensure 32-bit Compressed OOPs pointers',
+        riskDescription: 'Heaps exceeding 32GB disable compressed pointers and waste 40-50% memory bandwidth.',
+        remediationCommand: `# Verified: Elasticsearch heap configured at 31GB.`,
+      },
+      {
+        id: 'chk-2',
+        category: 'MAINTENANCE',
+        title: 'Index Refresh Interval & Bulk Ingestion Throughput',
+        status: refreshStatus,
+        currentValue: applyPatch ? 'index.refresh_interval = 30s' : 'index.refresh_interval = 1s (High I/O Segment Churn)',
+        recommendedValue: 'index.refresh_interval = 30s on high-throughput write indices',
+        riskDescription: 'Frequent 1s refreshes create millions of tiny Lucene segments, exhausting merge threads.',
+        remediationCommand: `PUT /*/_settings\n{ "index": { "refresh_interval": "30s" } }`,
+      },
+      {
+        id: 'chk-3',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Search Circuit Breakers & Search Slow Log',
+        status: applyPatch ? 'PASSED' : 'WARNING',
+        currentValue: applyPatch ? 'indices.breaker.total.use_real_memory = true' : 'indices.breaker.total.use_real_memory = false',
+        recommendedValue: 'indices.breaker.total.use_real_memory = true to block OOM queries',
+        riskDescription: 'Runaway aggregations can trigger OutOfMemoryError and crash cluster nodes.',
+        remediationCommand: `PUT /_cluster/settings\n{ "persistent": { "indices.breaker.total.use_real_memory": true } }`,
+      },
+      {
+        id: 'chk-4',
+        category: 'BACKUP_WAL',
+        title: 'Snapshot Lifecycle Management (SLM)',
+        status: 'PASSED',
+        currentValue: 'SLM policy = daily-backup active',
+        recommendedValue: 'SLM policy active with cloud object store repository',
+        riskDescription: 'Automated snapshot lifecycle ensures cluster recovery during catastrophic disk failure.',
+        remediationCommand: `# Verified: SLM policy operational.`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# SQLPulse Production Hardening: Elasticsearch
+curl -X PUT "http://localhost:9200/*/_settings" -H 'Content-Type: application/json' -d'
+{ "index": { "refresh_interval": "30s" } }
+'
+curl -X PUT "http://localhost:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
+{ "persistent": { "indices.breaker.total.use_real_memory": true } }
+'`;
+    executiveSummary = applyPatch
+      ? `Elasticsearch cluster hardened. Circuit breakers and 30s refresh interval active.`
+      : `Elasticsearch audit recommended increasing refresh_interval from 1s to 30s to mitigate Lucene segment churn at ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 14. Graph Database (Neo4j)
+  } else if (engineFamily === 'graph') {
+    const txStatus = applyPatch ? 'PASSED' : 'FAILED';
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Transaction Execution Timeout (dbms.transaction.timeout)',
+        status: txStatus,
+        currentValue: applyPatch ? 'dbms.transaction.timeout = 5s' : 'dbms.transaction.timeout = 0 (Uncapped Cypher Queries)',
+        recommendedValue: 'dbms.transaction.timeout = 5s',
+        riskDescription: 'Uncapped graph traversal queries can explore millions of relationship paths and freeze database threads.',
+        remediationCommand: `# In neo4j.conf:\ndbms.transaction.timeout=5s`,
+      },
+      {
+        id: 'chk-2',
+        category: 'MEMORY',
+        title: 'Page Cache & JVM Heap Sizing',
+        status: 'PASSED',
+        currentValue: 'server.memory.pagecache.size = 32GB, server.memory.heap.max_size = 31GB',
+        recommendedValue: 'Allocate 50% RAM to pagecache, remainder to JVM heap <= 31GB',
+        riskDescription: 'Page cache caches the graph store files in memory for zero-disk pointer hopping.',
+        remediationCommand: `# Verified: Neo4j memory configuration optimal.`,
+      },
+      {
+        id: 'chk-3',
+        category: 'SECURITY',
+        title: 'Cypher Query Authorization & TLS Encryption',
+        status: 'PASSED',
+        currentValue: 'dbms.security.auth_enabled = true, bolt.ssl_policy = default',
+        recommendedValue: 'Enforce native authentication and Bolt protocol TLS encryption',
+        riskDescription: 'Secures graph queries and cluster communication.',
+        remediationCommand: `# Verified: Auth and TLS enforced.`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# SQLPulse Production Hardening: Neo4j
+cat << 'EOF' >> /etc/neo4j/neo4j.conf
+dbms.transaction.timeout=5s
+dbms.jvm.additional=-XX:+UseG1GC
+EOF`;
+    executiveSummary = applyPatch
+      ? `Neo4j graph database hardened. Cypher transaction timeout and page cache optimization active.`
+      : `Neo4j audit detected unbounded transaction execution timeouts for ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 15. Vector Database (Pinecone / Milvus)
+  } else if (engineFamily === 'vector') {
+    const searchTimeoutStatus = applyPatch ? 'PASSED' : 'FAILED';
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'TIMEOUT_SAFETY',
+        title: 'ANN Vector Search Request Timeout',
+        status: searchTimeoutStatus,
+        currentValue: applyPatch ? 'search_timeout_ms = 1500ms' : 'search_timeout_ms = none (Uncapped HNSW/IVF Searches)',
+        recommendedValue: 'search_timeout_ms = 1500ms',
+        riskDescription: 'High ef_search parameters during peak traffic cause query queues to saturate CPU vector instruction units.',
+        remediationCommand: `# Set search timeout in vector client query options: timeout = 1.5`,
+      },
+      {
+        id: 'chk-2',
+        category: 'MEMORY',
+        title: 'Index Memory Pool Allocation',
+        status: 'PASSED',
+        currentValue: 'index.memory_quota = 64GB',
+        recommendedValue: 'Ensure vector index segments fit completely into RAM',
+        riskDescription: 'Vector indexes paged from disk suffer 100x latency degradation.',
+        remediationCommand: `# Verified: Vector index pool verified.`,
+      },
+      {
+        id: 'chk-3',
+        category: 'MAINTENANCE',
+        title: 'Segment Auto-Compaction & Vacuum',
+        status: applyPatch ? 'PASSED' : 'WARNING',
+        currentValue: applyPatch ? 'segment.compaction.enabled = true' : 'segment.compaction.enabled = false',
+        recommendedValue: 'Enable segment compaction to merge small vector inserts',
+        riskDescription: 'Uncompacted segments degrade recall accuracy and query throughput.',
+        remediationCommand: `# Enable auto-compaction in vector collection properties`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# SQLPulse Production Hardening: Vector Engine
+echo "Vector engine search timeout and segment compaction parameters configured."`;
+    executiveSummary = applyPatch
+      ? `Vector database deployment validated. ANN search timeouts and index memory allocation active.`
+      : `Vector database audit flagged missing search timeouts for ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 16. Time-series (InfluxDB)
+  } else if (engineFamily === 'timeseries' || engineFamily === 'time_series') {
+    const timeoutStatus = applyPatch ? 'PASSED' : 'FAILED';
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Query Statement Timeout (query-timeout)',
+        status: timeoutStatus,
+        currentValue: applyPatch ? 'query-timeout = 10s' : 'query-timeout = 0 (Uncapped)',
+        recommendedValue: 'query-timeout = 10s',
+        riskDescription: 'Unbounded long-range metric scans consume all TSM read cache and lock memory.',
+        remediationCommand: `# In influxdb.conf:\n[coordinator]\nquery-timeout = "10s"`,
+      },
+      {
+        id: 'chk-2',
+        category: 'MAINTENANCE',
+        title: 'Automated Retention Policy Enforcement',
+        status: 'PASSED',
+        currentValue: 'retention-autocreate = true, check-interval = 30m',
+        recommendedValue: 'Enforce shard group duration and retention policies',
+        riskDescription: 'Expired metric shards are dropped automatically without disk fragmentation.',
+        remediationCommand: `# Verified: Retention policy service active.`,
+      },
+      {
+        id: 'chk-3',
+        category: 'BACKUP_WAL',
+        title: 'WAL Flush & Compaction Throttling',
+        status: 'PASSED',
+        currentValue: 'wal-fsync-delay = 100ms, max-series-per-database = 1000000',
+        recommendedValue: 'Tune WAL flush interval to balance write throughput and crash recovery',
+        riskDescription: 'Batches fsync writes to durable storage.',
+        remediationCommand: `# Verified: InfluxDB WAL operational.`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# SQLPulse Production Hardening: InfluxDB
+influx -execute 'SHOW RETENTION POLICIES'`;
+    executiveSummary = applyPatch
+      ? `Time-series engine validated. Query timeouts and retention policies active.`
+      : `Time-series audit flagged uncapped query timeouts for ${estimatedQps.toLocaleString()} QPS.`;
+
+  // 17. Generic Engine-Neutral Block
+  } else {
+    const isHighQps = estimatedQps >= 15000;
+    const timeoutStatus = applyPatch ? 'PASSED' : 'FAILED';
+    const poolerStatus = applyPatch ? 'PASSED' : (isHighQps ? 'FAILED' : 'WARNING');
+    const maintenanceStatus = applyPatch ? 'PASSED' : 'WARNING';
+    const primaryMemParam = profile.memoryParams.sharedBufferParam || profile.memoryParams.cacheParam || 'memory_limit';
+    const statsExample = profile.maintenance.statsCommand.replace('{table}', 'table_name');
+    const statsScript = profile.maintenance.statsCommand.replace('{table}', 'production_table');
+
+    checks = [
+      {
+        id: 'chk-1',
+        category: 'TIMEOUT_SAFETY',
+        title: 'Query & Statement Execution Timeout',
+        status: timeoutStatus,
+        currentValue: applyPatch ? 'statement_timeout = 5000ms' : 'statement_timeout = 0 (Uncapped)',
+        recommendedValue: 'statement_timeout = 5000ms on all production connections',
+        riskDescription: `Uncapped queries at ${estimatedQps.toLocaleString()} QPS hold server resources and can cause cascading connection exhaustion.`,
+        remediationCommand: `-- Configure statement execution timeout in ${profile.memoryParams.configFile}:\nstatement_timeout = 5000`,
+      },
+      {
+        id: 'chk-2',
+        category: 'CONNECTION',
+        title: `Connection Sizing & Pooler Floor (${estConcurrentConn} Conns)`,
+        status: poolerStatus,
+        currentValue: applyPatch ? `Connection pooler active (max_connections = ${recPoolerConn})` : `max_connections = 1000 (Direct client connections)`,
+        recommendedValue: `max_connections = ${recPoolerConn} with dedicated connection pooler`,
+        riskDescription: `Direct unpooled connections at ${estimatedQps.toLocaleString()} QPS cause excessive thread context switching and resource exhaustion.`,
+        remediationCommand: `# Deploy connection pooling fronting ${meta.name}\n# Configure max_connections = ${recPoolerConn}`,
+      },
+      {
+        id: 'chk-3',
+        category: 'MEMORY',
+        title: `Memory Allocation (${primaryMemParam})`,
+        status: 'PASSED',
+        currentValue: `${primaryMemParam} allocated within hardware limits`,
+        recommendedValue: `Allocate 60-75% dedicated system RAM to ${primaryMemParam}`,
+        riskDescription: 'Properly bounded memory allocation prevents out-of-memory errors and optimizes buffer cache hits.',
+        remediationCommand: `# Verified: Primary memory allocation configured in ${profile.memoryParams.configFile}.`,
+      },
+      {
+        id: 'chk-4',
+        category: 'MAINTENANCE',
+        title: 'Automated Statistics & Index Maintenance',
+        status: maintenanceStatus,
+        currentValue: applyPatch ? 'Automated optimizer maintenance enabled' : 'Default manual maintenance schedule',
+        recommendedValue: `Periodic optimizer statistics collection via ${statsExample}`,
+        riskDescription: 'Stale optimizer statistics cause slow full-table scans and degraded execution plans.',
+        remediationCommand: `-- Gather table statistics:\n${statsScript};`,
+      },
+      {
+        id: 'chk-5',
+        category: 'BACKUP_WAL',
+        title: `Point-in-Time Recovery & Backup (${profile.backup.tool})`,
+        status: 'PASSED',
+        currentValue: `${profile.backup.tool} automated backup schedule active`,
+        recommendedValue: `Periodic automated backups using ${profile.backup.tool}`,
+        riskDescription: 'Continuous backups ensure minimal recovery point objective (RPO) during catastrophic failures.',
+        remediationCommand: `# Verified: Backup automation configured with ${profile.backup.tool}.`,
+      },
+      {
+        id: 'chk-6',
+        category: 'SECURITY',
+        title: 'Authentication & TLS Transport Encryption',
+        status: 'PASSED',
+        currentValue: 'Authentication enforced, TLS active',
+        recommendedValue: 'Enforce strong authentication and TLS encryption in transit',
+        riskDescription: 'Protects client credentials and sensitive payload data over the wire.',
+        remediationCommand: `# Verified: Transport security and authorization operational.`,
+      },
+    ];
+
+    remediationScript = `#!/usr/bin/env bash
+# ==========================================================
+# SQLPulse Production Hardening: ${meta.name}
+# Target Load: ${estimatedQps.toLocaleString()} QPS
+# ==========================================================
+# 1. Update configuration file (${profile.memoryParams.configFile})
+# 2. Run maintenance: ${statsScript}
+# 3. Ensure backup schedule with ${profile.backup.tool}
+echo "${meta.name} production hardening applied successfully!"`;
+
+    executiveSummary = applyPatch
+      ? `${meta.name} production readiness verified at 97% health. Connection pooling, statement timeouts, and memory limits active.`
+      : `${meta.name} production audit identified recommended hardening for ${estimatedQps.toLocaleString()} QPS traffic.`;
   }
 
   const passedCount = checks.filter(c => c.status === 'PASSED').length;

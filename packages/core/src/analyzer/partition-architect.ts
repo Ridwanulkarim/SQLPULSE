@@ -1,5 +1,6 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
 import { sanitizeSqlIdentifier } from './sql-utils';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface PartitionRequest {
   engine: string;
@@ -39,6 +40,7 @@ export interface PartitionResult {
 
 export class PartitionArchitect {
   public plan(req: PartitionRequest): PartitionResult {
+    const profile = getEngineProfile(req.engine);
     const meta = getEngineMetadata(req.engine);
     const table = sanitizeSqlIdentifier(req.tableName, 'events_log');
     const col = sanitizeSqlIdentifier(req.partitionColumn, 'created_at');
@@ -46,11 +48,17 @@ export class PartitionArchitect {
     const rows = Math.max(100000, req.estimatedMonthlyRows || 10000000);
     const retention = Math.max(1, req.retentionMonths || 12);
 
+    if (profile.capabilities['partition-plan'] === 'unsupported') {
+      return this.planUnsupported(profile, meta, table, col, strategy);
+    }
+
     const norm = req.engine.toLowerCase();
 
     if (norm === 'clickhouse') {
       return this.planClickHouse(meta, table, col, strategy, rows, retention);
-    } else if (norm.includes('timescale') || norm.includes('influx') || meta.category === 'timeseries') {
+    } else if (norm.includes('influx')) {
+      return this.planInflux(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('timescale')) {
       return this.planTimescale(meta, table, col, strategy, rows, retention);
     } else if (norm.includes('cockroach') || norm.includes('yugabyte')) {
       return this.planCockroach(meta, table, col, strategy, rows, retention);
@@ -58,27 +66,30 @@ export class PartitionArchitect {
       return this.planBigQuery(meta, table, col, strategy, rows, retention);
     } else if (norm.includes('redshift')) {
       return this.planRedshift(meta, table, col, strategy, rows, retention);
-    } else if (meta.category === 'search' || norm.includes('elastic') || norm.includes('opensearch')) {
+    } else if (meta.category === 'search' || norm.includes('elastic') || norm.includes('opensearch') || profile.family === 'search') {
       return this.planElasticsearch(meta, table, col, strategy, rows, retention);
-    } else if (meta.category === 'baas_embedded' || norm.includes('sqlite') || norm.includes('turso')) {
-      return this.planSQLite(meta, table, col, strategy, rows, retention);
-    } else if (norm === 'mysql' || norm === 'mariadb' || norm === 'planetscale') {
+    } else if (norm === 'mysql' || norm === 'mariadb' || norm === 'planetscale' || profile.family === 'mysql') {
       return this.planMySQL(meta, table, col, strategy, rows, retention);
-    } else if (norm === 'oracle' || norm === 'db2') {
+    } else if (norm === 'oracle' || profile.family === 'oracle') {
       return this.planOracle(meta, table, col, strategy, rows, retention);
-    } else if (norm.includes('mssql') || norm.includes('sql_server') || norm.includes('sqlserver') || norm.includes('microsoft_sql_server')) {
+    } else if (norm === 'db2' || profile.family === 'db2') {
+      return this.planDb2(meta, table, col, strategy, rows, retention);
+    } else if (norm === 'sap_hana' || profile.family === 'sap_hana') {
+      return this.planSapHana(meta, table, col, strategy, rows, retention);
+    } else if (norm.includes('mssql') || norm.includes('sql_server') || norm.includes('sqlserver') || norm.includes('microsoft_sql_server') || profile.family === 'sqlserver') {
       return this.planSqlServer(meta, table, col, strategy, rows, retention);
     } else if (norm === 'snowflake') {
       return this.planSnowflake(meta, table, col, strategy, rows, retention);
     } else if (norm.includes('hive') || norm.includes('spark') || norm.includes('databricks')) {
       return this.planHive(meta, table, col, strategy, rows, retention);
-    } else if (norm === 'mongodb' || norm === 'documentdb') {
+    } else if (norm === 'mongodb' || norm === 'documentdb' || profile.family === 'document') {
       return this.planMongo(meta, table, col, strategy, rows, retention);
-    } else if (norm === 'cassandra' || norm === 'scylladb') {
+    } else if (norm === 'cassandra' || norm === 'scylladb' || profile.family === 'wide_column') {
       return this.planCassandra(meta, table, col, strategy, rows, retention);
-    } else {
-      // Default: PostgreSQL
+    } else if (profile.isPostgresFamily) {
       return this.planPostgres(meta, table, col, strategy, rows, retention);
+    } else {
+      return this.planGeneric(profile, meta, table, col, strategy, rows, retention);
     }
   }
 
@@ -834,6 +845,208 @@ CREATE VIEW ${table}_all AS
       ],
       expertGuidelines: [
         'SQLite lacks native declarative partitioning; query individual slice tables directly or use UNION ALL views with pushdown filters.',
+      ],
+    };
+  }
+
+  private planInflux(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- InfluxDB Retention Policy & Shard Group Duration Architecture
+-- 1. Create Retention Policy with automated shard grouping
+CREATE RETENTION POLICY "${table}_retention_${retention}m" ON "production_db"
+    DURATION ${retention * 30}d
+    REPLICATION 1
+    SHARD DURATION 7d
+    DEFAULT;
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'InfluxDB Shard Group & Retention Policy Lifecycle',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- InfluxDB automatically drops shard groups past the retention policy duration.\n-- Inspect shard groups:\nSHOW SHARD GROUPS;`,
+      pruningSimulation: {
+        sampleQuery: `SELECT mean("value") FROM "${table}" WHERE time >= now() - 7d GROUP BY time(1h) fill(none);`,
+        partitionsScanned: '1 active 7-day shard group',
+        totalPartitions: retention * 4,
+        speedupFactor: 'Shard Group time-index pruning',
+        explanation: 'InfluxDB Time-Structured Merge Tree (TSM) skips shard groups whose [startTime, endTime] do not intersect query range.',
+      },
+      shardDistribution: [
+        { shardName: 'shard_group_curr', rangeOrHash: 'Current 7-day shard group', estimatedRows: `${(rows / 4 / 1000000).toFixed(1)}M points`, estimatedSizeGb: '0.8 GB (TSM)' },
+      ],
+      expertGuidelines: [
+        'Set SHARD DURATION appropriately: 1 day for high-write loads (>100k pts/sec), 7 days for medium workloads.',
+        'InfluxDB drops expired shard groups with zero I/O overhead compared to point-by-point deletion.',
+      ],
+    };
+  }
+
+  private planDb2(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- IBM DB2 Range Partitioning (Table Partitioning)
+CREATE TABLE ${table} (
+    id BIGINT NOT NULL GENERATED ALWAYS AS IDENTITY,
+    tenant_id INT NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload CLOB,
+    ${col} TIMESTAMP NOT NULL,
+    CONSTRAINT pk_${table} PRIMARY KEY (id, ${col})
+)
+PARTITION BY RANGE (${col}) (
+    STARTING FROM ('2026-10-01-00.00.00.000000')
+    ENDING AT ('2026-12-31-23.59.59.999999') EVERY (1 MONTH)
+);
+
+CREATE INDEX idx_${table}_tenant ON ${table}(tenant_id, ${col}) PARTITIONED;
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'IBM DB2 Range Partitioning Architecture',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- IBM DB2 Partition Maintenance via ALTER TABLE ATTACH/DETACH PARTITION:\nALTER TABLE ${table} DETACH PARTITION part_old INTO TABLE ${table}_archive;\nRUNSTATS ON TABLE ${table} AND INDEXES ALL;`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table} WHERE ${col} BETWEEN '2026-10-01-00.00.00' AND '2026-10-31-23.59.59';`,
+        partitionsScanned: '1 partition data slice',
+        totalPartitions: 12,
+        speedupFactor: 'Data partition elimination in DB2 SQL optimizer',
+        explanation: 'DB2 compiler uses range predicates to route I/O strictly to matching data partition blocks.',
+      },
+      shardDistribution: [
+        { shardName: 'PART_2026_10', rangeOrHash: '2026-10-01 to 2026-10-31', estimatedRows: `${(rows / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '2.5 GB' },
+      ],
+      expertGuidelines: [
+        'Use DETACH PARTITION to instantly roll off cold data without locking the entire table.',
+        'Use PARTITIONED indexes for fast individual partition maintenance.',
+      ],
+    };
+  }
+
+  private planSapHana(meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- SAP HANA Column Store Table Partitioning
+CREATE COLUMN TABLE ${table} (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY,
+    tenant_id INT NOT NULL,
+    event_type NVARCHAR(50) NOT NULL,
+    payload NCLOB,
+    ${col} SECONDDATE NOT NULL,
+    PRIMARY KEY (id, ${col})
+)
+PARTITION BY RANGE (${col}) (
+    PARTITION '2026-10-01' <= VALUES < '2026-11-01',
+    PARTITION '2026-11-01' <= VALUES < '2026-12-01',
+    PARTITION '2026-12-01' <= VALUES < '2027-01-01',
+    PARTITION OTHERS
+);
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: 'SAP HANA Column Store Range Partitioning',
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- SAP HANA Partition Pruning & Compression Maintenance:\nALTER TABLE ${table} DROP PARTITION '2025-10-01' <= VALUES < '2025-11-01';\nUPDATE "${table}" MERGE DELTA INDEX;`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table} WHERE ${col} >= '2026-10-01' AND ${col} < '2026-11-01';`,
+        partitionsScanned: '1 in-memory column partition',
+        totalPartitions: 12,
+        speedupFactor: 'HANA In-Memory Partition Pruning',
+        explanation: 'SAP HANA query engine prunes non-matching partition IDs during execution plan generation.',
+      },
+      shardDistribution: [
+        { shardName: 'PART_202610', rangeOrHash: '2026-10-01 to 2026-10-31', estimatedRows: `${(rows / 1000000).toFixed(1)}M rows`, estimatedSizeGb: '1.8 GB In-Memory' },
+      ],
+      expertGuidelines: [
+        'Partitioning in SAP HANA allows parallel multi-core scans across partitions and overcomes the 2-billion row limit per column store table.',
+        'Always include partition columns in primary key definitions.',
+      ],
+    };
+  }
+
+  private planGeneric(profile: any, meta: any, table: string, col: string, strategy: string, rows: number, retention: number): PartitionResult {
+    const ddl = `-- Generic ANSI SQL Range Partitioning Architecture for ${meta.name}
+CREATE TABLE ${table} (
+    id BIGINT NOT NULL,
+    tenant_id INT NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload VARCHAR(2048),
+    ${col} TIMESTAMP NOT NULL,
+    PRIMARY KEY (id, ${col})
+)
+PARTITION BY RANGE (${col}) (
+    PARTITION p_2026_10 VALUES LESS THAN ('2026-11-01'),
+    PARTITION p_2026_11 VALUES LESS THAN ('2026-12-01'),
+    PARTITION p_2026_12 VALUES LESS THAN ('2027-01-01')
+);
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: `${meta.name} Range Partitioning Architecture (Generic)`,
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: ddl,
+      maintenanceAutomation: `-- Maintenance Automation for ${meta.name}:\n-- Drop expired partition slices to prune historical data:\nALTER TABLE ${table} DROP PARTITION p_old;\n-- Gather optimizer statistics:\n${profile.maintenance.statsCommand(table)};`,
+      pruningSimulation: {
+        sampleQuery: `SELECT * FROM ${table} WHERE ${col} >= '2026-10-01' AND ${col} < '2026-11-01';`,
+        partitionsScanned: '1 partition slice (Targeted scan)',
+        totalPartitions: 12,
+        speedupFactor: 'Optimizer partition pruning',
+        explanation: `Optimizer prunes non-matching partition segments based on the range predicate on ${col}.`,
+      },
+      shardDistribution: [
+        { shardName: 'p_2026_10', rangeOrHash: '2026-10-01 to 2026-10-31', estimatedRows: `${(rows / 1000000).toFixed(1)}M rows`, estimatedSizeGb: `${+((rows * 200) / (1024 * 1024 * 1024)).toFixed(2)} GB` },
+      ],
+      expertGuidelines: [
+        `Ensure query predicates include the partitioning column (${col}) to leverage partition pruning.`,
+        `Review vendor documentation for ${meta.name} specific partitioning DDL syntax and lifecycle management.`,
+      ],
+    };
+  }
+
+  private planUnsupported(profile: any, meta: any, table: string, col: string, strategy: string): PartitionResult {
+    const concept = profile.family === 'embedded'
+      ? `${meta.name} is a serverless/embedded single-file database engine that does not support server-side table partitioning.`
+      : profile.family === 'key_value'
+      ? `${meta.name} is an in-memory key-value data store. Data distribution is handled via cluster sharding/hash slots rather than relational table partitioning.`
+      : profile.family === 'graph'
+      ? `${meta.name} is a graph database. Nodes and relationships are distributed across label indexes and cluster fabric rather than table partitions.`
+      : profile.family === 'vector'
+      ? `${meta.name} is a specialized vector database. Data organization is managed via vector index segments and namespaces rather than SQL partitioning.`
+      : `${meta.name} does not use traditional table partitioning.`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      strategy,
+      strategyTitle: `${meta.name} Partitioning Architecture (Not Applicable)`,
+      tableName: table,
+      partitionColumn: col,
+      partitionDdl: `-- Table partitioning is not supported natively in ${meta.name}.\n-- Equivalent architectural pattern:\n-- ${concept}`,
+      maintenanceAutomation: `-- Not applicable for ${meta.name}.\n-- Maintenance is handled via storage compaction and engine-specific retention policies.`,
+      pruningSimulation: {
+        sampleQuery: `-- Native partition pruning query not applicable for ${meta.name}`,
+        partitionsScanned: 'N/A',
+        totalPartitions: 0,
+        speedupFactor: 'N/A',
+        explanation: concept,
+      },
+      shardDistribution: [],
+      expertGuidelines: [
+        `${meta.name} does not support declarative SQL table partitioning.`,
+        `Refer to ${meta.name} documentation for native data lifecycle and storage management patterns.`,
       ],
     };
   }

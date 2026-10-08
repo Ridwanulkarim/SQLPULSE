@@ -1,3 +1,6 @@
+import { getEngineMetadata } from '../types/db-catalog.data';
+import { getEngineProfile } from '../types/engine-profiles';
+
 export interface ChaosNodeStatus {
   name: string;
   role: 'primary' | 'standby' | 'promoted_leader' | 'isolated' | 'crashed' | 'witness';
@@ -52,10 +55,13 @@ function resolveEngineDetails(rawEngine: string): {
   consensusProtocol: string;
   primaryPrefix: string;
   standbyPrefix: string;
+  isPostgresFamily: boolean;
 } {
-  const norm = (rawEngine || 'postgres').toLowerCase().trim();
+  const norm = (rawEngine || 'postgresql').toLowerCase().trim();
+  const profile = getEngineProfile(rawEngine || 'postgresql');
+  const meta = getEngineMetadata(rawEngine || 'postgresql');
 
-  if (norm.includes('mysql') || norm.includes('maria') || norm.includes('tidb') || norm.includes('percona')) {
+  if (norm.includes('mysql') || norm.includes('maria') || norm.includes('tidb') || norm.includes('percona') || profile.family === 'mysql') {
     return {
       family: 'mysql',
       name: 'MySQL / MariaDB',
@@ -65,9 +71,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Group Replication (Paxos)',
       primaryPrefix: 'mysql-writer-az1',
       standbyPrefix: 'mysql-reader-az2',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('oracle') || norm.includes('db2')) {
+  if (norm.includes('oracle') || profile.family === 'oracle') {
     return {
       family: 'oracle',
       name: 'Oracle Database',
@@ -77,9 +84,36 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Observer Quorum',
       primaryPrefix: 'oracle-prim-az1',
       standbyPrefix: 'oracle-stby-az2',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('sqlserver') || norm.includes('mssql') || norm.includes('azure_sql')) {
+  if (norm.includes('db2') || profile.family === 'db2') {
+    return {
+      family: 'db2',
+      name: 'IBM DB2',
+      port: 50000,
+      process: 'db2sysc',
+      failoverManager: 'TSA (Tivoli Storage Automation) / Pacemaker',
+      consensusProtocol: 'HADR Peer State Quorum',
+      primaryPrefix: 'db2-hadr-prim',
+      standbyPrefix: 'db2-hadr-stby',
+      isPostgresFamily: false,
+    };
+  }
+  if (norm.includes('sap_hana') || norm.includes('hana') || profile.family === 'sap_hana') {
+    return {
+      family: 'sap_hana',
+      name: 'SAP HANA',
+      port: 30015,
+      process: 'hdbnameserver',
+      failoverManager: 'SAP HANA System Replication (HSR) + Pacemaker',
+      consensusProtocol: 'HSR Sync Quorum with STONITH',
+      primaryPrefix: 'hana-prim-site1',
+      standbyPrefix: 'hana-sec-site2',
+      isPostgresFamily: false,
+    };
+  }
+  if (norm.includes('sqlserver') || norm.includes('mssql') || norm.includes('azure_sql') || profile.family === 'sqlserver') {
     return {
       family: 'mssql',
       name: 'Microsoft SQL Server',
@@ -89,9 +123,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Majority Node & File Share Witness',
       primaryPrefix: 'sql-ag-prim-01',
       standbyPrefix: 'sql-ag-sec-02',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('mongo') || norm.includes('document')) {
+  if (norm.includes('mongo') || norm.includes('document') || profile.family === 'document') {
     return {
       family: 'mongodb',
       name: 'MongoDB',
@@ -101,9 +136,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'MongoDB v1 Election (Raft-like)',
       primaryPrefix: 'mongo-prim-01',
       standbyPrefix: 'mongo-sec-02',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('redis') || norm.includes('keydb') || norm.includes('dragonfly') || norm.includes('valkey')) {
+  if (norm.includes('redis') || norm.includes('keydb') || norm.includes('dragonfly') || norm.includes('valkey') || profile.family === 'keyvalue') {
     return {
       family: 'redis',
       name: 'Redis',
@@ -113,9 +149,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Sentinel Quorum Majority',
       primaryPrefix: 'redis-master-az1',
       standbyPrefix: 'redis-replica-az2',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('click') || norm.includes('duck') || norm.includes('starrocks') || norm.includes('trino')) {
+  if (norm.includes('click') || norm.includes('starrocks') || norm.includes('trino')) {
     return {
       family: 'clickhouse',
       name: 'ClickHouse',
@@ -125,9 +162,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Keeper Raft Quorum',
       primaryPrefix: 'ch-node1-leader',
       standbyPrefix: 'ch-node2-replica',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('cassandra') || norm.includes('scylla')) {
+  if (norm.includes('cassandra') || norm.includes('scylla') || profile.family === 'wide_column') {
     return {
       family: 'cassandra',
       name: 'Apache Cassandra / ScyllaDB',
@@ -137,9 +175,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Paxos LWT / Peer-to-Peer',
       primaryPrefix: 'cass-node1-rack1',
       standbyPrefix: 'cass-node2-rack2',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('sqlite') || norm.includes('turso') || norm.includes('libsql')) {
+  if (norm.includes('sqlite') || norm.includes('turso') || norm.includes('libsql') || profile.family === 'embedded') {
     return {
       family: 'sqlite',
       name: 'SQLite / Embedded',
@@ -149,9 +188,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Filesystem Shm Mutex',
       primaryPrefix: 'sqlite-writer-proc',
       standbyPrefix: 'sqlite-reader-proc',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('snow') || norm.includes('bigquery') || norm.includes('redshift')) {
+  if (norm.includes('snow') || norm.includes('bigquery') || norm.includes('redshift') || profile.family === 'columnar_olap') {
     return {
       family: 'snowflake',
       name: 'Cloud Data Warehouse (Snowflake)',
@@ -161,9 +201,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Stateless Compute Redundancy',
       primaryPrefix: 'dw-compute-wh-1',
       standbyPrefix: 'dw-compute-wh-2',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('elastic') || norm.includes('opensearch') || norm.includes('solr')) {
+  if (norm.includes('elastic') || norm.includes('opensearch') || norm.includes('solr') || profile.family === 'search') {
     return {
       family: 'elasticsearch',
       name: 'Elasticsearch / OpenSearch',
@@ -173,9 +214,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Raft Cluster State Consensus',
       primaryPrefix: 'es-master-node-01',
       standbyPrefix: 'es-data-node-02',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('milvus') || norm.includes('qdrant') || norm.includes('pinecone') || norm.includes('weaviate')) {
+  if (norm.includes('milvus') || norm.includes('qdrant') || norm.includes('pinecone') || norm.includes('weaviate') || profile.family === 'vector') {
     return {
       family: 'vector',
       name: 'Milvus / Vector Engine',
@@ -185,9 +227,10 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Raft Coordinator Quorum',
       primaryPrefix: 'milvus-coord-primary',
       standbyPrefix: 'milvus-query-node-02',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('neo4j') || norm.includes('memgraph')) {
+  if (norm.includes('neo4j') || norm.includes('memgraph') || profile.family === 'graph') {
     return {
       family: 'neo4j',
       name: 'Neo4j Graph Database',
@@ -197,18 +240,33 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Raft Protocol Consensus',
       primaryPrefix: 'neo4j-core-leader-01',
       standbyPrefix: 'neo4j-core-follower-02',
+      isPostgresFamily: false,
     };
   }
-  if (norm.includes('timescale') || norm.includes('influx')) {
+  if (norm.includes('influx') || profile.family === 'timeseries') {
+    return {
+      family: 'influx',
+      name: 'InfluxDB',
+      port: 8086,
+      process: 'influxd',
+      failoverManager: 'InfluxDB High-Availability Influx-Relay / Cluster',
+      consensusProtocol: 'TSM Ring Quorum',
+      primaryPrefix: 'influx-node-01',
+      standbyPrefix: 'influx-node-02',
+      isPostgresFamily: false,
+    };
+  }
+  if (norm.includes('timescale')) {
     return {
       family: 'timescale',
-      name: 'TimescaleDB / InfluxDB',
+      name: 'TimescaleDB',
       port: 5432,
-      process: 'timescaledb',
-      failoverManager: 'Patroni HA + etcd',
+      process: 'postgres',
+      failoverManager: 'Patroni + etcd',
       consensusProtocol: 'Distributed DCS Raft',
       primaryPrefix: 'ts-writer-01',
       standbyPrefix: 'ts-reader-02',
+      isPostgresFamily: true,
     };
   }
   if (norm.includes('cockroach') || norm.includes('yugabyte')) {
@@ -221,6 +279,7 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'Multi-Raft Consensus per Range',
       primaryPrefix: 'crdb-node-az1',
       standbyPrefix: 'crdb-node-az2',
+      isPostgresFamily: false,
     };
   }
   if (norm.includes('kafka') || norm.includes('redpanda')) {
@@ -233,17 +292,32 @@ function resolveEngineDetails(rawEngine: string): {
       consensusProtocol: 'KRaft Quorum Protocol',
       primaryPrefix: 'kafka-broker-leader-1',
       standbyPrefix: 'kafka-broker-follower-2',
+      isPostgresFamily: false,
+    };
+  }
+  if (profile.isPostgresFamily) {
+    return {
+      family: 'postgres',
+      name: meta.name || 'PostgreSQL',
+      port: 5432,
+      process: 'postgres',
+      failoverManager: 'Patroni + etcd',
+      consensusProtocol: 'Raft Consensus',
+      primaryPrefix: 'pg-primary-node-01',
+      standbyPrefix: 'pg-standby-node-02',
+      isPostgresFamily: true,
     };
   }
   return {
-    family: 'postgres',
-    name: 'PostgreSQL',
-    port: 5432,
-    process: 'postgres',
-    failoverManager: 'Patroni + etcd',
-    consensusProtocol: 'Raft Consensus',
-    primaryPrefix: 'pg-primary-node-01',
-    standbyPrefix: 'pg-standby-node-02',
+    family: 'generic',
+    name: meta.name || 'Database',
+    port: profile.connection.defaultPort || 8080,
+    process: `${meta.id || 'db'}-daemon`,
+    failoverManager: `${meta.name} High-Availability Supervisor`,
+    consensusProtocol: 'Quorum Consensus Protocol',
+    primaryPrefix: `${meta.id || 'node'}-prim-01`,
+    standbyPrefix: `${meta.id || 'node'}-sec-02`,
+    isPostgresFamily: false,
   };
 }
 
@@ -260,6 +334,7 @@ export function simulateChaosScenario(options: {
   const majorityVotes = Math.floor(clusterSize / 2) + 1;
 
   const eng = resolveEngineDetails(rawEngine);
+  const profile = getEngineProfile(options.engine || 'postgresql');
 
   // Helper to generate node statuses for a cluster of size N
   const buildNodes = (overrides: {
@@ -444,7 +519,7 @@ ALTER AVAILABILITY GROUP [AG_PROD] SET (
     REQUIRED_SYNCHRONIZED_SECONDARIES_TO_COMMIT = 1
 );
 `;
-      } else {
+      } else if (eng.isPostgresFamily) {
         mitigationRunbook = `# ==========================================================
 # SRE Runbook: ${eng.name} Split-Brain Network Partition
 # Stack: ${eng.failoverManager} (${eng.consensusProtocol})
@@ -470,6 +545,25 @@ watchdog:
   mode: automatic
   device: /dev/watchdog
   safety_margin: 5
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: ${eng.name} Split-Brain Network Partition Mitigation
+# Stack: ${eng.failoverManager} (${eng.consensusProtocol})
+# ==========================================================
+
+1. [QUORUM ISOLATION] Verify majority partition consensus:
+   Minority partition automatically steps down and rejects write transactions.
+
+2. [FENCING] Fencing supervisor isolates stale primary node:
+   Cluster manager fences partitioned node to guarantee zero diverging writes.
+
+3. [SERVICE DISCOVERY] Client load balancer routes writes strictly to the active majority leader.`;
+
+        recommendedConfigPatch = `# ${eng.name} Split-Brain Fencing Configuration (${profile.memoryParams.configFile})
+cluster.quorum_majority_required = true
+cluster.network_partition_handling = auto-fence-minority
+cluster.split_brain_resolver = strict-majority
 `;
       }
       break;
@@ -588,16 +682,18 @@ tcp-keepalive 60
    Configure gateway / Envoy circuit breaker: max_connections: 500, max_pending_requests: 100.
 
 2. [TERMINATE IDLE SESSIONS] Kill blocking queries holding row locks:
-   ${eng.family === 'postgres' 
+   ${eng.isPostgresFamily 
      ? "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle in transaction' AND state_change < now() - INTERVAL '30 seconds';" 
      : eng.family === 'mysql' 
      ? "KILL CONNECTION (SELECT id FROM information_schema.processlist WHERE time > 30 AND command = 'Sleep');" 
-     : "ALTER SYSTEM DISCONNECT SESSION 'sid,serial#' IMMEDIATE;"}
+     : eng.family === 'oracle'
+     ? "ALTER SYSTEM DISCONNECT SESSION 'sid,serial#' IMMEDIATE;"
+     : `-- Terminate idle blocking client sessions on ${eng.name}`}
 
 3. [CONNECTION POOLING] Enforce transaction-level connection pooling (e.g. PgBouncer / ProxySQL / HikariCP).`;
 
         recommendedConfigPatch = `# ${eng.name} Connection Starvation Protection
-${eng.family === 'postgres' ? `max_connections = 300
+${eng.isPostgresFamily ? `max_connections = 300
 idle_in_transaction_session_timeout = '10000ms'
 statement_timeout = '30000ms'
 tcp_keepalives_idle = 60
@@ -716,9 +812,9 @@ setParameter:
 2. [PARALLEL REPLICATION] Enable multi-threaded replication apply:
    ${eng.family === 'mysql' 
      ? 'SET GLOBAL replica_parallel_workers = 8; SET GLOBAL replica_parallel_type = "LOGICAL_CLOCK";' 
-     : eng.family === 'postgres' 
+     : eng.isPostgresFamily 
      ? "ALTER SYSTEM SET max_parallel_apply_workers_per_subscription = 4;" 
-     : "Tune parallel redo apply processes on standby instance."}
+     : "Tune parallel redo/replica apply workers on standby instance."}
 
 3. [BATCH THROTTLING] Throttle large bulk UPDATE/DELETE operations into batches of 1,000 rows.`;
 
@@ -726,7 +822,7 @@ setParameter:
 ${eng.family === 'mysql' ? `replica_parallel_workers = 8
 replica_parallel_type = LOGICAL_CLOCK
 replica_preserve_commit_order = ON
-max_relay_log_size = 536870912` : eng.family === 'postgres' ? `max_parallel_apply_workers_per_subscription = 4
+max_relay_log_size = 536870912` : eng.isPostgresFamily ? `max_parallel_apply_workers_per_subscription = 4
 max_standby_streaming_delay = 15s
 wal_receiver_timeout = 10s
 hot_standby_feedback = on` : `parallel_apply_workers = 8
@@ -834,19 +930,21 @@ echo "[CHAOS] Disk threshold exceeded. Checking emergency read-only enforcement 
 # ==========================================================
 
 1. [EMERGENCY DISK RECLAIM] Free space on log mount:
-   ${eng.family === 'postgres' 
+   ${eng.isPostgresFamily 
      ? 'pg_archivecleanup /var/lib/postgresql/wal $(ls -t /var/lib/postgresql/wal | head -n 5 | tail -n 1)' 
      : eng.family === 'mysql' 
      ? 'PURGE BINARY LOGS BEFORE NOW() - INTERVAL 1 DAY;' 
-     : 'RMAN> CROSSCHECK ARCHIVELOG ALL; DELETE EXPIRED ARCHIVELOG ALL;'}
+     : eng.family === 'oracle'
+     ? 'RMAN> CROSSCHECK ARCHIVELOG ALL; DELETE EXPIRED ARCHIVELOG ALL;'
+     : `# Purge expired transaction logs past retention threshold on ${eng.name}`}
 
-2. [DROP UNUSED REPLICATION SLOTS] Prevent WAL retention runaway:
-   ${eng.family === 'postgres' ? 'SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE active = false;' : 'Inspect inactive replication handles.'}
+2. [DROP UNUSED REPLICATION SLOTS] Prevent transaction log retention runaway:
+   ${eng.isPostgresFamily ? 'SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE active = false;' : 'Inspect inactive replication handles and consumer groups.'}
 
-3. [STORAGE AUTOSCALING] Enable AWS EBS / Cloud Volume storage autoscaling (Scale up by 25% at 85% utilization).`;
+3. [STORAGE AUTOSCALING] Enable cloud volume storage autoscaling (Scale up by 25% at 85% utilization).`;
 
         recommendedConfigPatch = `# ${eng.name} Disk Space Quota & Auto-Pruning
-${eng.family === 'postgres' ? `wal_keep_size = 2048MB
+${eng.isPostgresFamily ? `wal_keep_size = 2048MB
 max_slot_wal_keep_size = 4096MB
 archive_cleanup_command = 'pg_archivecleanup /var/lib/postgresql/wal %r'
 wal_compression = zstd` : eng.family === 'mysql' ? `binlog_expire_logs_seconds = 259200 # 3 Days
@@ -1022,7 +1120,7 @@ MODIFY REPLICA ON N'NODE_2' WITH (
     FAILOVER_MODE = AUTOMATIC
 );
 `;
-      } else {
+      } else if (eng.isPostgresFamily) {
         mitigationRunbook = `# ==========================================================
 # SRE Runbook: ${eng.name} Primary Crash & Patroni Failover
 # High Availability Stack: ${eng.failoverManager}
@@ -1049,6 +1147,31 @@ wal_keep_size = 4096MB
 hot_standby_feedback = on
 max_standby_streaming_delay = 30s
 restart_after_crash = off
+`;
+      } else {
+        mitigationRunbook = `# ==========================================================
+# SRE Runbook: ${eng.name} Primary Crash & Failover
+# High Availability Stack: ${eng.failoverManager}
+# ==========================================================
+
+1. [HEARTBEAT DETECTION] Cluster supervisor detects primary heartbeat loss:
+   Leader lease expires after timeout threshold.
+
+2. [QUORUM ELECTION] ${eng.consensusProtocol} initiates leader election:
+   Standby node with highest transaction sequence is elected new primary.
+
+3. [PROMOTION] Promote replica to read-write authority:
+   Cluster supervisor updates routing table and accepts incoming client connections.
+
+4. [INGRESS ROUTING] Ingress load balancer / VIP switches active upstream endpoint to ${eng.primaryPrefix}.
+
+5. [REPLICA REINTEGRATION] When former primary node recovers, it syncs state and rejoins cluster as standby.`;
+
+        recommendedConfigPatch = `# ${eng.name} High-Availability Hardening (${profile.memoryParams.configFile})
+cluster.failover_mode = automatic
+cluster.heartbeat_timeout_ms = 3000
+cluster.election_timeout_ms = 5000
+cluster.sync_mode = ${syncMode}
 `;
       }
       break;

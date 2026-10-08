@@ -1,5 +1,6 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
-import { EngineFamily, resolveEngineFamily } from './sql-utils';
+import { EngineFamily, resolveEngineFamily, sanitizeSqlIdentifier } from './sql-utils';
+import { getEngineProfile } from '../types/engine-profiles';
 
 export interface SecurityRbacRequest {
   engine: string;
@@ -42,9 +43,11 @@ export interface SecurityRbacResult {
 export class SecurityRbacAnalyzer {
   public analyze(req: SecurityRbacRequest): SecurityRbacResult {
     const meta = getEngineMetadata(req.engine);
+    const profile = getEngineProfile(req.engine);
     const family = resolveEngineFamily(req.engine);
-    const table = req.tableName || 'customers';
-    const tenantCol = req.tenantColumn || 'tenant_id';
+    const table = sanitizeSqlIdentifier(req.tableName, 'customers');
+    const tenantCol = sanitizeSqlIdentifier(req.tenantColumn, 'tenant_id');
+    const isPg = profile.isPostgresFamily;
 
     let roles: RbacRole[] = [];
     let rlsPolicyScript = '';
@@ -52,7 +55,119 @@ export class SecurityRbacAnalyzer {
     let tlsHardeningConfig = '';
     let expertRecommendations: string[] = [];
 
-    switch (family) {
+    if (isPg) {
+      roles = [
+        {
+          name: 'app_service_rw',
+          scope: 'Application Backend Microservice',
+          privileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+          description: 'Least-privilege operational role. Cannot alter schemas or truncate tables.',
+          ddlGrant: `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_service_rw') THEN
+    CREATE ROLE app_service_rw NOINHERIT;
+  END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO app_service_rw;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service_rw;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service_rw;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_service_rw;
+
+CREATE USER api_backend WITH PASSWORD 'BackendSecureSecret!2026' IN ROLE app_service_rw;`,
+        },
+        {
+          name: 'analytics_ro',
+          scope: 'BI Analyst & Reporting Dashboards',
+          privileges: ['SELECT'],
+          description: 'Read-only access with default statement timeout (30s) to prevent locking.',
+          ddlGrant: `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'analytics_ro') THEN
+    CREATE ROLE analytics_ro NOINHERIT;
+  END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO analytics_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_ro;
+ALTER ROLE analytics_ro SET statement_timeout = '30000ms';
+ALTER ROLE analytics_ro SET idle_in_transaction_session_timeout = '10000ms';
+
+CREATE USER bi_reporter WITH PASSWORD 'BiAnalystPasscode!2026' IN ROLE analytics_ro;`,
+        },
+        {
+          name: 'schema_migrator',
+          scope: 'CI/CD Pipeline DDL Runner',
+          privileges: ['ALL PRIVILEGES'],
+          description: 'Elevated DDL role used exclusively during automated GitHub Actions migration jobs.',
+          ddlGrant: `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'schema_migrator') THEN
+    CREATE ROLE schema_migrator CREATEDB CREATEROLE;
+  END IF;
+END $$;
+
+GRANT ALL PRIVILEGES ON DATABASE production_db TO schema_migrator;`,
+        },
+      ];
+
+      rlsPolicyScript = `-- ${profile.name} Native Row-Level Security (RLS) Tenant Isolation
+-- 1. Enable RLS on target table
+ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;
+
+-- 2. Create Isolation Policy for Multi-Tenant Application Context
+DROP POLICY IF EXISTS tenant_isolation_policy ON "${table}";
+CREATE POLICY tenant_isolation_policy ON "${table}"
+    FOR ALL
+    TO app_service_rw
+    USING (${tenantCol} = NULLIF(current_setting('app.current_tenant_id', true), '')::UUID)
+    WITH CHECK (${tenantCol} = NULLIF(current_setting('app.current_tenant_id', true), '')::UUID);
+
+-- 3. Superuser/Admin Bypass Policy (Optional for audit/backup)
+CREATE POLICY admin_bypass_policy ON "${table}"
+    FOR ALL
+    TO schema_migrator
+    USING (true)
+    WITH CHECK (true);
+`;
+
+      dataMaskingScript = `-- ${profile.name} Dynamic PII Masking via pgcrypto & Masked Views
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Dynamic Masking View for Analytics / Support Teams
+CREATE OR REPLACE VIEW v_${table}_sanitized AS
+SELECT 
+    id,
+    ${tenantCol},
+    REGEXP_REPLACE(email, '^(.)(.*)(@.*)$', '\\1***\\3') AS email_masked,
+    CONCAT('***-***-', RIGHT(phone, 4)) AS phone_masked,
+    '***-**-' || RIGHT(ssn_last4, 4) AS ssn_masked,
+    created_at
+FROM "${table}";
+
+GRANT SELECT ON v_${table}_sanitized TO analytics_ro;
+`;
+
+      tlsHardeningConfig = `# ${profile.name} SSL / TLS 1.3 & Network Hardening (pg_hba.conf & postgresql.conf)
+# postgresql.conf:
+ssl = on
+ssl_ciphers = 'HIGH:!aNULL:!MD5:!3DES:!CAMELLIA:!AES128'
+ssl_prefer_server_ciphers = on
+ssl_min_protocol_version = 'TLSv1.3'
+password_encryption = scram-sha-256
+
+# pg_hba.conf:
+hostssl all             all             0.0.0.0/0               scram-sha-256 clientcert=verify-full
+hostssl replication     replicator      10.0.0.0/8              scram-sha-256`;
+
+      expertRecommendations = [
+        'Always combine `ENABLE ROW LEVEL SECURITY` with `FORCE ROW LEVEL SECURITY` so table owners cannot bypass tenant constraints.',
+        'Never use database superuser accounts for application servers; assign the granular `app_service_rw` role instead.',
+        'Rotate database credentials regularly using a secrets manager.',
+      ];
+    } else {
+      switch (family) {
       case 'mysql': {
         roles = [
           {
@@ -791,7 +906,7 @@ PRAGMA cipher_page_size = 4096;`;
         break;
       }
 
-      case 'postgres':
+      case 'generic':
       default: {
         roles = [
           {
@@ -799,120 +914,65 @@ PRAGMA cipher_page_size = 4096;`;
             scope: 'Application Backend Microservice',
             privileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
             description: 'Least-privilege operational role. Cannot alter schemas or truncate tables.',
-            ddlGrant: `DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_service_rw') THEN
-    CREATE ROLE app_service_rw NOINHERIT;
-  END IF;
-END $$;
-
-GRANT USAGE ON SCHEMA public TO app_service_rw;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service_rw;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service_rw;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_service_rw;
-
-CREATE USER api_backend WITH PASSWORD 'BackendSecureSecret!2026' IN ROLE app_service_rw;`,
+            ddlGrant: `CREATE ROLE app_service_rw;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO app_service_rw;
+CREATE USER api_backend IDENTIFIED BY 'BackendSecureSecret!2026';
+GRANT app_service_rw TO api_backend;`,
           },
           {
             name: 'analytics_ro',
             scope: 'BI Analyst & Reporting Dashboards',
             privileges: ['SELECT'],
-            description: 'Read-only access with default statement timeout (30s) to prevent locking.',
-            ddlGrant: `DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'analytics_ro') THEN
-    CREATE ROLE analytics_ro NOINHERIT;
-  END IF;
-END $$;
-
-GRANT USAGE ON SCHEMA public TO analytics_ro;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_ro;
-ALTER ROLE analytics_ro SET statement_timeout = '30000ms';
-ALTER ROLE analytics_ro SET idle_in_transaction_session_timeout = '10000ms';
-
-CREATE USER bi_reporter WITH PASSWORD 'BiAnalystPasscode!2026' IN ROLE analytics_ro;`,
+            description: 'Read-only access for reporting and analytics.',
+            ddlGrant: `CREATE ROLE analytics_ro;
+GRANT SELECT ON ${table} TO analytics_ro;
+CREATE USER bi_reporter IDENTIFIED BY 'BiAnalystPasscode!2026';
+GRANT analytics_ro TO bi_reporter;`,
           },
           {
             name: 'schema_migrator',
             scope: 'CI/CD Pipeline DDL Runner',
             privileges: ['ALL PRIVILEGES'],
-            description: 'Elevated DDL role used exclusively during automated GitHub Actions migration jobs.',
-            ddlGrant: `DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'schema_migrator') THEN
-    CREATE ROLE schema_migrator CREATEDB CREATEROLE;
-  END IF;
-END $$;
-
-GRANT ALL PRIVILEGES ON DATABASE production_db TO schema_migrator;`,
+            description: 'Elevated DDL role used exclusively during automated migration jobs.',
+            ddlGrant: `CREATE ROLE schema_migrator;
+GRANT ALL PRIVILEGES ON ${table} TO schema_migrator;`,
           },
         ];
 
-        rlsPolicyScript = `-- ${meta.name} Native Row-Level Security (RLS) Tenant Isolation
--- 1. Enable RLS on target table
-ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
-
--- 2. Create Isolation Policy for Multi-Tenant Application Context
-DROP POLICY IF EXISTS tenant_isolation_policy ON ${table};
-CREATE POLICY tenant_isolation_policy ON ${table}
-    FOR ALL
-    TO app_service_rw
-    USING (${tenantCol} = NULLIF(current_setting('app.current_tenant_id', true), '')::UUID)
-    WITH CHECK (${tenantCol} = NULLIF(current_setting('app.current_tenant_id', true), '')::UUID);
-
--- 3. Superuser/Admin Bypass Policy (Optional for audit/backup)
-CREATE POLICY admin_bypass_policy ON ${table}
-    FOR ALL
-    TO schema_migrator
-    USING (true)
-    WITH CHECK (true);
-
--- Usage Example in App Connection:
--- BEGIN;
--- SET LOCAL app.current_tenant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
--- SELECT * FROM ${table}; -- Automatically scoped to tenant!
--- COMMIT;
+        rlsPolicyScript = `-- ${meta.name} Multi-Tenant Isolation Strategy
+-- Implement tenant filter predicate via view-layer abstraction:
+CREATE VIEW v_${table}_scoped AS
+SELECT * FROM ${table}
+WHERE ${tenantCol} = CURRENT_USER;
 `;
 
-        dataMaskingScript = `-- ${meta.name} Dynamic PII Masking via pgcrypto & Masked Views
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- Dynamic Masking View for Analytics / Support Teams
-CREATE OR REPLACE VIEW v_${table}_sanitized AS
+        dataMaskingScript = `-- ${meta.name} Data Masking View for Non-Privileged Roles
+CREATE VIEW v_${table}_sanitized AS
 SELECT 
     id,
     ${tenantCol},
-    REGEXP_REPLACE(email, '^(.)(.*)(@.*)$', '\\1***\\3') AS email_masked,
-    CONCAT('***-***-', RIGHT(phone, 4)) AS phone_masked,
-    '***-**-' || RIGHT(ssn_last4, 4) AS ssn_masked,
+    '***' AS email_masked,
+    '***' AS phone_masked,
     created_at
 FROM ${table};
 
 GRANT SELECT ON v_${table}_sanitized TO analytics_ro;
 `;
 
-        tlsHardeningConfig = `# ${meta.name} SSL / TLS 1.3 & Network Hardening (pg_hba.conf & postgresql.conf)
-# postgresql.conf:
+        tlsHardeningConfig = `# ${meta.name} TLS / SSL Transport Security
 ssl = on
-ssl_ciphers = 'HIGH:!aNULL:!MD5:!3DES:!CAMELLIA:!AES128'
-ssl_prefer_server_ciphers = on
-ssl_min_protocol_version = 'TLSv1.3'
-password_encryption = scram-sha-256
-
-# pg_hba.conf (Enforce TLS and SCRAM-SHA-256):
-# TYPE  DATABASE        USER            ADDRESS                 METHOD
-hostssl all             all             0.0.0.0/0               scram-sha-256 clientcert=verify-full
-hostssl replication     replicator      10.0.0.0/8              scram-sha-256`;
+tls_min_version = 1.3
+require_secure_transport = on`;
 
         expertRecommendations = [
-          'Always combine `ENABLE ROW LEVEL SECURITY` with `FORCE ROW LEVEL SECURITY` so table owners cannot inadvertently bypass tenant constraints.',
-          'Never use database superuser accounts (`postgres` / `root`) for application web servers; assign the granular `app_service_rw` role instead.',
-          'Rotate database credentials regularly using AWS Secrets Manager or HashiCorp Vault with dynamic short-lived credentials.',
+          `Enforce least-privilege role assignment in ${meta.name}.`,
+          'Never use database administrative superuser accounts for application microservices.',
+          'Rotate database credentials regularly using a centralized secrets manager.',
         ];
         break;
       }
     }
+  }
 
     const auditItems: SecurityAuditItem[] = [
       {

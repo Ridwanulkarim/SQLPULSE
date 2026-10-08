@@ -1,5 +1,6 @@
 import { DATABASE_CATALOG, getEngineMetadata } from '../types/db-catalog.data';
-import { resolveEngineFamily, EngineFamily } from './sql-utils';
+import { getEngineProfile, resolveEngineFamily } from '../types/engine-profiles';
+import { EngineFamily } from '../types/engine-profile';
 
 export interface DisasterRecoveryRequest {
   engine: string;
@@ -46,6 +47,7 @@ export interface DisasterRecoveryResult {
 export class DisasterRecoveryCalculator {
   public calculate(req: DisasterRecoveryRequest): DisasterRecoveryResult {
     const meta = getEngineMetadata(req.engine);
+    const profile = getEngineProfile(req.engine);
     const family = resolveEngineFamily(req.engine);
     const sizeGb = Math.max(1, req.dbSizeGb);
     const dailyChange = Math.max(1, Math.min(100, req.dailyChangePercent));
@@ -56,7 +58,7 @@ export class DisasterRecoveryCalculator {
 
     let theoreticalRpo = '< 15 seconds';
     let rpoClass: 'Zero Data Loss' | 'Near Real-Time (<1m)' | 'Standard (<15m)' | 'High Risk (24h)' = 'Near Real-Time (<1m)';
-    let rpoExplanation = 'Continuous WAL/Binlog/Redo streaming archives write transactions to durable storage immediately after commit.';
+    let rpoExplanation = `Continuous ${profile.backup.walOrLogName} streaming archives write transactions to durable storage immediately after commit.`;
 
     if (strategy === 'multi_region_active_passive') {
       theoreticalRpo = '0 seconds (Synchronous / Semi-Sync)';
@@ -65,7 +67,7 @@ export class DisasterRecoveryCalculator {
     } else if (strategy === 'daily_full_plus_wal_cdc') {
       theoreticalRpo = '< 15 seconds';
       rpoClass = 'Near Real-Time (<1m)';
-      rpoExplanation = 'Transaction log streaming pushes log segments to cloud storage every 15 seconds.';
+      rpoExplanation = `${profile.backup.walOrLogName} streaming pushes log segments to cloud storage every 15 seconds.`;
     } else if (strategy === 'hourly_snapshots') {
       theoreticalRpo = '< 60 minutes';
       rpoClass = 'Standard (<15m)';
@@ -78,54 +80,54 @@ export class DisasterRecoveryCalculator {
 
     const netMbSec = netMbps / 8;
     const effectiveTransferMbSec = Math.min(diskMbSec, netMbSec);
-    const compressedSizeGb = +(sizeGb * 0.45).toFixed(2); 
-    const downloadMinutes = +( (compressedSizeGb * 1024) / (effectiveTransferMbSec * 60) ).toFixed(1);
-    const diskDecompressMinutes = +( (sizeGb * 1024) / (diskMbSec * 60) ).toFixed(1);
-    const dailyChangeGb = (sizeGb * (dailyChange / 100));
-    const walReplayMinutes = +( (dailyChangeGb * 1024 * 0.5) / (diskMbSec * 60) + 2 ).toFixed(1);
-    const verificationMinutes = +( Math.max(3, sizeGb * 0.02) ).toFixed(1);
+    const compressedSizeGb = +(sizeGb * 0.45).toFixed(2);
+    const downloadMinutes = +((compressedSizeGb * 1024) / (effectiveTransferMbSec * 60)).toFixed(1);
+    const diskDecompressMinutes = +((sizeGb * 1024) / (diskMbSec * 60)).toFixed(1);
+    const dailyChangeGb = sizeGb * (dailyChange / 100);
+    const walReplayMinutes = +((dailyChangeGb * 1024 * 0.5) / (diskMbSec * 60) + 2).toFixed(1);
+    const verificationMinutes = +(Math.max(3, sizeGb * 0.02)).toFixed(1);
 
     const stages: RtoStage[] = [
       {
         stage: '1. Cloud Archive Fetch & Download',
         durationMinutes: downloadMinutes,
-        description: `Downloading ${compressedSizeGb} GB compressed baseline image at ${effectiveTransferMbSec.toFixed(0)} MB/s.`,
+        description: `Download compressed backup (${compressedSizeGb} GB) over ${netMbps} Mbps network bandwidth.`,
       },
       {
-        stage: '2. Disk Decompression & Block Layout',
+        stage: '2. Decompression & Disk Placement',
         durationMinutes: diskDecompressMinutes,
-        description: `Decompressing Zstandard archive onto target ${diskMbSec} MB/s NVMe storage.`,
+        description: `Unpack physical data files into database volume at ${diskMbSec} MB/s sequential write speed.`,
       },
       {
-        stage: '3. Transaction Log Replay & PITR',
+        stage: `3. ${profile.backup.walOrLogName} Redo & Crash Recovery Replay`,
         durationMinutes: walReplayMinutes,
-        description: `Applying delta changes to advance engine state to target recovery timestamp.`,
+        description: `Apply delta log journals (${dailyChangeGb.toFixed(1)} GB daily churn) up to desired recovery target.`,
       },
       {
-        stage: '4. Integrity Verification & Read-Write Warmup',
+        stage: '4. Database Engine Startup & Sanity Drill',
         durationMinutes: verificationMinutes,
-        description: `Checking table checksums, verifying indexes, and warming buffer pool before switching traffic.`,
+        description: `Boot daemon, rebuild memory structures, execute consistency checks and warm buffers.`,
       },
     ];
 
-    const totalEstimatedRtoMinutes = +(downloadMinutes + diskDecompressMinutes + walReplayMinutes + verificationMinutes).toFixed(1);
-    const formattedRto = totalEstimatedRtoMinutes >= 60 
-      ? `${Math.floor(totalEstimatedRtoMinutes / 60)}h ${Math.round(totalEstimatedRtoMinutes % 60)}m` 
-      : `${totalEstimatedRtoMinutes} mins`;
+    const totalMinutes = +(downloadMinutes + diskDecompressMinutes + walReplayMinutes + verificationMinutes).toFixed(1);
+    const hours = Math.floor(totalMinutes / 60);
+    const remainingMins = Math.round(totalMinutes % 60);
+    const formattedRto = hours > 0 ? `${hours} hr ${remainingMins} min` : `${remainingMins} minutes`;
 
-    const raw30DayRetentionGb = Math.round((sizeGb * 4) + (dailyChangeGb * 30));
-    const compressed30DayRetentionGb = Math.round(raw30DayRetentionGb * 0.40);
-    const costPerGbMonth = cloud === 'aws_s3' ? 0.023 : cloud === 'gcp_gcs' ? 0.020 : cloud === 'azure_blob' ? 0.018 : 0.010;
-    const estimatedMonthlyStorageCostUsd = +(compressed30DayRetentionGb * costPerGbMonth).toFixed(2);
+    const raw30DayGb = +(sizeGb * 4 + dailyChangeGb * 30).toFixed(1);
+    const comp30DayGb = +(raw30DayGb * 0.42).toFixed(1);
+    const pricePerGb = cloud === 'aws_s3' ? 0.023 : cloud === 'azure_blob' ? 0.018 : cloud === 'gcp_gcs' ? 0.020 : 0.010;
+    const estCost = +(comp30DayGb * pricePerGb).toFixed(2);
 
-    const backupScriptBash = this.generateBackupScript(meta, family, cloud, sizeGb);
-    const cronDefinition = this.generateCron(meta);
-    const restoreRunbookMarkdown = this.generateRestoreRunbook(meta, family, sizeGb);
-    const verificationCommand = this.generateVerificationCommand(meta, family);
+    const backupScriptBash = this.generateBackupScript(profile, sizeGb, cloud);
+    const cronDef = this.generateCron(meta);
+    const restoreRunbook = this.generateRestoreRunbook(profile, sizeGb);
+    const verificationCmd = this.generateVerificationCommand(profile);
 
     return {
-      engine: meta.id,
-      engineName: meta.name,
+      engine: req.engine,
+      engineName: profile.name,
       strategy,
       rpo: {
         theoreticalRpo,
@@ -133,70 +135,94 @@ export class DisasterRecoveryCalculator {
         explanation: rpoExplanation,
       },
       rto: {
-        totalEstimatedRtoMinutes,
+        totalEstimatedRtoMinutes: totalMinutes,
         formattedRto,
         stages,
       },
       storageEconomics: {
-        raw30DayRetentionGb,
-        compressed30DayRetentionGb,
-        compressionRatio: '2.5:1 (Zstandard Level 3)',
-        estimatedMonthlyStorageCostUsd,
+        raw30DayRetentionGb: raw30DayGb,
+        compressed30DayRetentionGb: comp30DayGb,
+        compressionRatio: '2.38x (Zstandard Level 3)',
+        estimatedMonthlyStorageCostUsd: estCost,
       },
       backupScriptBash,
-      cronDefinition,
-      restoreRunbookMarkdown,
-      verificationCommand,
+      cronDefinition: cronDef,
+      restoreRunbookMarkdown: restoreRunbook,
+      verificationCommand: verificationCmd,
     };
   }
 
-  private generateBackupScript(meta: any, family: EngineFamily, cloud: string, sizeGb: number): string {
-    const s3Path = cloud === 'aws_s3' ? 's3://production-db-backups' : cloud === 'gcp_gcs' ? 'gs://production-db-backups' : 'az://production-db-backups';
-    const uploadCmd = cloud === 'aws_s3' ? 'aws s3 cp' : cloud === 'gcp_gcs' ? 'gcloud storage cp' : 'azcopy copy';
+  private generateBackupScript(profile: any, sizeGb: number, cloud: string): string {
+    const s3Path = cloud === 'aws_s3' ? 's3://production-db-backups' : cloud === 'gcp_gcs' ? 'gs://production-db-backups' : 'https://storage.azure.blob/backups';
+    const uploadCmd = cloud === 'aws_s3' ? 'aws s3 cp' : cloud === 'gcp_gcs' ? 'gsutil cp' : 'azcopy copy';
+    const isPg = profile.isPostgresFamily;
+    const family = profile.family as EngineFamily;
 
-    switch (family) {
-      case 'mysql':
-        return `#!/usr/bin/env bash
+    if (isPg) {
+      return `#!/usr/bin/env bash
 # =========================================================================
-# SQLPulse Production Disaster Recovery: MySQL (Percona XtraBackup)
+# SQLPulse Production Disaster Recovery: PostgreSQL Family (${profile.name})
 # Retention: 30 Days | Destination: ${s3Path}
 # =========================================================================
 set -euo pipefail
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_DIR="/var/backups/mysql/\${TIMESTAMP}"
-ARCHIVE_NAME="xtrabackup_\${TIMESTAMP}.xbstream.zst"
+BACKUP_DIR="/var/backups/${profile.engineId}/\${TIMESTAMP}"
+ARCHIVE_NAME="basebackup_\${TIMESTAMP}.tar.zst"
 
 mkdir -p "\${BACKUP_DIR}"
 
-# Run non-blocking hot physical backup
-xtrabackup \\
-  --backup \\
-  --user=backup_user \\
-  --password="\${MYSQL_BACKUP_PASS}" \\
-  --stream=xbstream \\
-  --parallel=4 \\
-  | zstd -3 -T0 > "\${BACKUP_DIR}/\${ARCHIVE_NAME}"
+pg_basebackup \\
+  --host=127.0.0.1 \\
+  --port=${profile.connection.defaultPort || 5432} \\
+  --username=postgres \\
+  --format=tar \\
+  --wal-method=stream \\
+  --checkpoint=fast \\
+  --label="sqlpulse_daily_\${TIMESTAMP}" \\
+  | zstd -3 -T0 -o "\${BACKUP_DIR}/\${ARCHIVE_NAME}"
 
-# Upload to Cloud
-${uploadCmd} "\${BACKUP_DIR}/\${ARCHIVE_NAME}" "${s3Path}/mysql/\${ARCHIVE_NAME}"
-echo "MySQL Backup Completed successfully."
+${uploadCmd} "\${BACKUP_DIR}/\${ARCHIVE_NAME}" "${s3Path}/${profile.engineId}/\${ARCHIVE_NAME}"
+echo "${profile.name} Backup Succeeded!"
+`;
+    }
+
+    switch (family) {
+      case 'mysql':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: MySQL Family (${profile.name})
+# Retention: 30 Days | Destination: ${s3Path}
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="/var/backups/mysql/\${TIMESTAMP}"
+mkdir -p "\${BACKUP_DIR}"
+
+xtrabackup --backup \\
+  --target-dir="\${BACKUP_DIR}" \\
+  --host=127.0.0.1 \\
+  --user=backup_operator \\
+  --password="\${MYSQL_BACKUP_PASSWORD}" \\
+  --parallel=4 \\
+  --compress \\
+  --compress-threads=4
+
+${uploadCmd} "\${BACKUP_DIR}" "${s3Path}/mysql/\${TIMESTAMP}/" --recursive
+echo "MySQL physical backup uploaded successfully."
 `;
 
       case 'oracle':
         return `#!/usr/bin/env bash
 # =========================================================================
-# SQLPulse Production Disaster Recovery: Oracle Database (RMAN)
-# Destination: ${s3Path}
+# SQLPulse Production Disaster Recovery: Oracle Database (${profile.name})
+# Retention: 30 Days | Destination: ${s3Path}
 # =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+export ORACLE_SID=ORCLCDB
 
 rman target / <<EOF
-CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 30 DAYS;
-CONFIGURE CONTROLFILE AUTOBACKUP ON;
-CONFIGURE DEVICE TYPE DISK PARALLELISM 4 BACKUP TYPE TO COMPRESSED BACKUPSET;
-
 RUN {
   ALLOCATE CHANNEL ch1 DEVICE TYPE DISK FORMAT '/var/backups/oracle/%d_%T_%U.bkp';
   ALLOCATE CHANNEL ch2 DEVICE TYPE DISK FORMAT '/var/backups/oracle/%d_%T_%U.bkp';
@@ -212,7 +238,7 @@ echo "Oracle RMAN backup uploaded to cloud."
       case 'sqlserver':
         return `#!/usr/bin/env bash
 # =========================================================================
-# SQLPulse Production Disaster Recovery: Microsoft SQL Server
+# SQLPulse Production Disaster Recovery: Microsoft SQL Server (${profile.name})
 # Destination: ${s3Path}
 # =========================================================================
 set -euo pipefail
@@ -225,13 +251,54 @@ TO DISK = '\${BACKUP_FILE}'
 WITH COMPRESSION, CHECKSUM, STATS = 10;
 "
 
-# Upload to Cloud
 ${uploadCmd} "\${BACKUP_FILE}" "${s3Path}/sqlserver/"
 echo "SQL Server compressed full backup uploaded successfully."
 `;
 
-      case 'snowflake':
+      case 'db2':
         return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: IBM DB2 (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="/var/backups/db2/\${TIMESTAMP}"
+mkdir -p "\${BACKUP_DIR}"
+
+db2 BACKUP DATABASE production_db ONLINE TO "\${BACKUP_DIR}" WITH 4 BUFFERS BUFFER 1024 PARALLELISM 2 COMPRESS;
+${uploadCmd} "\${BACKUP_DIR}" "${s3Path}/db2/\${TIMESTAMP}/" --recursive
+echo "IBM DB2 online backup uploaded."
+`;
+
+      case 'sap_hana':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: SAP HANA (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+hdbsql -U SYSTEM -i 00 "BACKUP DATA FOR production_db USING FILE ('/var/backups/hana/hana_full_\${TIMESTAMP}') ASYNCHRONOUS;"
+${uploadCmd} "/var/backups/hana/hana_full_\${TIMESTAMP}" "${s3Path}/hana/"
+echo "SAP HANA backup completed and transferred."
+`;
+
+      case 'embedded':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: SQLite / Embedded (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+
+sqlite3 /var/lib/sqlite/prod.db ".backup /var/backups/sqlite/db_\${TIMESTAMP}.sqlite"
+zstd -3 /var/backups/sqlite/db_\${TIMESTAMP}.sqlite -o /var/backups/sqlite/db_\${TIMESTAMP}.sqlite.zst
+${uploadCmd} "/var/backups/sqlite/db_\${TIMESTAMP}.sqlite.zst" "${s3Path}/sqlite/"
+echo "SQLite safe backup snapshot uploaded."
+`;
+
+      case 'columnar_olap':
+        if (profile.engineId === 'snowflake' || profile.name.toLowerCase().includes('snowflake')) {
+          return `#!/usr/bin/env bash
 # =========================================================================
 # SQLPulse Production Disaster Recovery: Snowflake Zero-Copy Backup
 # =========================================================================
@@ -241,20 +308,36 @@ snowsql -q "
 "
 echo "Snowflake 90-day continuous Time Travel & Fail-safe protection confirmed."
 `;
-
-      case 'clickhouse':
+        }
         return `#!/usr/bin/env bash
-# ClickHouse Production Backup using clickhouse-backup
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Columnar OLAP (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+clickhouse-backup create_remote "ch_full_\${TIMESTAMP}"
+echo "Columnar OLAP backup created and uploaded to ${s3Path}/${profile.engineId}."
+`;
+
+      case 'wide_column':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Cassandra / Wide-Column (${profile.name})
+# =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
-clickhouse-backup create_remote "ch_full_\${TIMESTAMP}"
-echo "ClickHouse distributed backup created and uploaded to ${s3Path}/clickhouse."
+nodetool snapshot --tag "snap_\${TIMESTAMP}" production_ks
+tar -cf - /var/lib/cassandra/data/production_ks/*/snapshots/snap_\${TIMESTAMP} | zstd -3 > "/var/backups/cassandra/snap_\${TIMESTAMP}.tar.zst"
+${uploadCmd} "/var/backups/cassandra/snap_\${TIMESTAMP}.tar.zst" "${s3Path}/cassandra/"
+echo "Cassandra snapshot compressed and uploaded."
 `;
 
-      case 'mongodb':
+      case 'document':
         return `#!/usr/bin/env bash
-# MongoDB Production Physical / Oplog Backup
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Document Database (${profile.name})
+# =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
@@ -263,9 +346,11 @@ ${uploadCmd} "/var/backups/mongo/mongo_\${TIMESTAMP}.archive.gz" "${s3Path}/mong
 echo "MongoDB full oplog backup uploaded."
 `;
 
-      case 'redis':
+      case 'keyvalue':
         return `#!/usr/bin/env bash
-# Redis RDB Snapshot + Cloud Offload
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Key-Value (${profile.name})
+# =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
@@ -274,57 +359,75 @@ while [ $(redis-cli LASTSAVE) -eq \${LAST_SAVE_TIME:-0} ]; do sleep 1; done
 
 zstd -3 /var/lib/redis/dump.rdb -o "/var/backups/redis/dump_\${TIMESTAMP}.rdb.zst"
 ${uploadCmd} "/var/backups/redis/dump_\${TIMESTAMP}.rdb.zst" "${s3Path}/redis/"
+echo "Redis RDB snapshot uploaded."
 `;
 
-      case 'sqlite':
+      case 'graph':
         return `#!/usr/bin/env bash
-# SQLite Safe Hot Backup Pipeline
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Graph Database (${profile.name})
+# =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
-sqlite3 /var/lib/sqlite/prod.db ".backup /var/backups/sqlite/db_\${TIMESTAMP}.sqlite"
-zstd -3 /var/backups/sqlite/db_\${TIMESTAMP}.sqlite -o /var/backups/sqlite/db_\${TIMESTAMP}.sqlite.zst
-${uploadCmd} "/var/backups/sqlite/db_\${TIMESTAMP}.sqlite.zst" "${s3Path}/sqlite/"
+neo4j-admin database backup --database=neo4j --to-path=/var/backups/neo4j/\${TIMESTAMP}
+${uploadCmd} /var/backups/neo4j/\${TIMESTAMP}/ "${s3Path}/neo4j/\${TIMESTAMP}/" --recursive
+echo "Neo4j graph store backup uploaded."
 `;
 
-      case 'cassandra':
+      case 'vector':
         return `#!/usr/bin/env bash
-# Cassandra Multi-Node Snapshot Pipeline
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Vector Store (${profile.name})
+# =========================================================================
 set -euo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
-nodetool snapshot --tag "snap_\${TIMESTAMP}" production_ks
-tar -cf - /var/lib/cassandra/data/production_ks/*/snapshots/snap_\${TIMESTAMP} | zstd -3 > "/var/backups/cassandra/snap_\${TIMESTAMP}.tar.zst"
-${uploadCmd} "/var/backups/cassandra/snap_\${TIMESTAMP}.tar.zst" "${s3Path}/cassandra/"
+milvus-backup create --backup_name="bkp_\${TIMESTAMP}" --collection_names=production_embeddings
+${uploadCmd} "/var/backups/milvus/bkp_\${TIMESTAMP}" "${s3Path}/vector/" --recursive
+echo "Vector store snapshot uploaded."
 `;
 
-      case 'postgres':
+      case 'search':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Search Engine (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+
+curl -s -X PUT "http://localhost:9200/_snapshot/backup_repo/snapshot_\${TIMESTAMP}?wait_for_completion=true"
+echo "Elasticsearch snapshot completed to cloud repository."
+`;
+
+      case 'timeseries':
+        return `#!/usr/bin/env bash
+# =========================================================================
+# SQLPulse Production Disaster Recovery: Time-Series (${profile.name})
+# =========================================================================
+set -euo pipefail
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+
+influx backup --db production_metrics /var/backups/influx/\${TIMESTAMP}
+${uploadCmd} /var/backups/influx/\${TIMESTAMP} "${s3Path}/timeseries/\${TIMESTAMP}" --recursive
+echo "Time-series backup uploaded."
+`;
+
+      case 'generic':
       default:
         return `#!/usr/bin/env bash
 # =========================================================================
-# SQLPulse Production Disaster Recovery: PostgreSQL
-# Retention: 30 Days | Destination: ${s3Path}
+# SQLPulse Production Disaster Recovery: ${profile.name} (Generic Engine)
 # =========================================================================
 set -euo pipefail
-
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_DIR="/var/backups/postgresql/\${TIMESTAMP}"
-ARCHIVE_NAME="pg_basebackup_\${TIMESTAMP}.tar.zst"
-
+BACKUP_DIR="/var/backups/${profile.engineId}/\${TIMESTAMP}"
 mkdir -p "\${BACKUP_DIR}"
 
-pg_basebackup \\
-  --host=127.0.0.1 \\
-  --port=5432 \\
-  --username=postgres \\
-  --format=tar \\
-  --wal-method=stream \\
-  --checkpoint=fast \\
-  --label="sqlpulse_daily_\${TIMESTAMP}" \\
-  | zstd -3 -T0 -o "\${BACKUP_DIR}/\${ARCHIVE_NAME}"
-
-${uploadCmd} "\${BACKUP_DIR}/\${ARCHIVE_NAME}" "${s3Path}/postgresql/\${ARCHIVE_NAME}"
-echo "PostgreSQL Backup Succeeded!"
+${profile.backup.commandTemplate('production_db', '"${BACKUP_DIR}/backup.dump"')}
+zstd -3 "\${BACKUP_DIR}/backup.dump" -o "\${BACKUP_DIR}/backup.dump.zst"
+${uploadCmd} "\${BACKUP_DIR}/backup.dump.zst" "${s3Path}/${profile.engineId}/"
+echo "${profile.name} backup finished successfully."
 `;
     }
   }
@@ -336,7 +439,48 @@ echo "PostgreSQL Backup Succeeded!"
 `;
   }
 
-  private generateRestoreRunbook(meta: any, family: EngineFamily, sizeGb: number): string {
+  private generateRestoreRunbook(profile: any, sizeGb: number): string {
+    const isPg = profile.isPostgresFamily;
+    const family = profile.family as EngineFamily;
+
+    if (isPg) {
+      return `### 🚨 Disaster Recovery Runbook: ${profile.name} Point-In-Time Restoration (PITR)
+
+1. **Stop Database Service**:
+   \`\`\`bash
+   sudo systemctl stop ${profile.engineId}
+   \`\`\`
+
+2. **Isolate Corrupted Data Directory**:
+   \`\`\`bash
+   sudo mv /var/lib/${profile.engineId}/data /var/lib/${profile.engineId}/data.corrupted_$(date +%s)
+   sudo mkdir -p /var/lib/${profile.engineId}/data
+   sudo chown -R postgres:postgres /var/lib/${profile.engineId}/data
+   \`\`\`
+
+3. **Fetch & Decompress Base Backup**:
+   \`\`\`bash
+   aws s3 cp s3://production-db-backups/${profile.engineId}/latest.tar.zst /tmp/
+   zstd -d -c /tmp/latest.tar.zst | tar -xf - -C /var/lib/${profile.engineId}/data/
+   \`\`\`
+
+4. **Configure Target Recovery Point (PITR Target Timestamp)**:
+   \`\`\`ini
+   # Add to ${profile.memoryParams.configFile} or recovery.signal
+   restore_command = 'aws s3 cp s3://production-db-backups/${profile.engineId}/wal/%f %p'
+   recovery_target_time = '2026-10-03 12:00:00 UTC'
+   recovery_target_action = 'promote'
+   \`\`\`
+
+5. **Start Database & Verify Cluster Status**:
+   \`\`\`bash
+   sudo touch /var/lib/${profile.engineId}/data/recovery.signal
+   sudo systemctl start ${profile.engineId}
+   sudo journalctl -u ${profile.engineId} -f
+   \`\`\`
+`;
+    }
+
     switch (family) {
       case 'mysql':
         return `### 🚨 Disaster Recovery Runbook: MySQL (Percona XtraBackup & Binlog Replay)
@@ -363,15 +507,13 @@ echo "PostgreSQL Backup Succeeded!"
 
 4. **Point-In-Time Binlog Replay (PITR)**:
    \`\`\`bash
-   # Replay transactions up to target recovery point
-   mysqlbinlog --stop-datetime="2026-10-03 12:00:00" \\
-     /var/log/mysql/binlog.00004* | mysql -u root -p
+   mysqlbinlog --stop-datetime="2026-10-03 12:00:00" /var/log/mysql/binlog.00004* | mysql -u root -p
    \`\`\`
 
 5. **Start MySQL & Verify**:
    \`\`\`bash
    sudo systemctl start mysql
-   mysql -e "SHOW SLAVE STATUS\\G"
+   mysql -e "SHOW REPLICA STATUS\\G"
    \`\`\`
 `;
 
@@ -448,113 +590,73 @@ echo "PostgreSQL Backup Succeeded!"
    \`\`\`
 `;
 
-      case 'snowflake':
-        return `### 🚨 Disaster Recovery Runbook: Snowflake Instant Time Travel & Table Restore
+      case 'db2':
+        return `### 🚨 Disaster Recovery Runbook: IBM DB2 Database Restoration
 
-1. **Instant Undrop (Sub-second RTO)**:
-   \`\`\`sql
-   UNDROP TABLE production_db.public.customers;
+1. **Deactivate and Drop Damaged Database**:
+   \`\`\`bash
+   db2 DEACTIVATE DATABASE production_db
+   db2 DROP DATABASE production_db
    \`\`\`
 
-2. **Restore Precise Point-in-Time Table State via Time Travel**:
-   \`\`\`sql
-   -- Clone table exactly as it existed at 12:00 PM UTC
-   CREATE OR REPLACE TABLE production_db.public.customers_pitr_restored
-   CLONE production_db.public.customers
-   AT (TIMESTAMP => '2026-10-03 12:00:00'::timestamp_tz);
+2. **Execute Online Restore from Backup Images**:
+   \`\`\`bash
+   db2 RESTORE DATABASE production_db FROM /var/backups/db2 TAKEN AT 20261003120000 WITHOUT ROLLING FORWARD
    \`\`\`
 
-3. **Swap Restored Table Online (Zero Downtime)**:
-   \`\`\`sql
-   ALTER TABLE production_db.public.customers 
-   SWAP WITH production_db.public.customers_pitr_restored;
+3. **Rollforward Active Transaction Logs**:
+   \`\`\`bash
+   db2 ROLLFORWARD DATABASE production_db TO 2026-10-03-12.00.00.000000 USING LOCAL TIME AND COMPLETE
    \`\`\`
 `;
 
-      case 'clickhouse':
-        return `### 🚨 Disaster Recovery Runbook: ClickHouse Distributed Backup Restoration
+      case 'sap_hana':
+        return `### 🚨 Disaster Recovery Runbook: SAP HANA System Recovery
 
-1. **Restore Backup via clickhouse-backup**:
+1. **Stop HANA System Instance**:
    \`\`\`bash
-   clickhouse-backup download "ch_full_latest"
-   clickhouse-backup restore "ch_full_latest"
+   HDB stop
    \`\`\`
 
-2. **Restart ClickHouse Server**:
+2. **Execute hdbsql Recovery Command**:
    \`\`\`bash
-   sudo systemctl restart clickhouse-server
-   clickhouse-client --query "SELECT count(*) FROM system.parts WHERE active;"
-   \`\`\`
-`;
-
-      case 'mongodb':
-        return `### 🚨 Disaster Recovery Runbook: MongoDB Point-In-Time Oplog Restoration
-
-1. **Stop mongod Application Traffic**:
-   \`\`\`bash
-   sudo systemctl stop mongod
+   hdbsql -U SYSTEM -i 00 "RECOVER DATABASE FOR production_db UNTIL TIMESTAMP '2026-10-03 12:00:00' USING DATA PATH ('/var/backups/hana/') USING LOG PATH ('/var/backups/hana/log/')"
    \`\`\`
 
-2. **Restore Baseline Dump with Oplog Replay**:
+3. **Restart Tenant Database & Check Status**:
    \`\`\`bash
-   mongorestore \\
-     --uri="mongodb://localhost:27017" \\
-     --gzip \\
-     --archive=/tmp/mongo_latest.archive.gz \\
-     --oplogReplay \\
-     --oplogLimit="1760000000:1"
-   \`\`\`
-
-3. **Verify Cluster State**:
-   \`\`\`bash
-   mongosh --eval "rs.status()"
+   HDB start
+   hdbsql -U SYSTEM -i 00 "SELECT DATABASE_NAME, ACTIVE_STATUS FROM M_DATABASES;"
    \`\`\`
 `;
 
-      case 'sqlite':
-        return `### 🚨 Disaster Recovery Runbook: SQLite Hot Database Recovery
+      case 'embedded':
+        return `### 🚨 Disaster Recovery Runbook: SQLite Database File Restoration (Litestream)
 
-1. **Restore Point-in-Time Database Image via Litestream or Snapshot**:
+1. **Verify Corrupted Database Process is Terminated**:
    \`\`\`bash
-   litestream restore -timestamp "2026-10-03T12:00:00Z" \\
-     -o /var/lib/sqlite/prod.db \\
-     s3://production-db-backups/sqlite/db
+   fuser -k /var/lib/sqlite/prod.db || true
    \`\`\`
 
-2. **Verify SQLite Integrity**:
+2. **Restore Database via Litestream S3 / Local Replica (Point-In-Time)**:
+   \`\`\`bash
+   litestream restore -o /var/lib/sqlite/prod.db -timestamp "2026-10-03T12:00:00Z" s3://my-sqlite-backups/db
+   chmod 640 /var/lib/sqlite/prod.db
+   \`\`\`
+
+3. **Verify Integrity**:
    \`\`\`bash
    sqlite3 /var/lib/sqlite/prod.db "PRAGMA integrity_check;"
    \`\`\`
 `;
 
-      case 'redis':
-        return `### 🚨 Disaster Recovery Runbook: Redis Snapshot & AOF Restore
+      case 'wide_column':
+        return `### 🚨 Disaster Recovery Runbook: Apache Cassandra / ScyllaDB Snapshot Restoration
 
-1. **Stop Redis Daemon**:
+1. **Stop Node Daemon & Truncate Tables**:
    \`\`\`bash
-   sudo systemctl stop redis
-   \`\`\`
-
-2. **Copy Restored RDB Dump**:
-   \`\`\`bash
-   cp /var/backups/redis/dump_restored.rdb /var/lib/redis/dump.rdb
-   chown redis:redis /var/lib/redis/dump.rdb
-   \`\`\`
-
-3. **Start Redis**:
-   \`\`\`bash
-   sudo systemctl start redis
-   redis-cli INFO persistence
-   \`\`\`
-`;
-
-      case 'cassandra':
-        return `### 🚨 Disaster Recovery Runbook: Apache Cassandra SSTable Recovery
-
-1. **Stop Cassandra Service**:
-   \`\`\`bash
-   nodetool drain
    sudo systemctl stop cassandra
+   rm -rf /var/lib/cassandra/commitlog/*
    \`\`\`
 
 2. **Restore SSTable Snapshot**:
@@ -570,60 +672,166 @@ echo "PostgreSQL Backup Succeeded!"
    \`\`\`
 `;
 
-      case 'postgres':
+      case 'document':
+        return `### 🚨 Disaster Recovery Runbook: MongoDB Point-In-Time Restoration
+
+1. **Restore Full Data Dump**:
+   \`\`\`bash
+   mongorestore --uri="mongodb://localhost:27017" --gzip --archive=/var/backups/mongo/latest.archive.gz
+   \`\`\`
+
+2. **Replay Oplog up to Timestamp**:
+   \`\`\`bash
+   mongorestore --uri="mongodb://localhost:27017" --oplogReplay --oplogLimit="1791000000:1" /var/backups/mongo/oplog_dir/
+   \`\`\`
+`;
+
+      case 'keyvalue':
+        return `### 🚨 Disaster Recovery Runbook: Redis In-Memory Snapshot Restore
+
+1. **Stop Redis Daemon**:
+   \`\`\`bash
+   sudo systemctl stop redis
+   \`\`\`
+
+2. **Replace RDB File**:
+   \`\`\`bash
+   zstd -d /var/backups/redis/dump_latest.rdb.zst -o /var/lib/redis/dump.rdb
+   sudo chown redis:redis /var/lib/redis/dump.rdb
+   \`\`\`
+
+3. **Start Redis Server**:
+   \`\`\`bash
+   sudo systemctl start redis
+   redis-cli PING
+   \`\`\`
+`;
+
+      case 'graph':
+        return `### 🚨 Disaster Recovery Runbook: Neo4j Graph Database Restore
+
+1. **Stop Neo4j Service**:
+   \`\`\`bash
+   sudo systemctl stop neo4j
+   \`\`\`
+
+2. **Restore Database from Snapshot**:
+   \`\`\`bash
+   neo4j-admin database restore --from-path=/var/backups/neo4j/latest --database=neo4j --overwrite-destination=true
+   \`\`\`
+
+3. **Start Neo4j & Verify Cypher Query Engine**:
+   \`\`\`bash
+   sudo systemctl start neo4j
+   \`\`\`
+`;
+
+      case 'vector':
+        return `### 🚨 Disaster Recovery Runbook: Vector Store Collection Restoration
+
+1. **Restore Vector Index via CLI**:
+   \`\`\`bash
+   milvus-backup restore --backup_name=latest_backup --restore_index=true
+   \`\`\`
+
+2. **Verify Collection and Partitions**:
+   \`\`\`python
+   from pymilvus import utility
+   print("Loaded collections:", utility.list_collections())
+   \`\`\`
+`;
+
+      case 'search':
+        return `### 🚨 Disaster Recovery Runbook: Elasticsearch / Search Engine Snapshot Restore
+
+1. **Close Existing Target Index**:
+   \`\`\`bash
+   curl -X POST "http://localhost:9200/production_index/_close"
+   \`\`\`
+
+2. **Restore from Snapshot Repository**:
+   \`\`\`bash
+   curl -X POST "http://localhost:9200/_snapshot/backup_repo/snapshot_latest/_restore" -H 'Content-Type: application/json' -d'{"indices": "production_index"}'
+   \`\`\`
+
+3. **Verify Cluster Health**:
+   \`\`\`bash
+   curl -s "http://localhost:9200/_cluster/health?pretty"
+   \`\`\`
+`;
+
+      case 'timeseries':
+        return `### 🚨 Disaster Recovery Runbook: Time-Series Database Restore
+
+1. **Restore Metrics Shards**:
+   \`\`\`bash
+   influx restore --portable --db production_metrics /var/backups/timeseries/latest
+   \`\`\`
+
+2. **Verify Measurements**:
+   \`\`\`bash
+   influx -database 'production_metrics' -execute 'SHOW MEASUREMENTS'
+   \`\`\`
+`;
+
+      case 'columnar_olap':
+      case 'generic':
       default:
-        return `### 🚨 Disaster Recovery Runbook: ${meta.name} Point-In-Time Restoration (PITR)
+        return `### 🚨 Disaster Recovery Runbook: ${profile.name} Data Restoration
 
-1. **Stop Database Service**:
+1. **Stop Damaged Service or Isolate Target Cluster**:
    \`\`\`bash
-   sudo systemctl stop ${meta.id}
+   sudo systemctl stop ${profile.engineId} || true
    \`\`\`
 
-2. **Isolate Corrupted Data Directory**:
+2. **Restore Storage Volume from Archive**:
    \`\`\`bash
-   sudo mv /var/lib/${meta.id}/data /var/lib/${meta.id}/data.corrupted_$(date +%s)
-   sudo mkdir -p /var/lib/${meta.id}/data
-   sudo chown -R ${meta.id}:${meta.id} /var/lib/${meta.id}/data
+   zstd -d /var/backups/${profile.engineId}/latest.dump.zst -o /var/backups/${profile.engineId}/restore.dump
+   ${profile.backup.commandTemplate('production_db', '/var/backups/' + profile.engineId + '/restore.dump')}
    \`\`\`
 
-3. **Fetch & Decompress Base Backup**:
+3. **Restart Engine & Verify Process**:
    \`\`\`bash
-   aws s3 cp s3://production-db-backups/${meta.id}/latest.tar.zst /tmp/
-   zstd -d -c /tmp/latest.tar.zst | tar -xf - -C /var/lib/${meta.id}/data/
-   \`\`\`
-
-4. **Configure Target Recovery Point (PITR Target Timestamp)**:
-   \`\`\`ini
-   # Add to postgresql.conf or recovery.signal
-   restore_command = 'aws s3 cp s3://production-db-backups/${meta.id}/wal/%f %p'
-   recovery_target_time = '2026-10-03 12:00:00 UTC'
-   recovery_target_action = 'promote'
-   \`\`\`
-
-5. **Start Database & Verify Cluster Status**:
-   \`\`\`bash
-   sudo touch /var/lib/${meta.id}/data/recovery.signal
-   sudo systemctl start ${meta.id}
-   sudo journalctl -u ${meta.id} -f
+   sudo systemctl start ${profile.engineId}
    \`\`\`
 `;
     }
   }
 
-  private generateVerificationCommand(meta: any, family: EngineFamily): string {
-    let checkQuery = 'SELECT count(*) FROM information_schema.tables;';
-    if (family === 'oracle') checkQuery = 'SELECT count(*) FROM all_tables;';
-    if (family === 'sqlite') checkQuery = 'PRAGMA integrity_check;';
-    if (family === 'mongodb') checkQuery = 'db.runCommand({ ping: 1 });';
-    if (family === 'redis') checkQuery = 'redis-cli PING';
+  private generateVerificationCommand(profile: any): string {
+    let checkQuery = 'SELECT 1;';
+    if (profile.isPostgresFamily) {
+      checkQuery = 'SELECT pg_is_in_recovery(), now() - pg_last_xact_replay_timestamp();';
+    } else if (profile.family === 'mysql') {
+      checkQuery = 'SHOW REPLICA STATUS;';
+    } else if (profile.family === 'oracle') {
+      checkQuery = 'SELECT STATUS, DATABASE_STATUS FROM V$INSTANCE;';
+    } else if (profile.family === 'sqlserver') {
+      checkQuery = "SELECT name, state_desc FROM sys.databases WHERE name = 'production_db';";
+    } else if (profile.family === 'db2') {
+      checkQuery = 'SELECT 1 FROM SYSIBM.SYSDUMMY1;';
+    } else if (profile.family === 'sap_hana') {
+      checkQuery = 'SELECT * FROM M_DATABASE;';
+    } else if (profile.family === 'embedded') {
+      checkQuery = 'PRAGMA integrity_check;';
+    } else if (profile.family === 'document') {
+      checkQuery = 'db.runCommand({ ping: 1 });';
+    } else if (profile.family === 'keyvalue') {
+      checkQuery = 'redis-cli PING';
+    } else if (profile.family === 'wide_column') {
+      checkQuery = 'nodetool status';
+    } else if (profile.family === 'search') {
+      checkQuery = 'GET /_cluster/health';
+    } else if (profile.family === 'graph') {
+      checkQuery = 'SHOW DATABASES;';
+    }
 
     return `# Automated Disaster Recovery Sandbox Verification Drill
 docker run --rm \\
-  -v /var/backups/${meta.id}:/backups:ro \\
+  -v /var/backups/${profile.engineId}:/backups:ro \\
   -e RESTORE_DRILL=true \\
-  sqlpulse/${meta.id}-dr-verifier:latest \\
+  sqlpulse/${profile.engineId}-dr-verifier:latest \\
   --verify-archive=/backups/latest.tar.zst \\
-  --checksum-check=all \\
   --smoke-test-query="${checkQuery}"
 `;
   }
