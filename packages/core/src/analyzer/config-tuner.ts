@@ -82,8 +82,10 @@ export class ConfigAutoTuner {
       return this.tuneMongo(req, meta, ram, cores, conns, storage, workload);
     } else if (normalizedEngine === 'cassandra' || normalizedEngine === 'scylladb') {
       return this.tuneCassandra(req, meta, ram, cores, conns, storage, workload);
-    } else if (normalizedEngine === 'elasticsearch' || normalizedEngine === 'opensearch') {
-      return this.tuneElasticsearch(req, meta, ram, cores, conns, storage, workload);
+    } else if (normalizedEngine.includes('snowflake')) {
+      return this.tuneSnowflake(req, meta, ram, cores, conns, storage, workload);
+    } else if (normalizedEngine.includes('bigquery') || normalizedEngine === 'google_bigquery') {
+      return this.tuneBigQuery(req, meta, ram, cores, conns, storage, workload);
     } else {
       
       return this.tuneUniversal(req, meta, ram, cores, conns, storage, workload);
@@ -720,6 +722,103 @@ PRAGMA busy_timeout = 5000;
       expertTips: [
         'Always set `PRAGMA synchronous = NORMAL;` when using WAL mode for a 3-5x write throughput improvement.',
         'Use `PRAGMA busy_timeout = 5000;` to gracefully wait on file locks instead of immediately failing with `SQLITE_BUSY`.',
+      ],
+    };
+  }
+
+  private tuneSnowflake(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
+    const warehouseSize = cores >= 32 ? '2X-Large' : cores >= 16 ? 'X-Large' : cores >= 8 ? 'Large' : 'Medium';
+    const config = `-- =========================================================================
+-- SQLPulse Production Cloud Control: Snowflake Data Cloud
+-- Workload: ${workload.toUpperCase()} | Suggested Warehouse: ${warehouseSize}
+-- Snowflake is a fully managed SaaS service with no underlying OS or config file.
+-- Compute resources, memory, and concurrency are managed via Virtual Warehouses:
+-- =========================================================================
+
+-- 1. Virtual Warehouse Sizing & Auto-Scaling:
+ALTER WAREHOUSE COMPUTE_WH SET 
+  WAREHOUSE_SIZE = '${warehouseSize}'
+  AUTO_SUSPEND = 300
+  AUTO_RESUME = TRUE
+  MIN_CLUSTER_COUNT = 1
+  MAX_CLUSTER_COUNT = 5
+  SCALING_POLICY = 'STANDARD';
+
+-- 2. Query Memory & Concurrency Governance:
+ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 3600;
+ALTER WAREHOUSE COMPUTE_WH SET STATEMENT_QUEUING_TIMEOUT_IN_SECONDS = 600;
+
+-- 3. Data Protection & Historical Retention (Time Travel):
+ALTER ACCOUNT SET DATA_RETENTION_TIME_IN_DAYS = 90;
+-- Fail-safe: Non-configurable 7-day disaster recovery automatically maintained by Snowflake.
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      configFileName: 'Managed Cloud Service (No OS Configuration File)',
+      generatedConfigText: config,
+      sysctlConfigText: '# Snowflake is a fully managed cloud service (managed OS and infrastructure; no sysctl tuning required).',
+      limitsConfigText: '# Snowflake is a fully managed cloud service (managed OS; no ulimits required).',
+      ramAllocation: [
+        { label: 'Virtual Warehouse Compute Nodes', sizeGb: +(ram * 0.70).toFixed(2), percentage: 70, color: '#0EA5E9', description: 'Elastic compute cluster nodes and query execution buffers' },
+        { label: 'Result Cache & Local SSD Cache', sizeGb: +(ram * 0.20).toFixed(2), percentage: 20, color: '#10B981', description: 'Remote cloud disk & local SSD cache' },
+        { label: 'Cloud Services Control Layer', sizeGb: +(ram * 0.10).toFixed(2), percentage: 10, color: '#F59E0B', description: 'Metadata, access control, and transaction coordinator' },
+      ],
+      keyParameters: [
+        { param: 'WAREHOUSE_SIZE', value: warehouseSize, defaultVal: 'X-Small', category: 'cpu', explanation: 'Snowflake Virtual Warehouse compute cluster allocation size.' },
+        { param: 'AUTO_SUSPEND', value: '300s', defaultVal: '600s', category: 'concurrency', explanation: 'Automatically suspends compute warehouse after 5 minutes of inactivity to prevent credit consumption.' },
+        { param: 'DATA_RETENTION_TIME_IN_DAYS', value: '90', defaultVal: '1', category: 'memory', explanation: 'Continuous Time Travel retention window for historical query and restore operations.' },
+      ],
+      expertTips: [
+        'Utilize multi-cluster warehouses (Standard scaling) to dynamically handle spiky concurrency without queueing.',
+        'Define table CLUSTERING KEYS on frequently filtered timestamp and tenant columns instead of manual sorting.',
+      ],
+    };
+  }
+
+  private tuneBigQuery(req: ConfigTuningRequest, meta: any, ram: number, cores: number, conns: number, storage: string, workload: string): ConfigTuningResult {
+    const config = `-- =========================================================================
+-- SQLPulse Production Cloud Control: Google BigQuery
+-- Workload: ${workload.toUpperCase()} | Serverless Managed Data Warehouse
+-- BigQuery is serverless: there are no OS configuration files or memory buffers to tune.
+-- Compute and concurrency are managed via BigQuery Slot Reservations & Editions:
+-- =========================================================================
+
+-- 1. BigQuery Editions & Slot Commitments (Enterprise Edition recommended):
+-- Baseline Dedicated Slots: 100
+-- Max Dynamic Autoscaling Slots: 500
+-- Slot Reservation: project-level assignments via Google Cloud Console or bq CLI:
+-- bq mk --reservation --project_id=my-project --location=US --slots=100 production_reservation
+
+-- 2. Storage Lifecycle Management & Partition Expiration:
+-- ALTER TABLE my_dataset.events SET OPTIONS (partition_expiration_days = 90);
+
+-- 3. Query Execution Controls:
+-- Set maximum bytes billed to prevent run-away query costs:
+-- bq query --maximum_bytes_billed=107374182400 "SELECT ...";
+`;
+
+    return {
+      engine: meta.id,
+      engineName: meta.name,
+      configFileName: 'Serverless Cloud Service (No OS Configuration File)',
+      generatedConfigText: config,
+      sysctlConfigText: '# Google BigQuery is a fully serverless cloud service (no host OS or sysctl required).',
+      limitsConfigText: '# Google BigQuery is a fully serverless cloud service (no host OS limits required).',
+      ramAllocation: [
+        { label: 'BigQuery Colossus Storage Tier', sizeGb: +(ram * 0.50).toFixed(2), percentage: 50, color: '#4285F4', description: 'Capacitor columnar storage format across Google Colossus filesystem' },
+        { label: 'Borg Slot Workers (Compute)', sizeGb: +(ram * 0.40).toFixed(2), percentage: 40, color: '#34A853', description: 'Dynamic worker slots executing distributed query plan stages' },
+        { label: 'Metadata & Planning Layer', sizeGb: +(ram * 0.10).toFixed(2), percentage: 10, color: '#FBBC05', description: 'Google Borg coordinator and query optimization tree' },
+      ],
+      keyParameters: [
+        { param: 'reservation_edition', value: 'Enterprise', defaultVal: 'Standard', category: 'cpu', explanation: 'BigQuery compute edition supporting slot autoscaling and reservations.' },
+        { param: 'baseline_slots', value: '100', defaultVal: '0 (On-Demand)', category: 'cpu', explanation: 'Dedicated compute slots provisioned for steady-state workloads.' },
+        { param: 'time_travel_window_hours', value: '168', defaultVal: '168', category: 'memory', explanation: 'Continuous 7-day Time Travel retention window across all tables.' },
+      ],
+      expertTips: [
+        'Partition large tables by DATE/TIMESTAMP and require partition filter predicates to avoid full-table scans.',
+        'Use BigQuery BI Engine with memory reservation for sub-second dashboard query acceleration.',
       ],
     };
   }

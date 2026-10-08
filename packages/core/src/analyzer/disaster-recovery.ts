@@ -65,9 +65,43 @@ export class DisasterRecoveryCalculator {
       rpoClass = 'Zero Data Loss';
       rpoExplanation = 'Synchronous standby acknowledged commits prior to disaster, ensuring zero data loss.';
     } else if (strategy === 'daily_full_plus_wal_cdc') {
-      theoreticalRpo = '< 15 seconds';
-      rpoClass = 'Near Real-Time (<1m)';
-      rpoExplanation = `${profile.backup.walOrLogName} streaming pushes log segments to cloud storage every 15 seconds.`;
+      if (profile.engineId === 'snowflake' || profile.name.toLowerCase().includes('snowflake')) {
+        theoreticalRpo = '0 seconds';
+        rpoClass = 'Zero Data Loss';
+        rpoExplanation = 'Snowflake Time Travel continuously retains historical micro-partition versions across all DML operations with multi-AZ cloud durability.';
+      } else if (profile.engineId.includes('bigquery') || profile.name.toLowerCase().includes('bigquery')) {
+        theoreticalRpo = '0 seconds';
+        rpoClass = 'Zero Data Loss';
+        rpoExplanation = 'Google BigQuery retains 7 days of continuous historical snapshots with automatic multi-region Colossus replication.';
+      } else if (profile.engineId === 'oracle' || profile.dialect === 'oracle') {
+        theoreticalRpo = '< 1 minute';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'Oracle Archived Redo Log duplexing and Data Guard transport ship committed redo records to archive destinations on log switch or commit.';
+      } else if (profile.engineId.includes('sqlserver') || profile.dialect === 'sqlserver') {
+        theoreticalRpo = '< 1 minute';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'SQL Server Transaction Log (.ldf) backup schedule and Always On AG transport continuously capture and ship committed transaction log records.';
+      } else if (profile.isPostgresFamily) {
+        theoreticalRpo = '< 15 seconds';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'PostgreSQL Write-Ahead Log (WAL) archiving via archive_command or pgBackRest streaming pushes completed segments to cloud storage.';
+      } else if (profile.dialect === 'mysql') {
+        theoreticalRpo = '< 30 seconds';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'MySQL Binary Log (binlog) streaming and automated binlog shipping replicate transactional events continuously.';
+      } else if (profile.family === 'keyvalue' || profile.engineId.includes('redis')) {
+        theoreticalRpo = '< 1 second';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'Redis Append-Only File (AOF) with appendfsync everysec persists written commands to durable storage every second.';
+      } else if (profile.family === 'document' || profile.engineId.includes('mongo')) {
+        theoreticalRpo = '< 5 seconds';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'MongoDB replica set continuous Oplog replication captures mutations in real time to secondary storage.';
+      } else {
+        theoreticalRpo = '< 1 minute';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = `Continuous ${profile.backup.walOrLogName} streaming captures committed transactions and ships log deltas to durable storage.`;
+      }
     } else if (strategy === 'hourly_snapshots') {
       theoreticalRpo = '< 60 minutes';
       rpoClass = 'Standard (<15m)';

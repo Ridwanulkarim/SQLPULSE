@@ -250,7 +250,39 @@ export const DisasterRecoveryTab: React.FC<DisasterRecoveryTabProps> = ({
               onChange={(e) => setBackupStrategy(e.target.value)}
               className="w-full px-3 py-2 rounded-xl text-xs font-bold border border-purple-200 bg-white"
             >
-              <option value="daily_full_plus_wal_cdc">✨ Full Basebackup + Continuous WAL/CDC Streaming (Low RPO)</option>
+              <option value="daily_full_plus_wal_cdc">
+                {(() => {
+                  const norm = (selectedEngine || '').toLowerCase();
+                  if (norm.includes('postgres') || norm.includes('cockroach') || norm.includes('timescale') || norm.includes('yugabyte') || norm.includes('neon') || norm.includes('supabase')) {
+                    return '✨ Full Basebackup + Continuous WAL Streaming (Low RPO)';
+                  }
+                  if (norm.includes('oracle')) {
+                    return '✨ Full RMAN Backup + Continuous Archived Redo Log Streaming (Low RPO)';
+                  }
+                  if (norm.includes('sqlserver') || norm.includes('mssql') || norm.includes('sql_server')) {
+                    return '✨ Full Database Backup + Continuous Transaction Log Streaming (Low RPO)';
+                  }
+                  if (norm.includes('mysql') || norm.includes('maria')) {
+                    return '✨ Full Backup + Continuous Binary Log (Binlog) Streaming (Low RPO)';
+                  }
+                  if (norm.includes('snowflake')) {
+                    return '✨ Time Travel Historical Retention + Continuous Fail-Safe (Zero RPO)';
+                  }
+                  if (norm.includes('bigquery')) {
+                    return '✨ Continuous Snapshot History + 7-Day Time Travel (Zero RPO)';
+                  }
+                  if (norm.includes('mongo')) {
+                    return '✨ Full Database Dump + Continuous Oplog Replication (Low RPO)';
+                  }
+                  if (norm.includes('redis') || norm.includes('valkey')) {
+                    return '✨ Full RDB Snapshot + Continuous AOF Append Log (Low RPO)';
+                  }
+                  if (norm.includes('cassandra') || norm.includes('scylla')) {
+                    return '✨ Full Snapshot + Continuous CommitLog Streaming (Low RPO)';
+                  }
+                  return '✨ Full Backup + Continuous Log & CDC Streaming (Low RPO)';
+                })()}
+              </option>
               <option value="multi_region_active_passive">🛡️ Multi-Region Synchronous Active-Passive (0 RPO)</option>
               <option value="hourly_snapshots">⏱️ Hourly Storage Volume Snapshots (1h RPO)</option>
               <option value="daily_full_differential">📦 Daily Full + Differential Dump (24h RPO)</option>

@@ -164,7 +164,11 @@ const POSTGRES_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'descripti
     configFile: 'postgresql.conf',
   },
   maintenance: {
+    // Doc: https://www.postgresql.org/docs/current/sql-analyze.html
+    // Doc: https://www.sqlite.org/lang_analyze.html
+    // Doc: https://www.sqlite.org/lang_analyze.html
     statsCommand: 'ANALYZE {table};',
+    // Doc: https://www.postgresql.org/docs/current/sql-vacuum.html
     spaceReclaimCommand: 'VACUUM (ANALYZE, VERBOSE) {table};',
     spaceReclaimConcept: 'VACUUM & Autovacuum Dead Tuple Reclaim',
     tuningDdlTemplate: (table, sizeGb = 100) =>
@@ -176,9 +180,12 @@ const POSTGRES_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'descripti
       `  autovacuum_vacuum_cost_delay = 2\n` +
       `);`,
   },
+  // Doc: https://www.postgresql.org/docs/current/sql-explain.html
   planCommand: 'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) <QUERY>;',
   onlineDdl: {
+    // Doc: https://www.postgresql.org/docs/current/sql-createindex.html
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${idx} ON ${tbl}(${cols});`,
+    // Doc: https://www.postgresql.org/docs/current/sql-dropindex.html
     dropIndexSql: (idx) => `DROP INDEX CONCURRENTLY IF EXISTS ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX CONCURRENTLY IF NOT EXISTS ${idx} ON ${tbl}(${cols});`,
     supportsConcurrent: true,
@@ -192,6 +199,7 @@ const POSTGRES_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'descripti
   backup: {
     tool: 'pgBackRest / pg_basebackup',
     walOrLogName: 'Write-Ahead Log (WAL)',
+    // Doc: https://pgbackrest.org/user-guide.html
     commandTemplate: (db, path) => `pgbackrest --stanza=${db} backup --type=full --repo1-path=${path}`,
   },
   replication: {
@@ -267,7 +275,12 @@ const MYSQL_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'
     configFile: 'my.cnf',
   },
   maintenance: {
+    // Doc: https://dev.mysql.com/doc/refman/8.0/en/analyze-table.html
+    // UNVERIFIED: ANSI generic statistics collection
+    // UNVERIFIED: Fallback ANSI SQL statistics
     statsCommand: 'ANALYZE TABLE {table};',
+    // Doc: https://dev.mysql.com/doc/refman/8.0/en/optimize-table.html
+    // UNVERIFIED: Fallback generic space reclaim
     spaceReclaimCommand: 'OPTIMIZE TABLE {table};',
     spaceReclaimConcept: 'InnoDB Clustered Index Rebuild & Defragmentation',
     tuningDdlTemplate: (table) =>
@@ -275,9 +288,12 @@ const MYSQL_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'
       `ALTER TABLE ${table} ENGINE=InnoDB, ALGORITHM=INPLACE, LOCK=NONE;\n` +
       `ANALYZE TABLE ${table};`,
   },
+  // Doc: https://dev.mysql.com/doc/refman/8.0/en/explain.html
   planCommand: 'EXPLAIN FORMAT=JSON <QUERY>;',
   onlineDdl: {
+    // Doc: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl.html
     createIndexSql: (idx, tbl, cols) => `ALTER TABLE ${tbl} ADD INDEX ${idx} (${cols}), ALGORITHM=INPLACE, LOCK=NONE;`,
+    // Doc: https://dev.mysql.com/doc/refman/8.0/en/drop-index.html
     dropIndexSql: (idx, tbl = '{table}') => `ALTER TABLE ${tbl} DROP INDEX ${idx}, ALGORITHM=INPLACE, LOCK=NONE;`,
     rollbackDropIndexSql: (idx, tbl, cols) => `ALTER TABLE ${tbl} ADD INDEX ${idx} (${cols}), ALGORITHM=INPLACE, LOCK=NONE;`,
     supportsConcurrent: false,
@@ -291,6 +307,7 @@ const MYSQL_FAMILY_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'
   backup: {
     tool: 'Percona XtraBackup / mysqldump',
     walOrLogName: 'Binary Log (binlog) & InnoDB Redo Log',
+    // Doc: https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html
     commandTemplate: (db, path) => `xtrabackup --backup --target-dir=${path} --databases=${db}`,
   },
   replication: {
@@ -365,7 +382,10 @@ const ORACLE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'spfile / init.ora',
   },
   maintenance: {
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/arpls/DBMS_STATS.html
     statsCommand: "BEGIN DBMS_STATS.GATHER_TABLE_STATS(ownname => USER, tabname => '{table}', estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE, cascade => TRUE); END;",
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/admin/managing-space-for-schema-objects.html
+    // Note: Requires ASSM tablespace and ENABLE ROW MOVEMENT. Reclaims high water mark (HWM) space.
     spaceReclaimCommand: 'ALTER TABLE {table} ENABLE ROW MOVEMENT; ALTER TABLE {table} SHRINK SPACE CASCADE;',
     spaceReclaimConcept: 'Segment Advisor & Online Table Shrink Space',
     tuningDdlTemplate: (table) =>
@@ -377,22 +397,36 @@ const ORACLE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
       `  DBMS_STATS.GATHER_TABLE_STATS(ownname => USER, tabname => '${table}', cascade => TRUE);\n` +
       `END;\n/`,
   },
+  // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/tgsql/generating-and-displaying-execution-plans.html
   planCommand: 'EXPLAIN PLAN FOR <QUERY>; SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);',
   onlineDdl: {
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/CREATE-INDEX.html
+    // Note: ONLINE index creation requires Oracle Database Enterprise Edition.
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d5c07475191014878eb1402fe3f631.html
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/DROP-INDEX.html
+    // Note: Oracle does not support DROP INDEX ... ONLINE.
+    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=statements-drop
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d9122575191014a9ec804b407a5ee2.html
+    // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/indexes.html
+    // UNVERIFIED: Generic index drop syntax
+    // UNVERIFIED: Fallback generic index drop
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
   },
   systemViews: {
-    slowQueries: 'V$SQL / V$SQLAREA (AWR DBA_HIST_SQLSTAT)',
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/dynamic-performance-views.html
+    // Note: AWR and ADDM (DBA_HIST_SQLSTAT, DBA_HIST_*) require an active Oracle Diagnostics Pack license.
+    slowQueries: 'V$SQL / V$SQLAREA (AWR DBA_HIST_SQLSTAT requires Diagnostics Pack)',
     activeSessions: 'V$SESSION',
     locks: 'V$LOCKED_OBJECT / DBA_BLOCKERS',
   },
   backup: {
     tool: 'Oracle Recovery Manager (RMAN) / Data Pump (expdp)',
     walOrLogName: 'Archived Redo Logs',
+    // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/rcmrf/BACKUP.html
     commandTemplate: (db, path) => `rman target / cmdfile="BACKUP DATABASE PLUS ARCHIVELOG FORMAT '${path}/%U.bkp';"`,
   },
   replication: {
@@ -468,7 +502,10 @@ const SQL_SERVER_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
     configFile: 'sp_configure',
   },
   maintenance: {
+    // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/update-statistics-transact-sql
     statsCommand: 'UPDATE STATISTICS {table} WITH FULLSCAN;',
+    // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/alter-index-transact-sql
+    // Note: REBUILD WITH (ONLINE = ON) requires Enterprise Edition, Developer Edition, or Azure SQL Database.
     spaceReclaimCommand: 'ALTER INDEX ALL ON {table} REBUILD WITH (ONLINE = ON);',
     spaceReclaimConcept: 'Index Defragmentation, Reorganize & Online Rebuild',
     tuningDdlTemplate: (table) =>
@@ -477,10 +514,16 @@ const SQL_SERVER_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
       `UPDATE STATISTICS ${table} WITH FULLSCAN;\n` +
       `GO`,
   },
-  planCommand: 'SET SHOWPLAN_XML ON; <QUERY>;',
+  // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/set-showplan-xml-transact-sql
+  // Note: SET SHOWPLAN_XML must be the only statement in a batch; emit separate batches using GO
+  planCommand: 'SET SHOWPLAN_XML ON;\nGO\n<QUERY>;\nGO\nSET SHOWPLAN_XML OFF;\nGO',
   onlineDdl: {
+    // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/create-index-transact-sql
+    // Note: ONLINE = ON requires Enterprise Edition or Azure SQL Database.
     createIndexSql: (idx, tbl, cols) => `CREATE NONCLUSTERED INDEX ${idx} ON ${tbl}(${cols}) WITH (ONLINE = ON);`,
-    dropIndexSql: (idx, tbl = '{table}') => `DROP INDEX ${idx} ON ${tbl} WITH (ONLINE = ON);`,
+    // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/drop-index-transact-sql
+    // Note: Per Microsoft docs, WITH (ONLINE = ON) on DROP INDEX applies only to clustered indexes. For nonclustered indexes, plain DROP INDEX is required.
+    dropIndexSql: (idx, tbl = '{table}') => `DROP INDEX ${idx} ON ${tbl};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE NONCLUSTERED INDEX ${idx} ON ${tbl}(${cols}) WITH (ONLINE = ON);`,
     supportsConcurrent: false,
     onlineClause: 'WITH (ONLINE = ON)',
@@ -493,6 +536,7 @@ const SQL_SERVER_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   backup: {
     tool: 'SQL Server Native BACKUP / Azure Blob Backup',
     walOrLogName: 'Transaction Log (LDF)',
+    // Doc: https://learn.microsoft.com/en-us/sql/t-sql/statements/backup-transact-sql
     commandTemplate: (db, path) => `BACKUP DATABASE [${db}] TO DISK = N'${path}' WITH COMPRESSION, CHECKSUM, STATS = 10;`,
   },
   replication: {
@@ -503,6 +547,8 @@ const SQL_SERVER_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   syntax: {
     identityColumn: 'BIGINT IDENTITY(1,1) PRIMARY KEY',
     rowLimit: (n, offset = 0) => (offset > 0 ? `OFFSET ${offset} ROWS FETCH NEXT ${n} ROWS ONLY` : `SELECT TOP (${n})`),
+    // Doc: https://learn.microsoft.com/en-us/sql/relational-databases/json/json-data-sql-server
+    // Note: SQL Server 2016-2022 uses NVARCHAR(MAX) with ISJSON() constraints; native JSON type in Azure SQL / 2025 preview.
     jsonType: 'NVARCHAR(MAX)',
     quoteIdentifier: (id) => `[${id}]`,
   },
@@ -567,7 +613,9 @@ const DB2_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'db2 get/update db cfg',
   },
   maintenance: {
+    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=commands-runstats
     statsCommand: 'RUNSTATS ON TABLE {table} WITH DISTRIBUTION AND DETAILED INDEXES ALL;',
+    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=commands-reorg-table
     spaceReclaimCommand: 'REORG TABLE {table};',
     spaceReclaimConcept: 'Offline / Online Table & Index Reorganization (REORG)',
     tuningDdlTemplate: (table) =>
@@ -575,8 +623,12 @@ const DB2_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
       `CALL SYSPROC.ADMIN_CMD('REORG TABLE ${table}');\n` +
       `CALL SYSPROC.ADMIN_CMD('RUNSTATS ON TABLE ${table} WITH DISTRIBUTION AND DETAILED INDEXES ALL');`,
   },
+  // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=tools-db2exfmt-explain-table-format-tool
   planCommand: 'EXPLAIN ALL FOR <QUERY>; db2exfmt -d <DB> -e <SCHEMA> -w -1 -o explain.out',
   onlineDdl: {
+    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=statements-create-index
+    // UNVERIFIED: Generic index creation syntax
+    // UNVERIFIED: Fallback generic index creation
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols});`,
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols});`,
@@ -591,6 +643,7 @@ const DB2_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'IBM DB2 Native BACKUP / HADR',
     walOrLogName: 'Active and Archived Transaction Logs',
+    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=commands-backup-database
     commandTemplate: (db, path) => `db2 BACKUP DATABASE ${db} ONLINE TO ${path} WITH 4 BUFFERS BUFFER 1024 PARALLELISM 2 COMPRESS;`,
   },
   replication: {
@@ -663,7 +716,9 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
     configFile: 'global.ini',
   },
   maintenance: {
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20c7d2c375191014a4c6e9447432cb11.html
     statsCommand: 'CREATE STATISTICS ON {table}; REFRESH STATISTICS ON {table};',
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d3f8207519101490bdf5bf528c11bb.html
     spaceReclaimCommand: 'ALTER TABLE {table} MERGE DELTA INDEX;',
     spaceReclaimConcept: 'Column Store In-Memory Delta Merge & Optimization',
     tuningDdlTemplate: (table) =>
@@ -671,6 +726,7 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
       `ALTER TABLE ${table} MERGE DELTA INDEX;\n` +
       `REFRESH STATISTICS ON ${table};`,
   },
+  // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d6f2fb75191014b2a3c713b5dc83c6.html
   planCommand: 'EXPLAIN PLAN FOR <QUERY>; SELECT * FROM EXPLAIN_PLAN_TABLE;',
   onlineDdl: {
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
@@ -687,6 +743,7 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   backup: {
     tool: 'SAP HANA Studio / hdbsql BACKUP DATA',
     walOrLogName: 'HANA Redo Log Segments',
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d1c78d75191014a2fbc8e411b0bb7b.html
     commandTemplate: (db, path) => `BACKUP DATA FOR ${db} USING FILE ('${path}/hana_full') ASYNCHRONOUS;`,
   },
   replication: {
@@ -768,7 +825,9 @@ const EMBEDDED_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
     configFile: 'PRAGMA statements',
   },
   maintenance: {
+    // Doc: https://www.sqlite.org/lang_analyze.html
     statsCommand: 'ANALYZE {table};',
+    // Doc: https://www.sqlite.org/lang_vacuum.html
     spaceReclaimCommand: 'VACUUM;',
     spaceReclaimConcept: 'SQLite VACUUM & Free-Page Truncation',
     tuningDdlTemplate: (table) =>
@@ -777,9 +836,13 @@ const EMBEDDED_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
       `VACUUM;\n` +
       `ANALYZE ${table};`,
   },
+  // Doc: https://www.sqlite.org/eqp.html
   planCommand: 'EXPLAIN QUERY PLAN <QUERY>;',
   onlineDdl: {
+    // Doc: https://www.sqlite.org/lang_createindex.html
+    // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/indexes.html
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX IF NOT EXISTS ${idx} ON ${tbl}(${cols});`,
+    // Doc: https://www.sqlite.org/lang_dropindex.html
     dropIndexSql: (idx) => `DROP INDEX IF EXISTS ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX IF NOT EXISTS ${idx} ON ${tbl}(${cols});`,
     supportsConcurrent: false,
@@ -793,6 +856,7 @@ const EMBEDDED_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   backup: {
     tool: 'sqlite3 Online Backup API / VACUUM INTO',
     walOrLogName: 'Write-Ahead Log (.db-wal)',
+    // Doc: https://www.sqlite.org/lang_vacuum.html#vacuuminto
     commandTemplate: (db, path) => `VACUUM INTO '${path}/backup.db';`,
   },
   replication: {
@@ -868,16 +932,21 @@ const COLUMNAR_OLAP_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description
     configFile: 'config.xml / Snowflake Warehouse config',
   },
   maintenance: {
+    // Doc: https://clickhouse.com/docs/en/sql-reference/statements/optimize
     statsCommand: 'OPTIMIZE TABLE {table} FINAL;',
+    // Doc: https://clickhouse.com/docs/en/sql-reference/statements/optimize
     spaceReclaimCommand: 'OPTIMIZE TABLE {table} FINAL CLEANUP;',
     spaceReclaimConcept: 'Columnar Parts Compaction & Tombstone De-duplication',
     tuningDdlTemplate: (table) =>
       `-- Columnar Storage Compaction for ${table}\n` +
       `OPTIMIZE TABLE ${table} FINAL;\n`,
   },
+  // Doc: https://clickhouse.com/docs/en/sql-reference/statements/explain
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
+    // Doc: https://clickhouse.com/docs/en/sql-reference/statements/alter/projection
     createIndexSql: (idx, tbl, cols) => `-- Columnar systems use sort keys / clustering keys:\nALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${cols} ORDER BY ${cols});`,
+    // Doc: https://clickhouse.com/docs/en/sql-reference/statements/alter/projection
     dropIndexSql: (idx, tbl = '{table}') => `ALTER TABLE ${tbl} DROP PROJECTION ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `ALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${cols} ORDER BY ${cols});`,
     supportsConcurrent: false,
@@ -891,6 +960,7 @@ const COLUMNAR_OLAP_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description
   backup: {
     tool: 'Cloud Managed Snapshots / Time Travel / S3 Export',
     walOrLogName: 'Commit Log / Append Parts',
+    // Doc: https://github.com/AlexAkulov/clickhouse-backup
     commandTemplate: (db, path) => `BACKUP TABLE ${db} TO S3('${path}');`,
   },
   replication: {
@@ -966,7 +1036,9 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
     configFile: 'cassandra.yaml / scylla.yaml',
   },
   maintenance: {
+    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/tablestats.html
     statsCommand: 'nodetool tablestats {table};',
+    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/compact.html
     spaceReclaimCommand: 'nodetool compact {table};',
     spaceReclaimConcept: 'SSTable Major Compaction & Tombstone Purge',
     tuningDdlTemplate: (table) =>
@@ -977,6 +1049,7 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
       `  'compaction_window_size': 1\n` +
       `} AND gc_grace_seconds = 86400;`,
   },
+  // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/cql_singlefile.html
   planCommand: 'TRACING ON; <QUERY>;',
   onlineDdl: {
     createIndexSql: (idx, tbl, cols) => `CREATE CUSTOM INDEX ${idx} ON ${tbl} (${cols}) USING 'org.apache.cassandra.index.sasi.SASIIndex';`,
@@ -993,6 +1066,7 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
   backup: {
     tool: 'nodetool snapshot / Medusa',
     walOrLogName: 'CommitLog',
+    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/snapshot.html
     commandTemplate: (db, path) => `nodetool snapshot -t backup_${Date.now()} ${db}`,
   },
   replication: {
@@ -1068,7 +1142,9 @@ const DOCUMENT_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
     configFile: 'mongod.conf',
   },
   maintenance: {
+    // Doc: https://www.mongodb.com/docs/manual/reference/method/db.collection.stats/
     statsCommand: 'db.{table}.stats();',
+    // Doc: https://www.mongodb.com/docs/manual/reference/command/compact/
     spaceReclaimCommand: 'db.runCommand({ compact: "{table}" });',
     spaceReclaimConcept: 'WiredTiger Collection Compaction & Storage Reclamation',
     tuningDdlTemplate: (table) =>
@@ -1076,9 +1152,12 @@ const DOCUMENT_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
       `db.runCommand({ compact: "${table}", force: true });\n` +
       `db.${table}.reIndex();`,
   },
+  // Doc: https://www.mongodb.com/docs/manual/reference/method/cursor.explain/
   planCommand: 'db.{table}.find(...).explain("executionStats");',
   onlineDdl: {
+    // Doc: https://www.mongodb.com/docs/manual/reference/method/db.collection.createIndex/
     createIndexSql: (idx, tbl, cols) => `db.${tbl}.createIndex({ ${cols}: 1 }, { background: true, name: "${idx}" });`,
+    // Doc: https://www.mongodb.com/docs/manual/reference/method/db.collection.dropIndex/
     dropIndexSql: (idx, tbl = '{table}') => `db.${tbl}.dropIndex("${idx}");`,
     rollbackDropIndexSql: (idx, tbl, cols) => `db.${tbl}.createIndex({ ${cols}: 1 }, { background: true, name: "${idx}" });`,
     supportsConcurrent: false,
@@ -1092,6 +1171,7 @@ const DOCUMENT_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   backup: {
     tool: 'mongodump / MongoDB Ops Manager Snapshots',
     walOrLogName: 'Oplog (local.oplog.rs)',
+    // Doc: https://www.mongodb.com/docs/database-tools/mongodump/
     commandTemplate: (db, path) => `mongodump --db=${db} --out=${path} --oplog`,
   },
   replication: {
@@ -1172,7 +1252,9 @@ const KEYVALUE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
     configFile: 'redis.conf',
   },
   maintenance: {
+    // Doc: https://redis.io/commands/info/
     statsCommand: 'INFO memory;',
+    // Doc: https://redis.io/commands/memory-purge/
     spaceReclaimCommand: 'MEMORY PURGE;',
     spaceReclaimConcept: 'Active Background Defragmentation & Jemalloc Dirty Page Purge',
     tuningDdlTemplate: () =>
@@ -1182,9 +1264,12 @@ const KEYVALUE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
       `CONFIG SET active-defrag-cycle-max 50\n` +
       `MEMORY PURGE`,
   },
+  // Doc: https://redis.io/commands/slowlog-get/
   planCommand: 'SLOWLOG GET 25; / MEMORY USAGE <key>;',
   onlineDdl: {
+    // Doc: https://redis.io/commands/ft.create/
     createIndexSql: (idx, tbl, cols) => `FT.CREATE ${idx} ON HASH PREFIX 1 ${tbl}: SCHEMA ${cols} TEXT;`,
+    // Doc: https://redis.io/commands/ft.dropindex/
     dropIndexSql: (idx) => `FT.DROPINDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `FT.CREATE ${idx} ON HASH PREFIX 1 ${tbl}: SCHEMA ${cols} TEXT;`,
     supportsConcurrent: false,
@@ -1198,6 +1283,7 @@ const KEYVALUE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   backup: {
     tool: 'BGSAVE (RDB) / BGREWRITEAOF (AOF)',
     walOrLogName: 'Append-Only File (appendonly.aof)',
+    // Doc: https://redis.io/commands/bgsave/
     commandTemplate: () => `BGSAVE`,
   },
   replication: {
@@ -1275,16 +1361,21 @@ const GRAPH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'neo4j.conf',
   },
   maintenance: {
+    // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
     statsCommand: 'SHOW INDEXES YIELD *;',
+    // Doc: https://neo4j.com/docs/operations-manual/current/tools/neo4j-admin/
     spaceReclaimCommand: 'CALL dbms.compact();',
     spaceReclaimConcept: 'Offline Store Compaction & Neo4j Admin Store Defragmentation',
     tuningDdlTemplate: () =>
       `// Neo4j Database Compaction & Cache Priming\n` +
       `CALL dbms.compact();`,
   },
+  // Doc: https://neo4j.com/docs/cypher-manual/current/query-tuning/how-do-i-profile-a-query/
   planCommand: 'EXPLAIN MATCH ... / PROFILE MATCH ...;',
   onlineDdl: {
+    // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (n.${cols});`,
+    // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
     dropIndexSql: (idx) => `DROP INDEX ${idx} IF EXISTS;`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (n.${cols});`,
     supportsConcurrent: false,
@@ -1298,6 +1389,7 @@ const GRAPH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'neo4j-admin database backup',
     walOrLogName: 'Neo4j Transaction Log',
+    // Doc: https://neo4j.com/docs/operations-manual/current/backup-restore/online-backup/
     commandTemplate: (db, path) => `neo4j-admin database backup --database=${db} --to-path=${path}`,
   },
   replication: {
@@ -1377,16 +1469,21 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'milvus.yaml / Pinecone Pod Config',
   },
   maintenance: {
+    // Doc: https://milvus.io/docs/manage-collections.md
     statsCommand: 'collection.describe();',
+    // Doc: https://milvus.io/docs/compact_data.md
     spaceReclaimCommand: 'collection.compact();',
     spaceReclaimConcept: 'Vector Segment Merge & Compaction',
     tuningDdlTemplate: (table) =>
       `// Milvus / Vector Collection Segment Compaction\n` +
       `pymilvus.utility.compact("${table}");`,
   },
+  // Doc: https://milvus.io/docs/search.md
   planCommand: 'Vector ANN Query Profiling / Query node latency breakdown',
   onlineDdl: {
+    // Doc: https://milvus.io/docs/build_index.md
     createIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW", "params": {"M": 16, "efConstruction": 64}});`,
+    // Doc: https://milvus.io/docs/drop_index.md
     dropIndexSql: (idx, tbl = '{table}') => `collection.drop_index(index_name="${idx}");`,
     rollbackDropIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW"});`,
     supportsConcurrent: false,
@@ -1400,6 +1497,7 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'milvus-backup / Cloud Snapshot API',
     walOrLogName: 'Vector WAL / Segment logs',
+    // Doc: https://github.com/zilliztech/milvus-backup
     commandTemplate: (db, path) => `milvus-backup create --backup_name=bkp_${Date.now()} --collection_names=${db}`,
   },
   replication: {
@@ -1476,16 +1574,21 @@ const SEARCH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'elasticsearch.yml / opensearch.yml',
   },
   maintenance: {
+    // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-stats.html
     statsCommand: 'GET /{table}/_stats',
+    // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html
     spaceReclaimCommand: 'POST /{table}/_forcemerge?max_num_segments=1',
     spaceReclaimConcept: 'Lucene Segment Force-Merge & Deleted Tombstone Purge',
     tuningDdlTemplate: (table) =>
       `// Elasticsearch / OpenSearch Segment Force-Merge\n` +
       `POST /${table}/_forcemerge?max_num_segments=1&only_expunge_deletes=true`,
   },
+  // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/search-explain.html
   planCommand: 'GET /{table}/_explain/<id> / GET /{table}/_search { "profile": true }',
   onlineDdl: {
+    // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-mapping.html
     createIndexSql: (idx, tbl, cols) => `PUT /${tbl}/_mapping { "properties": { "${cols}": { "type": "keyword" } } }`,
+    // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
     dropIndexSql: (idx) => `DELETE /${idx}`,
     rollbackDropIndexSql: (idx) => `PUT /${idx}`,
     supportsConcurrent: false,
@@ -1499,6 +1602,7 @@ const SEARCH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'Snapshot & Restore API to S3/GCS repository',
     walOrLogName: 'Translog (transaction log)',
+    // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-restore.html
     commandTemplate: (db, path) => `PUT /_snapshot/backup_repo/snapshot_${Date.now()}?wait_for_completion=true`,
   },
   replication: {
@@ -1575,17 +1679,22 @@ const TIMESERIES_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
     configFile: 'influxdb.conf / questdb.conf',
   },
   maintenance: {
+    // Doc: https://docs.influxdata.com/influxdb/v1/query_language/explore-schema/
     statsCommand: 'SHOW STATS',
+    // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#drop-series
     spaceReclaimCommand: 'ALTER TABLE {table} DROP PARTITION ...',
     spaceReclaimConcept: 'Retention Policy Shard Dropping & TSM Compaction',
     tuningDdlTemplate: (table) =>
       `-- Time-Series Retention Policy Maintenance\n` +
       `ALTER RETENTION POLICY "autogen" ON "db" DURATION 30d REPLICATION 1 DEFAULT;`,
   },
+  // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#explain
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
+    // Doc: https://docs.influxdata.com/influxdb/v1/concepts/key_concepts/
     createIndexSql: (idx, tbl, cols) => `-- Time-series engines index tags automatically:\nALTER TABLE ${tbl} ALTER COLUMN ${cols} ADD INDEX;`,
-    dropIndexSql: (idx) => `-- Drop index on tag`,
+    // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#drop-series
+    dropIndexSql: (idx) => `DROP SERIES FROM ${idx}`,
     rollbackDropIndexSql: (idx) => `-- Re-add index on tag`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
@@ -1598,6 +1707,7 @@ const TIMESERIES_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   backup: {
     tool: 'influx backup / file snapshot',
     walOrLogName: 'Time-Series WAL',
+    // Doc: https://docs.influxdata.com/influxdb/v1/administration/backup_and_restore/
     commandTemplate: (db, path) => `influx backup --db ${db} ${path}`,
   },
   replication: {
@@ -1670,7 +1780,9 @@ const GENERIC_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'database.conf',
   },
   maintenance: {
+    // UNVERIFIED: Fallback ANSI SQL statistics
     statsCommand: 'ANALYZE TABLE {table};',
+    // UNVERIFIED: Fallback generic space reclaim
     spaceReclaimCommand: 'OPTIMIZE TABLE {table};',
     spaceReclaimConcept: 'Engine Storage Compaction & Space Reclamation',
     tuningDdlTemplate: (table) =>
@@ -1678,9 +1790,12 @@ const GENERIC_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
       `/* Check your database documentation for native vacuum or rebuild commands */\n` +
       `ANALYZE TABLE ${table};`,
   },
+  // UNVERIFIED: Fallback generic explain query plan
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
+    // UNVERIFIED: Fallback generic index creation
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols});`,
+    // UNVERIFIED: Fallback generic index drop
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols});`,
     supportsConcurrent: false,
@@ -1694,6 +1809,7 @@ const GENERIC_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'Native Database Backup Utility or Storage Volume Snapshot',
     walOrLogName: 'Transaction / Redo / Journal Log',
+    // UNVERIFIED: Fallback generic backup tool
     commandTemplate: (db, path) => `backup_tool --database=${db} --target=${path}`,
   },
   replication: {
@@ -2013,6 +2129,56 @@ export function getEngineProfile(engineId?: string): EngineProfile {
   } else if (metadata?.category === 'streaming_ledger') {
     capabilities['partition-plan'] = 'unsupported';
     unsupportedReason['partition-plan'] = `${metadata?.name || canonical} partitions event log streams and topics rather than relational tables.`;
+  }
+
+  if (canonical === 'snowflake' || canonical.includes('snowflake')) {
+    base = {
+      ...base,
+      memoryParams: {
+        sharedBufferParam: 'Virtual Warehouse Size',
+        workMemParam: 'STATEMENT_TIMEOUT_IN_SECONDS',
+        cacheParam: 'Result Cache & Local SSD Cache',
+        configFile: 'Managed Cloud Service (No OS Configuration File)',
+      },
+      maintenance: {
+        statsCommand: '-- Automatic background metadata and clustering statistics collection;\nSHOW TABLES LIKE \'{table}\';',
+        spaceReclaimCommand: '-- Automatic continuous micro-partition clustering (No manual VACUUM);\nALTER TABLE {table} RECLUSTER;',
+        spaceReclaimConcept: 'Automatic Continuous Micro-partition Clustering & Time Travel Pruning (No Manual VACUUM)',
+        tuningDdlTemplate: (table) =>
+          `-- Snowflake Table Clustering Maintenance for ${table}\n` +
+          `ALTER TABLE ${table} CLUSTER BY (created_at);\n`,
+      },
+      planCommand: 'EXPLAIN USING JSON <QUERY>;',
+      backup: {
+        tool: 'Snowflake Time Travel & Fail-safe',
+        walOrLogName: 'Time Travel & Fail-safe Micro-partition Versioning',
+        commandTemplate: (db) => `CREATE DATABASE ${db}_backup CLONE ${db};`,
+      },
+    };
+  } else if (canonical === 'google_bigquery' || canonical.includes('bigquery')) {
+    base = {
+      ...base,
+      memoryParams: {
+        sharedBufferParam: 'Slots / Reservations',
+        workMemParam: 'Maximum Slot Allocation per Project',
+        cacheParam: 'Serverless Managed Memory',
+        configFile: 'Serverless Cloud Service (No OS Configuration File)',
+      },
+      maintenance: {
+        statsCommand: '-- BigQuery generates column statistics automatically on data load;\nSELECT * FROM `{table}` LIMIT 0;',
+        spaceReclaimCommand: '-- Automatic partition and table lifecycle expiration (No manual VACUUM);\nALTER TABLE `{table}` SET OPTIONS (partition_expiration_days = 90);',
+        spaceReclaimConcept: 'Automatic Partition Expiration & Long-Term Storage Tiering (No Manual VACUUM)',
+        tuningDdlTemplate: (table) =>
+          `-- BigQuery Partition & Lifecycle Sizing for ${table}\n` +
+          `ALTER TABLE \`${table}\` SET OPTIONS (partition_expiration_days = 90);`,
+      },
+      planCommand: 'EXPLAIN <QUERY>;',
+      backup: {
+        tool: 'BigQuery Time Travel & Table Snapshots',
+        walOrLogName: '7-Day Continuous Time Travel History',
+        commandTemplate: (db) => `CREATE SNAPSHOT TABLE \`${db}_snapshot\` CLONE \`${db}\`;`,
+      },
+    };
   }
 
   return {

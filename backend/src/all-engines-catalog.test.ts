@@ -414,4 +414,101 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
 
     expect(violations).toHaveLength(0);
   }, 120000);
+
+  it('SQL Server planCommand and dropIndexSql adhere strictly to official documentation', () => {
+    const profile = getEngineProfile('sqlserver');
+    // planCommand must emit separate batches using GO because SET SHOWPLAN_XML must be the only statement in a batch
+    expect(profile.planCommand).toContain('SET SHOWPLAN_XML ON;\nGO');
+    expect(profile.planCommand).toContain('GO\nSET SHOWPLAN_XML OFF;\nGO');
+
+    // dropIndexSql must not use WITH (ONLINE = ON) for nonclustered indexes (ONLINE on DROP applies only to clustered indexes)
+    const dropSql = profile.onlineDdl.dropIndexSql('idx_users_email', 'users');
+    expect(dropSql).toBe('DROP INDEX idx_users_email ON users;');
+    expect(dropSql).not.toContain('WITH (ONLINE = ON)');
+
+    // createIndexSql uses WITH (ONLINE = ON)
+    const createSql = profile.onlineDdl.createIndexSql('idx_users_email', 'users', 'email');
+    expect(createSql).toContain('WITH (ONLINE = ON)');
+  });
+
+  it('Snowflake and BigQuery have authentic cloud managed controls without invented config files or logs', () => {
+    const snow = getEngineProfile('snowflake');
+    expect(snow.memoryParams.configFile).toContain('Managed Cloud Service');
+    expect(snow.backup.walOrLogName).toContain('Time Travel');
+    expect(snow.backup.walOrLogName).not.toContain('Commit Log / Append Parts');
+    expect(snow.backup.walOrLogName).not.toContain('WAL');
+
+    const bq = getEngineProfile('google_bigquery');
+    expect(bq.memoryParams.configFile).toContain('Serverless Cloud Service');
+    expect(bq.backup.walOrLogName).toContain('Time Travel');
+    expect(bq.backup.walOrLogName).not.toContain('Commit Log / Append Parts');
+    expect(bq.backup.walOrLogName).not.toContain('WAL');
+  });
+
+  it('every vendor profile command has an official doc-URL comment or an UNVERIFIED marker', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.resolve(__dirname, '../../packages/core/src/types/engine-profiles.ts');
+    const sourceCode = fs.readFileSync(filePath, 'utf-8');
+
+    const bases = [
+      'POSTGRES_FAMILY_BASE',
+      'MYSQL_FAMILY_BASE',
+      'ORACLE_BASE',
+      'SQL_SERVER_BASE',
+      'DB2_BASE',
+      'SAP_HANA_BASE',
+      'EMBEDDED_BASE',
+      'COLUMNAR_OLAP_BASE',
+      'WIDE_COLUMN_BASE',
+      'DOCUMENT_BASE',
+      'KEYVALUE_BASE',
+      'GRAPH_BASE',
+      'VECTOR_BASE',
+      'SEARCH_BASE',
+      'TIMESERIES_BASE',
+      'GENERIC_BASE',
+    ];
+
+    const commandKeys = [
+      'statsCommand',
+      'spaceReclaimCommand',
+      'planCommand',
+      'createIndexSql',
+      'dropIndexSql',
+      'commandTemplate',
+    ];
+
+    const missingDocs: string[] = [];
+
+    for (const base of bases) {
+      const baseIdx = sourceCode.indexOf(`const ${base}:`);
+      expect(baseIdx).toBeGreaterThan(-1);
+      let nextBaseIdx = sourceCode.indexOf('\nconst ', baseIdx + 20);
+      if (nextBaseIdx === -1) {
+        nextBaseIdx = sourceCode.indexOf('\nexport function', baseIdx + 20);
+      }
+      const baseSlice = sourceCode.substring(baseIdx, nextBaseIdx > -1 ? nextBaseIdx : undefined);
+
+      const lines = baseSlice.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        for (const cmdKey of commandKeys) {
+          const regex = new RegExp(`^\\s*${cmdKey}:`);
+          if (regex.test(line)) {
+            const preceding = lines.slice(Math.max(0, i - 4), i).join('\n');
+            const hasDoc = /https?:\/\//i.test(preceding) || /UNVERIFIED/i.test(preceding);
+            if (!hasDoc) {
+              missingDocs.push(`${base} -> ${cmdKey} (line: ${line.trim()})`);
+            }
+          }
+        }
+      }
+    }
+
+    if (missingDocs.length > 0) {
+      console.error('Commands missing doc URL or UNVERIFIED marker:', missingDocs);
+    }
+    expect(missingDocs).toHaveLength(0);
+  });
 });

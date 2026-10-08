@@ -31,7 +31,7 @@ export const DATABASE_CATALOG: DatabaseEngineMetadata[] = [
     "icon": "🏛️",
     "rank": 3,
     "popularityScore": 694.47,
-    "commandHint": "SET SHOWPLAN_XML ON; <QUERY>;",
+    "commandHint": "SET SHOWPLAN_XML ON;\nGO\n<QUERY>;\nGO\nSET SHOWPLAN_XML OFF;\nGO",
     "description": "#3 Ranked on DB-Engines. Popularity score: 694.47."
   },
   {
