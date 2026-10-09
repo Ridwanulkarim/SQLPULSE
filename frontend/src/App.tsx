@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { Header, AppTabId, AppTheme } from './components/Header';
 import { BrandLogo } from './components/BrandLogo';
+import { StudioSidebar } from './components/StudioSidebar';
 import { MetricsOverview } from './components/MetricsOverview';
 import { PlanInput } from './components/PlanInput';
 import { VisualPlanGraph } from './components/VisualPlanGraph';
@@ -255,13 +256,9 @@ export function App() {
 
   return (
     <div className={`min-h-screen flex flex-col relative ${currentTheme} font-sans`}>
-      {currentTheme === 'theme-lavender' && (
-        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-          <div className="absolute top-[-10%] left-[-5%] w-[45vw] h-[45vw] rounded-full bg-purple-200/40 blur-[100px]" />
-          <div className="absolute top-[20%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-indigo-100/50 blur-[120px]" />
-          <div className="absolute bottom-[-10%] left-[30%] w-[35vw] h-[35vw] rounded-full bg-violet-200/30 blur-[90px]" />
-        </div>
-      )}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-0 left-0 w-[55vw] h-[45vw] max-w-[700px] max-h-[500px] bg-gradient-to-br from-violet-200/20 via-indigo-100/10 to-transparent blur-[110px]" />
+      </div>
 
       <Header
         activeTab={activeTab}
@@ -274,49 +271,31 @@ export function App() {
         onSelectTheme={setCurrentTheme}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 relative z-10">
-        <div className="text-center max-w-3xl mx-auto space-y-4 pt-2 pb-2">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 text-xs font-semibold text-zinc-800 dark:text-zinc-200 shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-            SQLPulse Engine • 447 Databases Indexed • 25 Specialized Studios
-          </div>
+      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 relative z-10 flex flex-col lg:flex-row gap-8 items-start">
+        {/* Left Studio Sidebar (Matching Image 1 On This Page navigation) */}
+        <aside className="hidden lg:block w-56 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-3 select-none">
+          <StudioSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        </aside>
 
-          <div className="flex items-center justify-center gap-3.5">
-            <BrandLogo size="lg" />
-            <h1 className="text-4xl sm:text-6xl font-brand font-black tracking-[-0.035em] text-slate-950 dark:text-white flex items-center select-none">
-              SQL<span className="text-[#00A8B5] dark:text-[#00F0FF]">Pulse</span>
-            </h1>
-          </div>
-
-          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 max-w-2xl mx-auto leading-relaxed">
-            Universal database performance tuning, zero-downtime migration linter, Cloud FinOps cost sizer, index doctor, and PII anonymization across 447 database engines.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+        {/* Right Active Studio Workspace */}
+        <div className="flex-1 min-w-0 w-full space-y-6">
+          {/* Mobile Studio Quick Switcher */}
+          <div className="lg:hidden flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Active Studio</span>
             <button
               type="button"
               onClick={() => setIsCommandPaletteOpen(true)}
-              className="px-4 py-2 rounded-full text-xs font-bold bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm transition active:scale-95 flex items-center gap-2"
+              className="text-xs font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1.5"
             >
-              <Search className="w-3.5 h-3.5 text-cyan-400" />
-              <span>⌘K Spotlight Studio Search</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('matrix')}
-              className="px-4 py-2 rounded-full text-xs font-semibold bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 transition active:scale-95 flex items-center gap-1.5 shadow-xs"
-            >
-              <Database className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Explore 447 Database Matrix</span>
+              <Search className="w-3.5 h-3.5" />
+              <span>Switch Studio (⌘K)</span>
             </button>
           </div>
-        </div>
 
-        {currentStudioId && (
-          <div className="space-y-3 mb-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4 sm:py-2.5 rounded-2xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 shadow-xs backdrop-blur-md">
+          {currentStudioId && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:px-4 sm:py-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-zinc-200/80 dark:border-zinc-800 shadow-xs backdrop-blur-md">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Analyzing for:</span>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Target Engine:</span>
                 <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <span className="text-base leading-none">🗄️</span>
                   {currentProfile.name}
@@ -331,36 +310,40 @@ export function App() {
                     ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                     : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                 }`}>
-                  {currentCapability === 'native' ? '● Native Engine Support' : currentCapability === 'adapted' ? '◈ Adapted Family Profile' : '▲ Not Applicable / Preview'}
+                  {currentCapability === 'native' ? '● Native Engine Support' : currentCapability === 'adapted' ? '◈ Adapted Family Profile' : '▲ Preview'}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <div className="flex items-center gap-2">
                 {isSimulation && (
-                  <span className="px-2.5 py-0.5 rounded-full font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center gap-1">
-                    <span>⚡ Simulation / Estimate Model</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center gap-1">
+                    <span>⚡ Simulation Model</span>
                   </span>
                 )}
-                <span className="text-slate-500 dark:text-slate-400 text-[10px] hidden lg:inline">
-                  Review all generated SQL &amp; scripts before running in production
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 transition flex items-center gap-1.5"
+                >
+                  <Search className="w-3 h-3 text-zinc-500" />
+                  <span>⌘K Studio Search</span>
+                </button>
               </div>
             </div>
+          )}
 
-            {currentCapability === 'unsupported' && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3.5 shadow-xs">
-                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1.5">
-                  <h4 className="font-bold text-sm text-amber-900 dark:text-amber-100">
-                    Not applicable for {currentProfile.name}
-                  </h4>
-                  <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-                    {unsupportedReason || `The "${activeTab}" studio features do not directly apply to ${currentProfile.name} (${currentProfile.family}). Equivalent architectural concepts and alternatives are detailed in the engine profile documentation.`}
-                  </p>
-                </div>
+          {currentCapability === 'unsupported' && (
+            <div className="p-4 sm:p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start gap-3.5 shadow-xs">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1.5">
+                <h4 className="font-bold text-sm text-amber-900 dark:text-amber-100">
+                  Not applicable for {currentProfile.name}
+                </h4>
+                <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                  {unsupportedReason || `The "${activeTab}" studio features do not directly apply to ${currentProfile.name} (${currentProfile.family}). Equivalent architectural concepts and alternatives are detailed in the engine profile documentation.`}
+                </p>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
         <Suspense fallback={<StudioLoadingFallback />}>
           {activeTab === 'plan' && (
@@ -585,6 +568,7 @@ export function App() {
             />
           )}
         </Suspense>
+        </div>
       </main>
 
       <Suspense fallback={null}>

@@ -136,19 +136,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('plan')}
-              className="flex items-center gap-2.5 group text-left"
+              className="flex items-center gap-2.5 group text-left select-none"
             >
               <BrandLogo size="md" />
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <span className="font-brand font-black text-2xl tracking-[-0.035em] text-slate-950 dark:text-white flex items-center select-none">
-                    SQL<span className="text-[#00A8B5] dark:text-[#00F0FF]">Pulse</span>
-                  </span>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-[#00A8B5] dark:text-[#00F0FF] border border-cyan-500/20">
-                    447 DBs • 25 Studios
-                  </span>
-                </div>
-              </div>
+              <span className="font-bold text-xl sm:text-2xl tracking-[-0.03em] text-zinc-950 dark:text-white">
+                SQLPulse
+              </span>
             </button>
           </div>
 
