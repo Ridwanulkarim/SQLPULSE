@@ -8,8 +8,7 @@ import {
   ShieldAlert,
   Code2,
   Table2,
-  RotateCcw,
-  Sparkles
+  RotateCcw
 } from 'lucide-react';
 import { UniversalDbSelector } from './UniversalDbSelector';
 import { DbBrandLogo } from './DbBrandLogo';
@@ -582,7 +581,7 @@ LIMIT 50;`,
                 title={`Load authentic ${srcMeta.name} sample code`}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-purple-700 bg-white border border-purple-300 hover:bg-purple-100 shadow-sm transition active:scale-95"
               >
-                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                <Code2 className="w-3.5 h-3.5 text-purple-600" />
                 <span>Load {srcMeta.name} Sample</span>
               </button>
               <button

@@ -250,7 +250,7 @@ export const ConfigTunerTab: React.FC<ConfigTunerTabProps> = ({
               <option value="oltp_web">🌐 Web Application / High-Throughput OLTP</option>
               <option value="olap_dw">📊 Data Warehouse / Heavy Analytics (OLAP)</option>
               <option value="mixed_hybrid">⚖️ Mixed Hybrid (HTAP / Moderate Reports)</option>
-              <option value="vector_ai">🤖 Vector AI / Semantic Search &amp; RAG</option>
+              <option value="vector_ai">Vector Search &amp; RAG Workloads</option>
               <option value="cache_inmemory">⚡ In-Memory Cache / Fast Key-Value</option>
               <option value="timeseries_iot">📈 Time-Series / IoT High-Ingestion</option>
             </select>

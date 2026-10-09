@@ -15,7 +15,7 @@ import {
   Activity,
   Clock,
   Zap,
-  Sparkles,
+  Wrench,
   Gauge,
   ArrowDownRight,
   SlidersHorizontal,
@@ -94,7 +94,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
     { id: 'olap', label: '📊 Analytics & OLAP' },
     { id: 'document', label: '📄 Document NoSQL' },
     { id: 'keyvalue', label: '⚡ Key-Value & Memory' },
-    { id: 'vector', label: '🧠 Vector AI' },
+    { id: 'vector', label: 'Vector & Embeddings' },
     { id: 'search', label: '🔍 Search Engines' },
     { id: 'graph', label: '🕸️ Graph DBs' },
     { id: 'timeseries', label: '📈 Time-Series' },
@@ -298,7 +298,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
                 : 'bg-gradient-to-r from-amber-50 to-orange-50 text-slate-800 border-amber-300 hover:bg-amber-100'
             }`}
           >
-            <Sparkles className={`w-3.5 h-3.5 ${simulatePostVacuum ? 'text-amber-200 animate-spin' : 'text-amber-600'}`} />
+            <Wrench className={`w-3.5 h-3.5 ${simulatePostVacuum ? 'text-amber-200 animate-spin' : 'text-amber-600'}`} />
             <span>{simulatePostVacuum ? `${reclaimNoun} Simulation: ACTIVE (Post-Reclaim State)` : `Simulate ${isPgFamily ? 'Vacuum & Repack' : 'Compaction & Reclaim'} Run`}</span>
           </button>
 

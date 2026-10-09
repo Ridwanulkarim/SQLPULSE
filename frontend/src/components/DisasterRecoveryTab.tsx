@@ -23,17 +23,17 @@ export function getEngineBackupStrategyLabel(engine: string): string {
     const profile = getEngineProfile(engine);
     if (profile.backup) {
       if (profile.engineId === 'snowflake' || profile.name.toLowerCase().includes('snowflake')) {
-        return '✨ Time Travel Historical Retention + Continuous Fail-Safe (Zero RPO)';
+        return 'Time Travel Historical Retention + Continuous Fail-Safe (Zero RPO)';
       }
       if (profile.engineId.includes('bigquery') || profile.name.toLowerCase().includes('bigquery')) {
-        return '✨ Continuous Snapshot History + 7-Day Time Travel (Zero RPO)';
+        return 'Continuous Snapshot History + 7-Day Time Travel (Zero RPO)';
       }
-      return `✨ ${profile.backup.tool} + Continuous ${profile.backup.walOrLogName} Streaming (Low RPO)`;
+      return `${profile.backup.tool} + Continuous ${profile.backup.walOrLogName} Streaming (Low RPO)`;
     }
   } catch {
     // Fallback if profile not found
   }
-  return '✨ Full Backup + Continuous Log & CDC Streaming (Low RPO)';
+  return 'Full Backup + Continuous Log & CDC Streaming (Low RPO)';
 }
 
 interface DisasterRecoveryTabProps {

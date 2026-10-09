@@ -155,7 +155,7 @@ export const DatabaseComparisonTab: React.FC<DatabaseComparisonTabProps> = ({
   const presets = [
     { label: 'Relational Giants: Postgres vs MySQL vs Snowflake', d1: 'postgres', d2: 'mysql', d3: 'snowflake' },
     { label: 'Real-Time OLAP: ClickHouse vs Snowflake vs DuckDB', d1: 'clickhouse', d2: 'snowflake', d3: 'duckdb' },
-    { label: 'Vector AI: Pinecone vs Milvus vs Qdrant', d1: 'pinecone', d2: 'milvus', d3: 'qdrant' },
+    { label: 'Vector Engines: Pinecone vs Milvus vs Qdrant', d1: 'pinecone', d2: 'milvus', d3: 'qdrant' },
     { label: 'In-Memory & Cache: Redis vs Valkey vs Memcached', d1: 'redis', d2: 'valkey', d3: 'memcached' },
     { label: 'Document NoSQL: MongoDB vs Couchbase vs Firestore', d1: 'mongodb', d2: 'couchbase', d3: 'firestore' },
   ];

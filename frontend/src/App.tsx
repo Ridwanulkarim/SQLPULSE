@@ -283,8 +283,8 @@ export function App() {
 
           <div className="flex items-center justify-center gap-3.5">
             <BrandLogo size="lg" />
-            <h1 className="text-4xl sm:text-6xl font-brand font-extrabold tracking-[-0.035em] text-slate-950 dark:text-white flex items-center">
-              SQL<span className="text-[#0096b3] dark:text-[#00f0ff]">Pulse</span>
+            <h1 className="text-4xl sm:text-6xl font-brand font-black tracking-[-0.035em] text-slate-950 dark:text-white flex items-center select-none">
+              SQL<span className="text-[#00A8B5] dark:text-[#00F0FF]">Pulse</span>
             </h1>
           </div>
 
@@ -623,7 +623,7 @@ export function App() {
 
       <footer className="border-t border-purple-200/50 py-6 text-center text-xs text-slate-500 relative z-10 font-sans">
         <p>
-          SQLPulse — Universal Database Engineering Studio • {DATABASE_CATALOG.length} Engines Cataloged Across SQL, NoSQL, Vector AI, Graph, Time-Series &amp; In-Memory. Press <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-purple-200 shadow-xs">⌘K</kbd> to search anytime.
+          SQLPulse — Universal Database Engineering Studio • {DATABASE_CATALOG.length} Engines Cataloged Across SQL, NoSQL, Vector, Graph, Time-Series &amp; In-Memory. Press <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white rounded border border-purple-200 shadow-xs">⌘K</kbd> to search anytime.
         </p>
       </footer>
     </div>

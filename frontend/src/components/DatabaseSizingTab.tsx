@@ -255,7 +255,7 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Accurately model RAM, IOPS demand, Vector AI HNSW graph overheads, PgBouncer pooler sizing, and storage across all {DATABASE_CATALOG.length} database systems.
+              Accurately model RAM, IOPS demand, Vector HNSW graph overheads, PgBouncer pooler sizing, and storage across all {DATABASE_CATALOG.length} database systems.
             </p>
           </div>
 
@@ -281,7 +281,7 @@ CREATE INDEX ON ${partitionTable} (customer_id, ${partitionKey});
             }`}
           >
             <Cpu className="w-3.5 h-3.5 text-purple-600" />
-            🧠 Vector AI RAM
+            Vector Embeddings RAM
           </button>
           <button
             onClick={() => setActiveSubTab('oltp')}

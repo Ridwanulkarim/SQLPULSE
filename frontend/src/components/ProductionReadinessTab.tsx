@@ -8,7 +8,6 @@ import {
   XCircle,
   Terminal,
   Activity,
-  Sparkles,
   Server,
   Network,
   Gauge,
@@ -177,7 +176,7 @@ export const ProductionReadinessTab: React.FC<ProductionReadinessTabProps> = ({
                   : 'bg-gradient-to-r from-amber-50 to-orange-50 text-slate-800 border-amber-300 hover:bg-amber-100'
               }`}
             >
-              <Sparkles className={`w-3.5 h-3.5 ${applyPatch ? 'text-amber-200 animate-spin' : 'text-amber-600'}`} />
+              <ShieldCheck className={`w-3.5 h-3.5 ${applyPatch ? 'text-amber-200 animate-spin' : 'text-amber-600'}`} />
               <span>{applyPatch ? 'Hardened: Tuning Patch Active (Simulated)' : 'Simulate 1-Click Hardening Patch'}</span>
             </button>
           </div>
@@ -232,7 +231,7 @@ export const ProductionReadinessTab: React.FC<ProductionReadinessTabProps> = ({
                   </span>
                   {result.appliedTuningPatch && (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/30 text-teal-300 border border-teal-400/40 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5" /> Hardened
+                      <ShieldCheck className="w-2.5 h-2.5" /> Hardened
                     </span>
                   )}
                 </div>

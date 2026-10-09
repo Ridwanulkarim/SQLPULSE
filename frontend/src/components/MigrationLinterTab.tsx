@@ -308,7 +308,7 @@ ${result?.findings.map((f) => f.safeAlternativeSql).join('\n\n') || currentDb.co
                   className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 transition flex items-center gap-1.5 shadow-sm active:scale-95"
                 >
                   <FileText className="w-3.5 h-3.5 text-purple-700" />
-                  <span>{showRunbook ? 'Hide Runbook' : '✨ Runbook'}</span>
+                  <span>{showRunbook ? 'Hide Runbook' : 'Runbook'}</span>
                 </button>
               </div>
 

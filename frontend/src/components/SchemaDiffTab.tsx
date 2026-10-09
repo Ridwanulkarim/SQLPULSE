@@ -7,7 +7,6 @@ import {
   Layers,
   Code2,
   Table2,
-  Sparkles,
   AlertTriangle
 } from 'lucide-react';
 import { UniversalDbSelector } from './UniversalDbSelector';
@@ -530,7 +529,7 @@ CREATE TABLE ledger_entries (
                 disabled={isLoading}
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md transition active:scale-95 flex items-center gap-1.5"
               >
-                <Sparkles className="w-3.5 h-3.5" /> Compute Custom DDL Diff
+                <GitCompare className="w-3.5 h-3.5" /> Compute Custom DDL Diff
               </button>
             </div>
           </div>

@@ -58,7 +58,7 @@ export const QuerySynthesizerTab: React.FC<QuerySynthesizerTabProps> = ({
       text: 'গেল ১ বছরে সবচেয়ে বেশি কেনাকাটা করা সেরা ১০ গ্রাহক যারা গত ৬০ দিনে কোনো রিভিউ দেয়নি তাদের তালিকা বের করো',
     },
     {
-      label: '🤖 Vector AI Semantic Search',
+      label: 'Vector Semantic Search',
       engine: 'pinecone',
       domain: 'vector_rag',
       text: 'Search top 10 document embeddings matching query with category and published_year metadata filters',
@@ -261,8 +261,8 @@ export const QuerySynthesizerTab: React.FC<QuerySynthesizerTabProps> = ({
                 <option value="radiology_dicom">🏥 Radiology PACS &amp; Medical Imaging (DICOM Metadata &amp; Scans)</option>
                 <option value="fitness_wearables">🏋️ Fitness &amp; Wearables Health (HRV, Sleep Stages &amp; SpO2)</option>
               </optgroup>
-              <optgroup label="🚀 AI, Real-Time Media &amp; Communications (12)">
-                <option value="vector_embeddings">🧠 GenAI &amp; Vector Search (1536-dim RAG Embeddings)</option>
+              <optgroup label="Vector, Real-Time Media &amp; Communications (12)">
+                <option value="vector_embeddings">Vector Search (1536-dim RAG Embeddings)</option>
                 <option value="iot">📡 IoT &amp; Smart Telemetry (Sensors, Temp &amp; Vibration)</option>
                 <option value="ride_sharing">🚗 Ride-Sharing &amp; Mobility (Trips, GPS &amp; Surge Dispatch)</option>
                 <option value="food_delivery">🍕 Food Delivery &amp; Kitchens (Live Courier GPS &amp; Menus)</option>

@@ -92,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
   const tabs: { id: AppTabId; label: string; icon: React.ReactNode; category: string; desc: string }[] = [
     
     { id: 'plan', label: 'Plan Visualizer', icon: <GitGraph className="w-3.5 h-3.5 text-indigo-600" />, category: 'Performance', desc: 'Tree cost graph & bottlenecks' },
-    { id: 'advisor', label: 'Query Advisor', icon: <SearchCheck className="w-3.5 h-3.5 text-blue-600" />, category: 'Performance', desc: 'AI anti-pattern & compound ESR' },
+    { id: 'advisor', label: 'Query Advisor', icon: <SearchCheck className="w-3.5 h-3.5 text-blue-600" />, category: 'Performance', desc: 'Heuristic anti-pattern & compound ESR' },
     { id: 'rewriter', label: 'SQL Rewriter', icon: <Zap className="w-3.5 h-3.5 text-amber-600" />, category: 'Performance', desc: '10x-100x sargability AST optimizer' },
     { id: 'orm_profiler', label: 'ORM Profiler', icon: <Code2 className="w-3.5 h-3.5 text-emerald-600" />, category: 'Performance', desc: 'N+1 loop & Cartesian eliminator' },
     { id: 'logs', label: 'Slow Logs', icon: <FileSearch className="w-3.5 h-3.5 text-rose-600" />, category: 'Performance', desc: 'Slow log forensic analyzer' },
@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'migration', label: 'Safe Migration', icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />, category: 'Migrations', desc: 'Zero-downtime DDL linter & CI/CD' },
     { id: 'partition', label: 'Partitioning', icon: <Layers className="w-3.5 h-3.5 text-purple-600" />, category: 'Migrations', desc: 'Big data range & hash sharding' },
     { id: 'transpiler', label: 'Transpiler', icon: <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />, category: 'Migrations', desc: 'Cross-dialect polyglot converter' },
-    { id: 'bloat', label: 'Bloat & Vacuum', icon: <HardDrive className="w-3.5 h-3.5 text-amber-600" />, category: 'Migrations', desc: 'Index bloat & zero-downtime repack' },
+    { id: 'bloat', label: 'Bloat & Reclaim', icon: <HardDrive className="w-3.5 h-3.5 text-amber-600" />, category: 'Migrations', desc: 'Storage bloat & zero-downtime defrag' },
 
     { id: 'production_readiness', label: 'Readiness Score', icon: <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />, category: 'Architecture', desc: 'Pre-launch SLA/SLO health scorecard' },
     { id: 'chaos_simulator', label: 'Chaos Sim', icon: <Flame className="w-3.5 h-3.5 text-rose-600" />, category: 'Architecture', desc: 'Node crash & split-brain simulator' },
@@ -117,12 +117,12 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sanitizer', label: 'PII Sanitizer', icon: <EyeOff className="w-3.5 h-3.5 text-rose-600" />, category: 'FinOps & Security', desc: 'GDPR/HIPAA data masking & staging' },
     { id: 'security', label: 'Security & RLS', icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />, category: 'FinOps & Security', desc: 'RBAC least-privilege & PII masking' },
 
-    { id: 'cdc_outbox', label: 'CDC & Outbox', icon: <Radio className="w-3.5 h-3.5 text-violet-600" />, category: 'AI & Data', desc: 'Transactional outbox & Debezium' },
-    { id: 'vector_tuner', label: 'Vector & RAG', icon: <Cpu className="w-3.5 h-3.5 text-cyan-600" />, category: 'AI & Data', desc: 'HNSW memory & hybrid search' },
-    { id: 'synthesizer', label: 'Query Synthesizer', icon: <Terminal className="w-3.5 h-3.5 text-purple-600" />, category: 'AI & Data', desc: 'Multilingual text-to-query studio' },
-    { id: 'connect', label: 'Connect Hub', icon: <Link2 className="w-3.5 h-3.5 text-indigo-600" />, category: 'AI & Data', desc: 'DSN connection strings & ORMs' },
-    { id: 'mock', label: 'Mock Generator', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-fuchsia-600" />, category: 'AI & Data', desc: 'Realistic datasets & load benchmark' },
-    { id: 'matrix', label: '447 DB Matrix', icon: <Database className="w-3.5 h-3.5 text-indigo-600" />, category: 'AI & Data', desc: '447 engine comparison index' },
+    { id: 'cdc_outbox', label: 'CDC & Outbox', icon: <Radio className="w-3.5 h-3.5 text-violet-600" />, category: 'Data & Integration', desc: 'Transactional outbox & Debezium' },
+    { id: 'vector_tuner', label: 'Vector Index', icon: <Cpu className="w-3.5 h-3.5 text-cyan-600" />, category: 'Data & Integration', desc: 'HNSW memory & similarity indexing' },
+    { id: 'synthesizer', label: 'Query Synthesizer', icon: <Terminal className="w-3.5 h-3.5 text-purple-600" />, category: 'Data & Integration', desc: 'Natural language to SQL studio' },
+    { id: 'connect', label: 'Connect Hub', icon: <Link2 className="w-3.5 h-3.5 text-indigo-600" />, category: 'Data & Integration', desc: 'DSN connection strings & ORMs' },
+    { id: 'mock', label: 'Mock Generator', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-fuchsia-600" />, category: 'Data & Integration', desc: 'Realistic datasets & load benchmark' },
+    { id: 'matrix', label: '447 DB Matrix', icon: <Database className="w-3.5 h-3.5 text-indigo-600" />, category: 'Data & Integration', desc: '447 engine comparison index' },
   ];
 
   const activeTabObj = tabs.find(t => t.id === activeTab) || tabs[0];
@@ -140,11 +140,11 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <BrandLogo size="md" />
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-brand font-extrabold text-xl tracking-[-0.035em] text-slate-950 dark:text-white flex items-center">
-                    SQL<span className="text-[#0096b3] dark:text-[#00f0ff]">Pulse</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-brand font-black text-2xl tracking-[-0.035em] text-slate-950 dark:text-white flex items-center select-none">
+                    SQL<span className="text-[#00A8B5] dark:text-[#00F0FF]">Pulse</span>
                   </span>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-[#0096b3] dark:text-[#00f0ff] border border-cyan-500/20">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-[#00A8B5] dark:text-[#00F0FF] border border-cyan-500/20">
                     447 DBs • 25 Studios
                   </span>
                 </div>

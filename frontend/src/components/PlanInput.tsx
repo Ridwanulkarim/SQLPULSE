@@ -58,7 +58,7 @@ export const PlanInput: React.FC<PlanInputProps> = ({
     { id: 'olap', label: 'Analytics & OLAP', icon: '📊' },
     { id: 'document', label: 'Document NoSQL', icon: '📄' },
     { id: 'keyvalue', label: 'Key-Value & In-Memory', icon: '⚡' },
-    { id: 'vector', label: 'Vector AI & ML', icon: '🧠' },
+    { id: 'vector', label: 'Vector & Embeddings', icon: '📐' },
     { id: 'search', label: 'Search Engines', icon: '🔍' },
     { id: 'graph', label: 'Graph DBs', icon: '🕸️' },
     { id: 'timeseries', label: 'Time-Series', icon: '📈' },

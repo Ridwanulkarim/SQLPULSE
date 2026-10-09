@@ -27,7 +27,7 @@ export const UniversalDbSelector: React.FC<UniversalDbSelectorProps> = ({
     { id: 'olap', label: 'Analytics & OLAP', icon: '📊' },
     { id: 'document', label: 'Document NoSQL', icon: '📄' },
     { id: 'keyvalue', label: 'Key-Value & Memory', icon: '⚡' },
-    { id: 'vector', label: 'Vector AI', icon: '🧠' },
+    { id: 'vector', label: 'Vector & Embeddings', icon: '📐' },
     { id: 'search', label: 'Search Engines', icon: '🔍' },
     { id: 'graph', label: 'Graph DBs', icon: '🕸️' },
     { id: 'timeseries', label: 'Time-Series', icon: '📈' },

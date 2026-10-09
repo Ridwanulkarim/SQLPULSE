@@ -59,7 +59,7 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
     } else if (meta.category === 'graph' || norm.includes('neo4j')) {
       sample = `// Neo4j Cypher: Unbounded variable-length traversal (-[:KNOWS*]->) causes combinatorial blowup\nMATCH (u:User {email: 'alex@example.com'})-[:KNOWS*]->(friend:User)\nRETURN friend;`;
     } else if (meta.category === 'vector' || norm.includes('pinecone') || norm.includes('milvus')) {
-      sample = `// Vector AI: Brute-force exact search across 10M embeddings\nclient.query({\n  vector: [0.12, -0.44, 0.89],\n  top_k: 10,\n  exact_search: true\n});`;
+      sample = `// Vector: Brute-force exact search across 10M embeddings\nclient.query({\n  vector: [0.12, -0.44, 0.89],\n  top_k: 10,\n  exact_search: true\n});`;
     } else if (meta.category === 'olap' || norm.includes('click')) {
       sample = `-- ClickHouse: Wildcard scan without partition pruning\nSELECT * FROM telemetry_events WHERE host_id LIKE '%server%' ORDER BY event_time DESC;`;
     } else {
@@ -115,10 +115,10 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
       sql: `// Neo4j Cypher: Unbounded variable-length traversal (-[:KNOWS*]->) causes combinatorial blowup\nMATCH (u:User {email: 'alex@example.com'})-[:KNOWS*]->(friend:User)\nRETURN friend;`,
     },
     {
-      label: 'Vector AI Exact Brute-Force KNN',
-      icon: '🧠',
+      label: 'Vector Exact Brute-Force KNN',
+      icon: '📐',
       engine: 'pinecone',
-      sql: `// Vector AI: Brute-force exact search across 10M embeddings\nclient.query({\n  vector: [0.12, -0.44, 0.89, ...],\n  top_k: 10,\n  exact_search: true\n});`,
+      sql: `// Vector: Brute-force exact search across 10M embeddings\nclient.query({\n  vector: [0.12, -0.44, 0.89, ...],\n  top_k: 10,\n  exact_search: true\n});`,
     },
     {
       label: 'ClickHouse Unpartitioned Scan',
@@ -137,7 +137,7 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <Zap className="w-4 h-4 text-purple-600 fill-purple-500/20 shrink-0" />
               <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                Universal AI Query Anti-Pattern Scanner &amp; Index Synthesizer
+                Universal Query Anti-Pattern Scanner &amp; Index Synthesizer
               </h2>
               <span className="px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-900 rounded-full border border-purple-200">
                 {DATABASE_CATALOG.length} DB Engines Active
@@ -346,7 +346,7 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
-                  <span>✨ Optimized Rewrite for {currentDb.name}</span>
+                  <span>Optimized Rewrite for {currentDb.name}</span>
                   <button
                     type="button"
                     onClick={() => handleCopy(result.rewrittenQuery, 'rewritten_sql')}
@@ -421,7 +421,7 @@ export const QueryAdvisorTab: React.FC<QueryAdvisorTabProps> = ({
             </div>
             <h4 className="text-xs font-bold text-slate-900">Multi-Model Engine Awareness</h4>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Detects SQL sargability, MongoDB `$where` JS bottlenecks, Redis `KEYS *` event loop locks, Vector AI KNN scans, and Cypher cartesian products across 447 engines.
+              Detects SQL sargability, MongoDB `$where` JS bottlenecks, Redis `KEYS *` event loop locks, Vector KNN scans, and Cypher cartesian products across 447 engines.
             </p>
           </div>
 
