@@ -6,6 +6,14 @@ import {
   StudioId,
   StudioCapability,
 } from './engine-profile';
+import { getEngineSpecificOverride } from './engine-profile-overrides';
+
+export function splitColumns(columns: string): string[] {
+  return columns
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
 
 // Canonical list of all 25 studio IDs
 export const ALL_STUDIO_IDS: StudioId[] = [
@@ -54,6 +62,12 @@ export const ENGINE_ALIASES: Record<string, string> = {
   redshift: 'amazon_redshift',
   neon: 'postgresql',
   alloydb: 'postgresql',
+  azure_cosmos_db: 'microsoft_azure_cosmos_db',
+  cosmosdb: 'microsoft_azure_cosmos_db',
+  cosmos_db: 'microsoft_azure_cosmos_db',
+  firestore: 'google_cloud_firestore',
+  neptune: 'amazon_neptune',
+  hive: 'apache_hive',
 };
 
 // Set of all recognized engine IDs and aliases
@@ -713,22 +727,23 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   maintenance: {
     // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20c7d2c375191014a4c6e9447432cb11.html
     statsCommand: 'CREATE STATISTICS ON {table}; REFRESH STATISTICS ON {table};',
-    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d3f8207519101490bdf5bf528c11bb.html
-    spaceReclaimCommand: 'ALTER TABLE {table} MERGE DELTA INDEX;',
+    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b37205a03a661715/20d8f3ec7519101490238d97fb18c0c4.html
+    spaceReclaimCommand: 'MERGE DELTA OF "{table}";',
     spaceReclaimConcept: 'Column Store In-Memory Delta Merge & Optimization',
     tuningDdlTemplate: (table) =>
       `-- SAP HANA Column Store Delta Merge and Statistics Refresh\n` +
-      `ALTER TABLE ${table} MERGE DELTA INDEX;\n` +
+      `MERGE DELTA OF "${table}";\n` +
       `REFRESH STATISTICS ON ${table};`,
   },
   // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d6f2fb75191014b2a3c713b5dc83c6.html
   planCommand: 'EXPLAIN PLAN FOR <QUERY>; SELECT * FROM EXPLAIN_PLAN_TABLE;',
   onlineDdl: {
-    createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
+    // Doc: https://help.sap.com/docs/HANA_SERVICE_CF/7c78879d0c5247f2905b3c582f3473f9/20d8293775191014a5b6b8014e39750b.html
+    createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl} (${splitColumns(cols).join(', ')});`,
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
+    rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl} (${splitColumns(cols).join(', ')});`,
     supportsConcurrent: false,
-    onlineClause: 'ONLINE',
+    onlineClause: 'NONE',
   },
   systemViews: {
     slowQueries: 'M_EXPENSIVE_STATEMENTS / M_SQL_PLAN_CACHE',
@@ -939,10 +954,16 @@ const COLUMNAR_OLAP_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
     // Doc: https://clickhouse.com/docs/en/sql-reference/statements/alter/projection
-    createIndexSql: (idx, tbl, cols) => `-- Columnar systems use sort keys / clustering keys:\nALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${cols} ORDER BY ${cols});`,
+    createIndexSql: (idx, tbl, cols) => {
+      const colsList = splitColumns(cols).join(', ');
+      return `-- Columnar systems use sort keys / clustering keys:\nALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${colsList} ORDER BY ${colsList});`;
+    },
     // Doc: https://clickhouse.com/docs/en/sql-reference/statements/alter/projection
     dropIndexSql: (idx, tbl = '{table}') => `ALTER TABLE ${tbl} DROP PROJECTION ${idx};`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `ALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${cols} ORDER BY ${cols});`,
+    rollbackDropIndexSql: (idx, tbl, cols) => {
+      const colsList = splitColumns(cols).join(', ');
+      return `ALTER TABLE ${tbl} ADD PROJECTION ${idx} (SELECT ${colsList} ORDER BY ${colsList});`;
+    },
     supportsConcurrent: false,
     onlineClause: 'METADATA_ONLY',
   },
@@ -963,7 +984,7 @@ const COLUMNAR_OLAP_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description
     syncReplicaConfig: "ReplicatedMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}')",
   },
   syntax: {
-    identityColumn: 'BIGINT AUTO_INCREMENT',
+    identityColumn: 'UInt64 (use generateUUIDv4() or cityHash64())',
     rowLimit: (n) => `LIMIT ${n}`,
     jsonType: 'VARIANT / JSON',
     quoteIdentifier: (id) => `"${id}"`,
@@ -1152,10 +1173,20 @@ const DOCUMENT_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   planCommand: 'db.{table}.find(...).explain("executionStats");',
   onlineDdl: {
     // Doc: https://www.mongodb.com/docs/manual/reference/method/db.collection.createIndex/
-    createIndexSql: (idx, tbl, cols) => `db.${tbl}.createIndex({ ${cols}: 1 }, { background: true, name: "${idx}" });`,
+    createIndexSql: (idx, tbl, cols) => {
+      const fields = splitColumns(cols)
+        .map((c) => `"${c.split(/\s+/)[0]}": 1`)
+        .join(', ');
+      return `db.${tbl}.createIndex({ ${fields} }, { background: true, name: "${idx}" });`;
+    },
     // Doc: https://www.mongodb.com/docs/manual/reference/method/db.collection.dropIndex/
     dropIndexSql: (idx, tbl = '{table}') => `db.${tbl}.dropIndex("${idx}");`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `db.${tbl}.createIndex({ ${cols}: 1 }, { background: true, name: "${idx}" });`,
+    rollbackDropIndexSql: (idx, tbl, cols) => {
+      const fields = splitColumns(cols)
+        .map((c) => `"${c.split(/\s+/)[0]}": 1`)
+        .join(', ');
+      return `db.${tbl}.createIndex({ ${fields} }, { background: true, name: "${idx}" });`;
+    },
     supportsConcurrent: false,
     onlineClause: 'background: true',
   },
@@ -1168,7 +1199,10 @@ const DOCUMENT_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
     tool: 'mongodump / MongoDB Ops Manager Snapshots',
     walOrLogName: 'Oplog (local.oplog.rs)',
     // Doc: https://www.mongodb.com/docs/database-tools/mongodump/
-    commandTemplate: (db, path) => `mongodump --db=${db} --out=${path} --oplog`,
+    commandTemplate: (db, path) =>
+      db
+        ? `mongodump --db="${db}" --gzip --out="${path}"`
+        : `mongodump --oplog --gzip --out="${path}"`,
   },
   replication: {
     mechanism: 'MongoDB Replica Set (Primary-Secondary-Arbiter)',
@@ -1264,10 +1298,20 @@ const KEYVALUE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   planCommand: 'SLOWLOG GET 25; / MEMORY USAGE <key>;',
   onlineDdl: {
     // Doc: https://redis.io/commands/ft.create/
-    createIndexSql: (idx, tbl, cols) => `FT.CREATE ${idx} ON HASH PREFIX 1 ${tbl}: SCHEMA ${cols} TEXT;`,
+    createIndexSql: (idx, tbl, cols) => {
+      const schemaFields = splitColumns(cols)
+        .map((c) => `${c.split(/\s+/)[0]} TEXT`)
+        .join(' ');
+      return `FT.CREATE ${idx} ON HASH PREFIX 1 "${tbl}:" SCHEMA ${schemaFields};`;
+    },
     // Doc: https://redis.io/commands/ft.dropindex/
     dropIndexSql: (idx) => `FT.DROPINDEX ${idx};`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `FT.CREATE ${idx} ON HASH PREFIX 1 ${tbl}: SCHEMA ${cols} TEXT;`,
+    rollbackDropIndexSql: (idx, tbl, cols) => {
+      const schemaFields = splitColumns(cols)
+        .map((c) => `${c.split(/\s+/)[0]} TEXT`)
+        .join(' ');
+      return `FT.CREATE ${idx} ON HASH PREFIX 1 "${tbl}:" SCHEMA ${schemaFields};`;
+    },
     supportsConcurrent: false,
     onlineClause: 'ASYNC',
   },
@@ -1359,21 +1403,31 @@ const GRAPH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   maintenance: {
     // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
     statsCommand: 'SHOW INDEXES YIELD *;',
-    // Doc: https://neo4j.com/docs/operations-manual/current/tools/neo4j-admin/
-    spaceReclaimCommand: 'CALL dbms.compact();',
+    // Doc: https://neo4j.com/docs/operations-manual/current/performance/space-reuse/
+    spaceReclaimCommand: 'neo4j-admin database copy {table} {table}-compacted --compact-node-store',
     spaceReclaimConcept: 'Offline Store Compaction & Neo4j Admin Store Defragmentation',
-    tuningDdlTemplate: () =>
-      `// Neo4j Database Compaction & Cache Priming\n` +
-      `CALL dbms.compact();`,
+    tuningDdlTemplate: (table) =>
+      `// Neo4j Database Offline Store Compaction\n` +
+      `neo4j-admin database copy ${table} ${table}-compacted --compact-node-store;`,
   },
   // Doc: https://neo4j.com/docs/cypher-manual/current/query-tuning/
   planCommand: 'EXPLAIN MATCH ... / PROFILE MATCH ...;',
   onlineDdl: {
     // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
-    createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (n.${cols});`,
+    createIndexSql: (idx, tbl, cols) => {
+      const formattedCols = splitColumns(cols)
+        .map((c) => `n.${c.split(/\s+/)[0]}`)
+        .join(', ');
+      return `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (${formattedCols});`;
+    },
     // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
     dropIndexSql: (idx) => `DROP INDEX ${idx} IF EXISTS;`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (n.${cols});`,
+    rollbackDropIndexSql: (idx, tbl, cols) => {
+      const formattedCols = splitColumns(cols)
+        .map((c) => `n.${c.split(/\s+/)[0]}`)
+        .join(', ');
+      return `CREATE INDEX ${idx} IF NOT EXISTS FOR (n:${tbl}) ON (${formattedCols});`;
+    },
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
   },
@@ -1465,23 +1519,25 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'milvus.yaml / Pinecone Pod Config',
   },
   maintenance: {
-    // Doc: https://github.com/milvus-io/pymilvus
+    // Doc: https://milvus.io/docs/manage_collections.md
     statsCommand: 'collection.describe();',
-    // Doc: https://github.com/milvus-io/pymilvus
+    // Doc: https://milvus.io/docs/compact_data.md
     spaceReclaimCommand: 'collection.compact();',
     spaceReclaimConcept: 'Vector Segment Merge & Compaction',
     tuningDdlTemplate: (table) =>
       `// Milvus / Vector Collection Segment Compaction\n` +
       `pymilvus.utility.compact("${table}");`,
   },
-  // Doc: https://github.com/milvus-io/pymilvus
+  // Doc: https://milvus.io/docs/manage_collections.md
   planCommand: 'Vector ANN Query Profiling / Query node latency breakdown',
   onlineDdl: {
-    // Doc: https://github.com/milvus-io/pymilvus
-    createIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW", "params": {"M": 16, "efConstruction": 64}});`,
-    // Doc: https://github.com/milvus-io/pymilvus
+    // Doc: https://milvus.io/docs/build_index.md
+    createIndexSql: (idx, tbl, cols) =>
+      `collection.create_index(field_name="${splitColumns(cols)[0] || 'vector'}", index_params={"metric_type": "COSINE", "index_type": "HNSW", "params": {"M": 16, "efConstruction": 64}});`,
+    // Doc: https://milvus.io/docs/drop_index.md
     dropIndexSql: (idx, tbl = '{table}') => `collection.drop_index(index_name="${idx}");`,
-    rollbackDropIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW"});`,
+    rollbackDropIndexSql: (idx, tbl, cols) =>
+      `collection.create_index(field_name="${splitColumns(cols)[0] || 'vector'}", index_params={"metric_type": "COSINE", "index_type": "HNSW"});`,
     supportsConcurrent: false,
     onlineClause: 'ASYNC',
   },
@@ -1491,10 +1547,11 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     locks: 'N/A',
   },
   backup: {
-    tool: 'milvus-backup / Cloud Snapshot API',
-    walOrLogName: 'Vector WAL / Segment logs',
-    // Doc: https://github.com/zilliztech/milvus-backup
-    commandTemplate: (db, path) => `milvus-backup create --backup_name=bkp_${Date.now()} --collection_names=${db}`,
+    tool: 'milvus-backup / Milvus MinIO Snapshot',
+    walOrLogName: 'Milvus Log Broker (Kafka / Pulsar WAL)',
+    // Doc: https://milvus.io/docs/milvus_backup_cli.md
+    commandTemplate: (target, coll = 'default_collection') =>
+      `milvus-backup create -n "${target}" -c "${coll}"`,
   },
   replication: {
     mechanism: 'QueryNode / DataNode Raft-based sharding and multi-AZ replication',
@@ -1583,9 +1640,16 @@ const SEARCH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   planCommand: 'GET /{table}/_explain/<id> / GET /{table}/_search { "profile": true }',
   onlineDdl: {
     // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-mapping.html
-    createIndexSql: (idx, tbl, cols) => `PUT /${tbl}/_mapping { "properties": { "${cols}": { "type": "keyword" } } }`,
+    createIndexSql: (idx, tbl, cols) => {
+      const props = splitColumns(cols)
+        .map((c) => `"${c.split(/\s+/)[0]}": { "type": "keyword" }`)
+        .join(', ');
+      return `PUT /${tbl}/_mapping { "properties": { ${props} } }`;
+    },
     // Doc: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
-    dropIndexSql: (idx) => `DELETE /${idx}`,
+    dropIndexSql: (idx) =>
+      `// CAUTION: In Elasticsearch, DELETE /${idx} removes the entire index and all documents. Individual field mappings cannot be dropped without reindexing.\n` +
+      `DELETE /${idx}`,
     rollbackDropIndexSql: (idx) => `PUT /${idx}`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
@@ -1688,9 +1752,15 @@ const TIMESERIES_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
     // Doc: https://docs.influxdata.com/influxdb/v1/concepts/key_concepts/
-    createIndexSql: (idx, tbl, cols) => `-- Time-series engines index tags automatically:\nALTER TABLE ${tbl} ALTER COLUMN ${cols} ADD INDEX;`,
+    createIndexSql: (idx, tbl, cols) => {
+      const colsList = splitColumns(cols).map((c) => c.split(/\s+/)[0]);
+      return `-- Time-series engines index tags/symbols automatically:\n` +
+        colsList.map((c) => `ALTER TABLE ${tbl} ALTER COLUMN ${c} ADD INDEX;`).join('\n');
+    },
     // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#drop-series
-    dropIndexSql: (idx) => `DROP SERIES FROM ${idx}`,
+    dropIndexSql: (idx) =>
+      `// CAUTION: In InfluxDB, DROP SERIES permanently deletes underlying time-series data points matching the series key!\n` +
+      `DROP SERIES FROM ${idx}`,
     rollbackDropIndexSql: (idx) => `-- Re-add index on tag`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
@@ -1703,8 +1773,13 @@ const TIMESERIES_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   backup: {
     tool: 'influx backup / file snapshot',
     walOrLogName: 'Time-Series WAL',
-    // Doc: https://docs.influxdata.com/influxdb/v1/administration/backup_and_restore/
-    commandTemplate: (db, path) => `influx backup --db ${db} ${path}`,
+    // Doc: https://docs.influxdata.com/influxdb/v2/admin/backup-restore/backup/
+    // Doc: https://docs.influxdata.com/influxdb/v1/tools/influxd/backup/
+    commandTemplate: (db, path) =>
+      `# InfluxDB 2.x CLI:\n` +
+      `influx backup "${path}" -t "$INFLUX_TOKEN" ${db ? `--bucket "${db}"` : ''}\n` +
+      `# InfluxDB 1.x CLI:\n` +
+      `influxd backup -portable ${db ? `-db "${db}"` : ''} "${path}"`,
   },
   replication: {
     mechanism: 'Multi-node InfluxDB Enterprise / Raft consensus shard replication',
@@ -2127,55 +2202,27 @@ export function getEngineProfile(engineId?: string): EngineProfile {
     unsupportedReason['partition-plan'] = `${metadata?.name || canonical} partitions event log streams and topics rather than relational tables.`;
   }
 
-  if (canonical === 'snowflake' || canonical.includes('snowflake')) {
+  const specificOverride = getEngineSpecificOverride(canonical);
+  if (specificOverride) {
     base = {
       ...base,
-      memoryParams: {
-        sharedBufferParam: 'Virtual Warehouse Size',
-        workMemParam: 'STATEMENT_TIMEOUT_IN_SECONDS',
-        cacheParam: 'Result Cache & Local SSD Cache',
-        configFile: 'Managed Cloud Service (No OS Configuration File)',
-      },
-      maintenance: {
-        statsCommand: '-- Automatic background metadata and clustering statistics collection;\nSHOW TABLES LIKE \'{table}\';',
-        spaceReclaimCommand: '-- Automatic continuous micro-partition clustering (No manual VACUUM);\nALTER TABLE {table} RECLUSTER;',
-        spaceReclaimConcept: 'Automatic Continuous Micro-partition Clustering & Time Travel Pruning (No Manual VACUUM)',
-        tuningDdlTemplate: (table) =>
-          `-- Snowflake Table Clustering Maintenance for ${table}\n` +
-          `ALTER TABLE ${table} CLUSTER BY (created_at);\n`,
-      },
-      planCommand: 'EXPLAIN USING JSON <QUERY>;',
-      backup: {
-        tool: 'Snowflake Time Travel & Fail-safe',
-        walOrLogName: 'Time Travel & Fail-safe Micro-partition Versioning',
-        commandTemplate: (db) => `CREATE DATABASE ${db}_backup CLONE ${db};`,
-      },
+      ...specificOverride,
+      memoryParams: { ...base.memoryParams, ...(specificOverride.memoryParams || {}) },
+      maintenance: { ...base.maintenance, ...(specificOverride.maintenance || {}) },
+      backup: { ...base.backup, ...(specificOverride.backup || {}) },
+      replication: { ...base.replication, ...(specificOverride.replication || {}) },
+      onlineDdl: { ...base.onlineDdl, ...(specificOverride.onlineDdl || {}) },
+      connection: { ...base.connection, ...(specificOverride.connection || {}) },
+      syntax: { ...base.syntax, ...(specificOverride.syntax || {}) },
     };
-  } else if (canonical === 'google_bigquery' || canonical.includes('bigquery')) {
-    base = {
-      ...base,
-      memoryParams: {
-        sharedBufferParam: 'Slots / Reservations',
-        workMemParam: 'Maximum Slot Allocation per Project',
-        cacheParam: 'Serverless Managed Memory',
-        configFile: 'Serverless Cloud Service (No OS Configuration File)',
-      },
-      maintenance: {
-        statsCommand: '-- BigQuery generates column statistics automatically on data load;\nSELECT * FROM `{table}` LIMIT 0;',
-        spaceReclaimCommand: '-- Automatic partition and table lifecycle expiration (No manual VACUUM);\nALTER TABLE `{table}` SET OPTIONS (partition_expiration_days = 90);',
-        spaceReclaimConcept: 'Automatic Partition Expiration & Long-Term Storage Tiering (No Manual VACUUM)',
-        tuningDdlTemplate: (table) =>
-          `-- BigQuery Partition & Lifecycle Sizing for ${table}\n` +
-          `ALTER TABLE \`${table}\` SET OPTIONS (partition_expiration_days = 90);`,
-      },
-      planCommand: 'EXPLAIN <QUERY>;',
-      backup: {
-        tool: 'BigQuery Time Travel & Table Snapshots',
-        walOrLogName: '7-Day Continuous Time Travel History',
-        commandTemplate: (db) => `CREATE SNAPSHOT TABLE \`${db}_snapshot\` CLONE \`${db}\`;`,
-      },
-    };
+    if (specificOverride.capabilities) {
+      Object.assign(capabilities, specificOverride.capabilities);
+    }
+    if (specificOverride.unsupportedReason) {
+      Object.assign(unsupportedReason, specificOverride.unsupportedReason);
+    }
   }
+
 
   return {
     ...base,

@@ -18,7 +18,7 @@ This report outlines all verified corrections made to ensure 100% compliance wit
   SET SHOWPLAN_XML OFF;
   GO
   ```
-- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts) and [`packages/core/src/types/db-catalog.data.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/db-catalog.data.ts).
+- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts) and [`packages/core/src/types/db-catalog.data.ts`](../packages/core/src/types/db-catalog.data.ts).
 
 ---
 
@@ -27,14 +27,14 @@ This report outlines all verified corrections made to ensure 100% compliance wit
 - **Resolution**:
   - Emits standard `DROP INDEX ${idx} ON ${tbl};` for nonclustered indexes.
   - Documented edition constraints: online index operations (`REBUILD WITH (ONLINE = ON)`) require **Enterprise Edition**, **Developer Edition**, or **Azure SQL Database**.
-- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts).
+- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts).
 
 ---
 
 ### 1.3 SQL Server JSON Type Specification
 - **Vendor Rule**: According to [Microsoft Learn (JSON Data in SQL Server)](https://learn.microsoft.com/en-us/sql/relational-databases/json/json-data-sql-server), SQL Server versions 2016 through 2022 do not have a dedicated `JSON` data type; JSON is stored in `NVARCHAR(MAX)` with `ISJSON()` check constraints. Native `JSON` storage is introduced only in Azure SQL Database and SQL Server 2025 preview.
 - **Resolution**: Explicitly documented in profile syntax notes.
-- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts).
+- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts).
 
 ---
 
@@ -48,7 +48,7 @@ This report outlines all verified corrections made to ensure 100% compliance wit
   2. **Row movement must be enabled** (`ALTER TABLE ... ENABLE ROW MOVEMENT`).
   *Note*: Unlike online index operations, `SHRINK SPACE` is **not** restricted to Enterprise Edition and is available in Standard Edition.
 - **Online DDL (`ONLINE` clause)**: `CREATE INDEX ... ONLINE` and `ALTER INDEX ... REBUILD ONLINE` require **Oracle Enterprise Edition**.
-- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts).
+- **Files Updated**: [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts).
 
 ---
 
@@ -62,8 +62,8 @@ This report outlines all verified corrections made to ensure 100% compliance wit
   - Disaster Recovery studio RPO description tailored: `ClickHouse ReplicatedMergeTree synchronizes immutable columnar data parts via ClickHouse Keeper with near-instantaneous replica replication.`
   - FinOps studio backup category displays `Automated Snapshots & Immutable Columnar Data Parts (MergeTree) Backup`.
 - **Files Updated**:
-  - [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts)
-  - [`packages/core/src/analyzer/disaster-recovery.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/analyzer/disaster-recovery.ts)
+  - [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts)
+  - [`packages/core/src/analyzer/disaster-recovery.ts`](../packages/core/src/analyzer/disaster-recovery.ts)
 
 ---
 
@@ -75,16 +75,16 @@ This report outlines all verified corrections made to ensure 100% compliance wit
   - Snowflake config tuner reports `configFile: 'Managed Cloud Service (No OS Configuration File)'`, controls Virtual Warehouse parameters (`AUTO_SUSPEND`, `STATEMENT_TIMEOUT_IN_SECONDS`), and uses **Time Travel & Fail-safe** with database cloning (`CREATE DATABASE bkp CLONE db`).
   - Google BigQuery reports `configFile: 'Serverless Cloud Service (No OS Configuration File)'`, controls project slot allocations/reservations, and uses **Time Travel & Table Snapshots** (`CREATE SNAPSHOT TABLE ... CLONE ...`).
 - **Files Updated**:
-  - [`packages/core/src/analyzer/config-tuner.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/analyzer/config-tuner.ts)
-  - [`packages/core/src/analyzer/disaster-recovery.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/analyzer/disaster-recovery.ts)
-  - [`packages/core/src/types/engine-profiles.ts`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/packages/core/src/types/engine-profiles.ts)
+  - [`packages/core/src/analyzer/config-tuner.ts`](../packages/core/src/analyzer/config-tuner.ts)
+  - [`packages/core/src/analyzer/disaster-recovery.ts`](../packages/core/src/analyzer/disaster-recovery.ts)
+  - [`packages/core/src/types/engine-profiles.ts`](../packages/core/src/types/engine-profiles.ts)
 
 ---
 
 ## 5. UI Disaster Recovery Strategy Dropdown
 
 ### 5.1 Profile-Driven Strategy Dropdown Function
-- **Resolution**: Implemented and exported profile-driven helper function `getEngineBackupStrategyLabel(engine)` in [`DisasterRecoveryTab.tsx`](file:///Users/apple/.gemini/antigravity/scratch/sqlpulse/frontend/src/components/DisasterRecoveryTab.tsx):
+- **Resolution**: Implemented and exported profile-driven helper function `getEngineBackupStrategyLabel(engine)` in [`DisasterRecoveryTab.tsx`](../frontend/src/components/DisasterRecoveryTab.tsx):
   - Directly queries `getEngineProfile(engine)` to retrieve `profile.backup.tool` and `profile.backup.walOrLogName`.
   - Works dynamically across all 447 engines in `DATABASE_CATALOG`.
   - **Oracle**: `"Oracle Recovery Manager (RMAN) / Data Pump (expdp) + Continuous Archived Redo Logs Streaming"`

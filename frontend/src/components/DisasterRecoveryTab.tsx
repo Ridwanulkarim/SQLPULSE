@@ -22,11 +22,23 @@ export function getEngineBackupStrategyLabel(engine: string): string {
   try {
     const profile = getEngineProfile(engine);
     if (profile.backup) {
+      if (profile.backup.tool.includes('Not applicable')) {
+        return profile.backup.tool;
+      }
+      if (profile.family === 'embedded') {
+        return `${profile.backup.tool} (Periodic Database File Copy / Snapshot)`;
+      }
       if (profile.engineId === 'snowflake' || profile.name.toLowerCase().includes('snowflake')) {
         return 'Time Travel Historical Retention + Continuous Fail-Safe (Zero RPO)';
       }
       if (profile.engineId.includes('bigquery') || profile.name.toLowerCase().includes('bigquery')) {
         return 'Continuous Snapshot History + 7-Day Time Travel (Zero RPO)';
+      }
+      if (profile.engineId === 'amazon_dynamodb' || profile.engineId.includes('dynamodb')) {
+        return 'Point-in-Time Recovery (PITR) + On-Demand Snapshots (Zero RPO)';
+      }
+      if (profile.engineId === 'memcached' || profile.engineId.includes('memcached')) {
+        return 'Ephemeral In-Memory Cache (No Persistent Disk Backup)';
       }
       return `${profile.backup.tool} + Continuous ${profile.backup.walOrLogName} Streaming (Low RPO)`;
     }

@@ -518,4 +518,137 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
     }
     expect(missingDocs).toHaveLength(0);
   });
+
+  it('formats multi-column indexes correctly with 2+ columns across non-relational engines', () => {
+    const mongo = getEngineProfile('mongodb');
+    const mongoSql = mongo.onlineDdl.createIndexSql('idx_users', 'users', 'col_a, col_b');
+    expect(mongoSql).toContain('"col_a": 1, "col_b": 1');
+    expect(mongoSql).not.toContain('{ col_a, col_b: 1 }');
+
+    const neo = getEngineProfile('neo4j');
+    const neoSql = neo.onlineDdl.createIndexSql('idx_node', 'User', 'col_a, col_b');
+    expect(neoSql).toContain('ON (n.col_a, n.col_b)');
+    expect(neoSql).not.toContain('ON (n.col_a, col_b)');
+
+    const es = getEngineProfile('elasticsearch');
+    const esSql = es.onlineDdl.createIndexSql('idx_es', 'users', 'col_a, col_b');
+    expect(esSql).toContain('"col_a": { "type": "keyword" }');
+    expect(esSql).toContain('"col_b": { "type": "keyword" }');
+
+    const redis = getEngineProfile('redis');
+    const redisSql = redis.onlineDdl.createIndexSql('idx_red', 'users', 'col_a, col_b');
+    expect(redisSql).toContain('SCHEMA col_a TEXT col_b TEXT');
+
+    const qdb = getEngineProfile('questdb');
+    const qdbSql = qdb.onlineDdl.createIndexSql('idx_qdb', 'users', 'col_a, col_b');
+    expect(qdbSql).toContain('ALTER TABLE users ALTER COLUMN col_a ADD INDEX;');
+    expect(qdbSql).toContain('ALTER TABLE users ALTER COLUMN col_b ADD INDEX;');
+  });
+
+  it('isolates lead-engine commands from non-lead engines across all families', () => {
+    // Vector family: Pinecone, Qdrant, Weaviate, Chroma must NOT receive milvus-backup
+    for (const vEngine of ['pinecone', 'qdrant', 'weaviate', 'chroma']) {
+      const prof = getEngineProfile(vEngine);
+      expect(prof.backup.tool).not.toContain('milvus-backup');
+      const ddl = prof.onlineDdl.createIndexSql('idx', 'items', 'vector');
+      expect(ddl).not.toContain('milvus');
+    }
+
+    // Key-value family: Memcached, etcd must NOT receive Redis BGSAVE or FT.CREATE
+    for (const kvEngine of ['memcached', 'etcd']) {
+      const prof = getEngineProfile(kvEngine);
+      expect(prof.backup.tool).not.toContain('BGSAVE');
+      const ddl = prof.onlineDdl.createIndexSql('idx', 'cache', 'key, val');
+      expect(ddl).not.toContain('FT.CREATE');
+    }
+
+    // Document family: DynamoDB, Cosmos DB, Firestore must NOT receive mongodump
+    for (const docEngine of ['amazon_dynamodb', 'microsoft_azure_cosmos_db', 'google_cloud_firestore']) {
+      const prof = getEngineProfile(docEngine);
+      expect(prof.backup.tool).not.toContain('mongodump');
+      const ddl = prof.onlineDdl.createIndexSql('idx', 'items', 'pk, sk');
+      expect(ddl).not.toContain('createIndex(');
+    }
+
+    // Columnar / OLAP: Snowflake, Redshift, BigQuery, Databricks, Trino, Presto, Hive must NOT receive ClickHouse commands
+    for (const olapEngine of ['snowflake', 'amazon_redshift', 'google_bigquery', 'databricks', 'trino', 'presto', 'apache_hive']) {
+      const prof = getEngineProfile(olapEngine);
+      expect(prof.backup.tool).not.toContain('clickhouse-backup');
+      const ddl = prof.onlineDdl.createIndexSql('idx', 'events', 'ts, user_id');
+      expect(ddl).not.toContain('ADD PROJECTION');
+    }
+
+    // Wide column: HBase must NOT receive Cassandra nodetool or SASI
+    const hbase = getEngineProfile('apache_hbase');
+    expect(hbase.backup.tool).not.toContain('nodetool');
+    const hbaseDdl = hbase.onlineDdl.createIndexSql('idx', 'tbl', 'col');
+    expect(hbaseDdl).not.toContain('SASIIndex');
+
+    // Couchbase must NOT receive Cassandra nodetool, SASI, or port 9042
+    const couchbase = getEngineProfile('couchbase');
+    expect(couchbase.backup.tool).not.toContain('nodetool');
+    expect(couchbase.connection.defaultPort).toBe(8091);
+
+    // Bloomberg Comdb2 must NOT receive IBM Db2 commands
+    const comdb2 = getEngineProfile('comdb2');
+    expect(comdb2.backup.tool).not.toContain('db2 backup');
+    expect(comdb2.systemViews.locks).not.toContain('db2pd');
+    expect(comdb2.connection.defaultPort).toBe(5105);
+
+    // Embedded: DuckDB must NOT receive SQLite VACUUM INTO or AUTOINCREMENT
+    const duckdb = getEngineProfile('duckdb');
+    expect(duckdb.backup.tool).not.toContain('VACUUM INTO');
+    expect(duckdb.syntax.identityColumn).not.toContain('AUTOINCREMENT');
+
+    // Time-series: QuestDB, Prometheus, VictoriaMetrics must NOT receive influx backup
+    for (const tsEngine of ['questdb', 'prometheus', 'victoriametrics']) {
+      const prof = getEngineProfile(tsEngine);
+      expect(prof.backup.tool).not.toContain('influx backup');
+    }
+
+    // Search: Splunk and Algolia must NOT receive Elasticsearch PUT / mapping
+    for (const sEngine of ['splunk', 'algolia']) {
+      const prof = getEngineProfile(sEngine);
+      const ddl = prof.onlineDdl.createIndexSql('idx', 'logs', 'col');
+      expect(ddl).not.toContain('PUT /logs/_mapping');
+    }
+  });
+
+  it('configures accurate default ports for specialized and cloud engines', () => {
+    const expectedPorts: Record<string, number> = {
+      snowflake: 443,
+      google_bigquery: 443,
+      amazon_redshift: 5439,
+      databricks: 443,
+      duckdb: 0,
+      amazon_dynamodb: 443,
+      microsoft_azure_cosmos_db: 443,
+      google_cloud_firestore: 443,
+      couchbase: 8091,
+      memcached: 11211,
+      etcd: 2379,
+      pinecone: 443,
+      qdrant: 6333,
+      weaviate: 8080,
+      chroma: 8000,
+      questdb: 9000,
+      prometheus: 9090,
+      victoriametrics: 8428,
+      apache_hbase: 16010,
+      amazon_neptune: 8182,
+      tigergraph: 14240,
+      splunk: 8089,
+      algolia: 443,
+      comdb2: 5105,
+      trino: 8080,
+      presto: 8080,
+      apache_hive: 10000,
+    };
+
+    for (const [engine, port] of Object.entries(expectedPorts)) {
+      const prof = getEngineProfile(engine);
+      expect(prof.connection.defaultPort).toBe(port);
+    }
+  });
 });
+
