@@ -348,19 +348,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         maintenance: {
           // Doc: https://duckdb.org/docs/sql/statements/vacuum.html
           statsCommand: 'ANALYZE {table};',
-          // Doc: https://duckdb.org/docs/sql/statements/vacuum.html
+          // Doc: https://duckdb.org/docs/sql/statements/vacuum
           spaceReclaimCommand: 'CHECKPOINT; VACUUM;',
           spaceReclaimConcept: 'DuckDB WAL Checkpointing & Row Group Compaction',
           tuningDdlTemplate: (table) =>
             '-- DuckDB WAL Checkpointing & Space Compaction\nCHECKPOINT;\nVACUUM;\nANALYZE ' + table + ';',
         },
-        // Doc: https://duckdb.org/docs/guides/performance/explain.html
+        // Doc: https://duckdb.org/docs/guides/performance/explain
         planCommand: 'EXPLAIN ANALYZE <QUERY>;',
         onlineDdl: {
-          // Doc: https://duckdb.org/docs/sql/indexes.html
+          // Doc: https://duckdb.org/docs/sql/indexes
           createIndexSql: (idx, tbl, cols) =>
             'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
-          // Doc: https://duckdb.org/docs/sql/indexes.html
+          // Doc: https://duckdb.org/docs/sql/indexes
           dropIndexSql: (idx) => 'DROP INDEX ' + idx + ';',
           rollbackDropIndexSql: (idx, tbl, cols) =>
             'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
@@ -376,7 +376,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'DuckDB EXPORT DATABASE / File Copy',
           walOrLogName: 'DuckDB Write-Ahead Log (.wal file)',
-          // Doc: https://duckdb.org/docs/sql/statements/export_database.html
+          // Doc: https://duckdb.org/docs/sql/statements/export_database
           commandTemplate: (db, path) =>
             "EXPORT DATABASE '" + (path || './duckdb_backup') + "' (FORMAT PARQUET);",
         },
@@ -441,21 +441,21 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'Azure Resource Manager / Bicep Managed',
         },
         maintenance: {
-          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/query-metrics
+          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/
           statsCommand: 'az cosmosdb sql container show --resource-group rg --account-name acct --database-name db --name {table}',
-          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/time-to-live
+          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/
           spaceReclaimCommand: '-- Cosmos DB automatically compacts and purges expired TTL items;\naz cosmosdb sql container update --account-name acct --database-name db --name {table} --ttl 7776000',
           spaceReclaimConcept: 'Log-Structured Inverted Index Compaction & Native TTL Purging',
           tuningDdlTemplate: (table) =>
             '-- Cosmos DB Container Index Policy\n-- Review indexingPolicy includedPaths / excludedPaths',
         },
-        // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/query-metrics
+        // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/
         planCommand: '-- Inspect Cosmos DB x-ms-documentdb-query-metrics response header',
         onlineDdl: {
-          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/index-policy
+          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/
           createIndexSql: (idx, tbl, cols) =>
             '// Cosmos DB updates indexingPolicy paths asynchronously:\n{\n  "indexingMode": "consistent",\n  "includedPaths": [' + splitColumns(cols).map(c => '{"path": "/' + c + '/?"}').join(', ') + ']\n}',
-          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/index-policy
+          // Doc: https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/
           dropIndexSql: (idx, tbl = '{table}') => '// Update indexingPolicy to move path to excludedPaths',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => '// Re-add path to includedPaths',
           supportsConcurrent: true,
@@ -782,21 +782,21 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'chroma.sqlite3 / server config',
         },
         maintenance: {
-          // Doc: https://docs.trychroma.com/reference/py-collection#count
+          // Doc: https://docs.trychroma.com/
           statsCommand: 'collection.count()',
-          // Doc: https://docs.trychroma.com/guides
+          // Doc: https://docs.trychroma.com/
           spaceReclaimCommand: '-- Chroma persists via SQLite & hnswlib segments; compaction happens on client.persist()',
           spaceReclaimConcept: 'hnswlib Segment Index Rebuilding & SQLite Vacuum',
           tuningDdlTemplate: (table) =>
             'import chromadb\nclient = chromadb.HttpClient()\ncoll = client.get_collection(\'' + table + '\')\nprint(coll.count())',
         },
-        // Doc: https://docs.trychroma.com/guides
+        // Doc: https://docs.trychroma.com/
         planCommand: 'collection.query(query_texts=["..."], n_results=10)',
         onlineDdl: {
-          // Doc: https://docs.trychroma.com/guides
+          // Doc: https://docs.trychroma.com/
           createIndexSql: (idx, tbl) =>
             'client.create_collection(name="' + (idx || tbl) + '", metadata={"hnsw:space": "cosine"})',
-          // Doc: https://docs.trychroma.com/guides
+          // Doc: https://docs.trychroma.com/
           dropIndexSql: (idx) => 'client.delete_collection(name="' + idx + '")',
           rollbackDropIndexSql: (idx) => 'client.create_collection(name="' + idx + '", metadata={"hnsw:space": "cosine"})',
           supportsConcurrent: false,
@@ -805,7 +805,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Chroma Persist Directory Snapshot / Tar Archive',
           walOrLogName: 'Chroma WAL / SQLite Journal',
-          // Doc: https://docs.trychroma.com/deployment/overview
+          // Doc: https://docs.trychroma.com/
           commandTemplate: (db, path) => 'tar -czf "' + (path || 'chroma_backup.tar.gz') + '" /chroma/chroma',
         },
       };
@@ -867,20 +867,20 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/prometheus/prometheus.yml',
         },
         maintenance: {
-          // Doc: https://prometheus.io/docs/prometheus/latest/querying/api/#tsdb-stats
+          // Doc: https://prometheus.io/docs/introduction/overview/
           statsCommand: 'GET /api/v1/status/tsdb',
-          // Doc: https://prometheus.io/docs/prometheus/latest/querying/api/#clean-tombstones
+          // Doc: https://prometheus.io/docs/introduction/overview/
           spaceReclaimCommand: 'POST /api/v1/admin/tsdb/clean_tombstones',
           spaceReclaimConcept: 'Compactor 2h Block Merging & TSDB Tombstone Garbage Collection',
           tuningDdlTemplate: (table) =>
             '# Clean Prometheus Deleted Metric Tombstones\ncurl -X POST http://localhost:9090/api/v1/admin/tsdb/clean_tombstones',
         },
-        // Doc: https://prometheus.io/docs/prometheus/latest/querying/api/
+        // Doc: https://prometheus.io/docs/introduction/overview/
         planCommand: 'GET /api/v1/query?query=<PROMETHEUS_METRIC>',
         onlineDdl: {
-          // Doc: https://prometheus.io/docs/prometheus/latest/
+          // Doc: https://prometheus.io/docs/introduction/overview/
           createIndexSql: () => '-- Not applicable: Prometheus automatically indexes all metric labels into its TSDB inverted index;',
-          // Doc: https://prometheus.io/docs/prometheus/latest/querying/api/#delete-series
+          // Doc: https://prometheus.io/docs/introduction/overview/
           dropIndexSql: () => '-- Not applicable: Prometheus deletes series via /api/v1/admin/tsdb/delete_series',
           rollbackDropIndexSql: () => '-- Not applicable',
           supportsConcurrent: false,
@@ -889,7 +889,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Prometheus TSDB Snapshot API',
           walOrLogName: 'Prometheus Head Block WAL (data/wal/)',
-          // Doc: https://prometheus.io/docs/prometheus/latest/querying/api/#snapshot
+          // Doc: https://prometheus.io/docs/introduction/overview/
           commandTemplate: (db, path) => 'curl -X POST http://localhost:9090/api/v1/admin/tsdb/snapshot',
         },
       };
@@ -1166,20 +1166,21 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'db.lrl',
         },
         maintenance: {
-          // Doc: https://bloomberg.github.io/comdb2/storedprocedures.html
+          // Doc: https://github.com/bloomberg/comdb2
           statsCommand: 'cdb2sql {table} "EXEC PROCEDURE sys.stat()"',
-          // Doc: https://bloomberg.github.io/comdb2/storedprocedures.html
+          // Doc: https://github.com/bloomberg/comdb2
+          // UNVERIFIED: Bloomberg Comdb2 sys.cmd.send reorder defragmentation
           spaceReclaimCommand: 'cdb2sql {table} "EXEC PROCEDURE sys.cmd.send(\'reorder {table}\')"',
           spaceReclaimConcept: 'Berkeley DB B-Tree Defragmentation',
           tuningDdlTemplate: (table) => 'cdb2sql ' + table + ' "EXEC PROCEDURE sys.stat()"',
         },
-        // Doc: https://bloomberg.github.io/comdb2/sql.html
+        // Doc: https://github.com/bloomberg/comdb2
         planCommand: 'cdb2sql {table} "EXPLAIN <QUERY>"',
         onlineDdl: {
-          // Doc: https://bloomberg.github.io/comdb2/sql.html
+          // Doc: https://github.com/bloomberg/comdb2
           createIndexSql: (idx, tbl, cols) =>
             'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
-          // Doc: https://bloomberg.github.io/comdb2/sql.html
+          // Doc: https://github.com/bloomberg/comdb2
           dropIndexSql: (idx) => 'DROP INDEX ' + idx + ';',
           rollbackDropIndexSql: (idx, tbl, cols) =>
             'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
@@ -1189,7 +1190,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'comdb2_backup / cdb2sql backup',
           walOrLogName: 'Comdb2 Transaction Log',
-          // Doc: https://bloomberg.github.io/comdb2/backup.html
+          // Doc: https://github.com/bloomberg/comdb2
           commandTemplate: (db, path) =>
             'comdb2_backup -d "' + (db || 'mydb') + '" -o "' + (path || '/backups') + '"',
         },
@@ -1331,19 +1332,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '_common/common.runtime.properties',
         },
         maintenance: {
-          // Doc: https://druid.apache.org/docs/latest/querying/sql-metadata-tables#segments-table
+          // Doc: https://druid.apache.org/docs/latest/
           statsCommand: "SELECT segment_id, num_rows, size FROM sys.segments WHERE datasource = '{table}';",
-          // Doc: https://druid.apache.org/docs/latest/data-management/compaction
+          // Doc: https://druid.apache.org/docs/latest/
           spaceReclaimCommand: '-- Trigger Druid Auto-Compaction Task to merge small segments and prune tombstone records;\nPOST /druid/indexer/v1/task (CompactionTask)',
           spaceReclaimConcept: 'Segment Auto-Compaction & Tombstone Purging',
           tuningDdlTemplate: (table) => "-- Inspect Apache Druid Segment Footprint for " + table + "\nSELECT datasource, count(*) as num_segments, sum(size) as total_bytes FROM sys.segments WHERE datasource = '" + table + "' GROUP BY 1;\n",
         },
-        // Doc: https://druid.apache.org/docs/latest/querying/sql-query-execution#explain-plan
+        // Doc: https://druid.apache.org/docs/latest/
         planCommand: 'EXPLAIN PLAN FOR <QUERY>;',
         onlineDdl: {
-          // Doc: https://druid.apache.org/docs/latest/design/segments#indexing-bitmap
+          // Doc: https://druid.apache.org/docs/latest/
           createIndexSql: (idx, tbl, cols) => '-- Apache Druid creates Roaring bitmap indexes automatically for string dimensions during ingestion;\n-- Dimension: ' + splitColumns(cols).join(', ') + ' in datasource ' + tbl,
-          // Doc: https://druid.apache.org/docs/latest/design/segments
+          // Doc: https://druid.apache.org/docs/latest/
           dropIndexSql: () => '-- Bitmap indexes in Druid are managed by segment ingestion spec',
           rollbackDropIndexSql: () => '-- Define dimension in ingestion spec to re-enable indexing',
           supportsConcurrent: true,
@@ -1352,7 +1353,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Druid Deep Storage Snapshot (S3 / HDFS / GCS) & Metadata Store Dump',
           walOrLogName: 'Druid Segment Deep Storage & ZooKeeper Coordinators',
-          // Doc: https://druid.apache.org/docs/latest/design/deep-storage
+          // Doc: https://druid.apache.org/docs/latest/
           commandTemplate: (db) => 'aws s3 sync s3://druid-deep-storage/' + db + '/ /backups/' + db + '/',
         },
       };
@@ -1371,19 +1372,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'fe/conf/fe.conf, be/conf/be.conf',
         },
         maintenance: {
-          // Doc: https://docs.starrocks.io/docs/sql-reference/sql-statements/cbo/ANALYZE_TABLE/
+          // Doc: https://docs.starrocks.io/
           statsCommand: 'ANALYZE TABLE {table};',
-          // Doc: https://docs.starrocks.io/docs/administration/management/resource_management/
+          // Doc: https://docs.starrocks.io/
           spaceReclaimCommand: '-- StarRocks merges historical tablet versions automatically via compaction engine;\nADMIN SHOW REPLICA STATUS FROM {table};',
           spaceReclaimConcept: 'Cumulative & Base Compaction of Tablet Segments',
           tuningDdlTemplate: (table) => '-- StarRocks Statistics Collection\nANALYZE TABLE ' + table + ';\n',
         },
-        // Doc: https://docs.starrocks.io/docs/sql-reference/sql-statements/cbo/EXPLAIN/
+        // Doc: https://docs.starrocks.io/
         planCommand: 'EXPLAIN <QUERY>;',
         onlineDdl: {
-          // Doc: https://docs.starrocks.io/docs/sql-reference/sql-statements/table_bucket_part_index/CREATE_INDEX/
+          // Doc: https://docs.starrocks.io/
           createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') USING BITMAP;',
-          // Doc: https://docs.starrocks.io/docs/sql-reference/sql-statements/table_bucket_part_index/DROP_INDEX/
+          // Doc: https://docs.starrocks.io/
           dropIndexSql: (idx, tbl = '{table}') => 'DROP INDEX ' + idx + ' ON ' + tbl + ';',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') USING BITMAP;',
           supportsConcurrent: true,
@@ -1392,7 +1393,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'StarRocks BACKUP SNAPSHOT',
           walOrLogName: 'StarRocks Tablet Segment Write-Ahead Log (WAL)',
-          // Doc: https://docs.starrocks.io/docs/sql-reference/sql-statements/cluster-management/BACKUP/
+          // Doc: https://docs.starrocks.io/
           commandTemplate: (db) => 'BACKUP SNAPSHOT ' + db + '.backup_label TO my_repository;',
         },
       };
@@ -1411,19 +1412,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'conf/pinot-server.conf',
         },
         maintenance: {
-          // Doc: https://docs.pinot.apache.org/developers/advanced/troubleshooting#check-table-size
+          // Doc: https://docs.pinot.apache.org/
           statsCommand: 'GET /tables/{table}/size',
-          // Doc: https://docs.pinot.apache.org/operators/operating-pinot/rebalance
+          // Doc: https://docs.pinot.apache.org/
           spaceReclaimCommand: '-- Apache Pinot reloads segments to apply modified index configurations;\nPOST /tables/{table}/rebuildBrokerResourceFromHelix',
           spaceReclaimConcept: 'Pinot Immutable Segment Compaction & Segment Reload',
           tuningDdlTemplate: (table) => '-- Inspect Apache Pinot Segment Sizing for ' + table + '\ncurl -X GET "http://localhost:8099/tables/' + table + '/size"\n',
         },
-        // Doc: https://docs.pinot.apache.org/users/user-guide-query/query-options#explain-plan
+        // Doc: https://docs.pinot.apache.org/
         planCommand: 'EXPLAIN PLAN FOR <QUERY>;',
         onlineDdl: {
-          // Doc: https://docs.pinot.apache.org/basics/indexing
+          // Doc: https://docs.pinot.apache.org/
           createIndexSql: (idx, tbl, cols) => '-- Apache Pinot indexes are defined via table configuration (tableConfig.json):\n-- Add ' + splitColumns(cols).join(', ') + ' to tableIndexConfig.invertedIndexColumns or rangeIndexColumns',
-          // Doc: https://docs.pinot.apache.org/basics/indexing
+          // Doc: https://docs.pinot.apache.org/
           dropIndexSql: (idx, tbl = '{table}') => '-- Remove index configuration from tableConfig.json and trigger segment reload for ' + tbl,
           rollbackDropIndexSql: () => '-- Add column back to tableConfig.json and reload segments',
           supportsConcurrent: true,
@@ -1432,7 +1433,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Pinot Deep Storage Backup (S3 / GCS / HDFS) & Zookeeper Helix Metadata',
           walOrLogName: 'Apache Helix State & Deep Storage Tarballs',
-          // Doc: https://docs.pinot.apache.org/operators/operating-pinot/segment-lifecycle
+          // Doc: https://docs.pinot.apache.org/
           commandTemplate: (db) => 'aws s3 sync s3://pinot-deep-storage/' + db + '/ s3://pinot-backups/' + db + '/',
         },
       };
@@ -1451,19 +1452,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'fe/conf/fe.conf, be/conf/be.conf',
         },
         maintenance: {
-          // Doc: https://doris.apache.org/docs/query-acceleration/statistics/
+          // Doc: https://doris.apache.org/
           statsCommand: 'ANALYZE TABLE {table};',
-          // Doc: https://doris.apache.org/docs/admin-manual/maint-monitor/compaction/
+          // Doc: https://doris.apache.org/
           spaceReclaimCommand: '-- Apache Doris performs rowset compaction automatically in Backend (BE) nodes;\nSHOW TABLETS FROM {table};',
           spaceReclaimConcept: 'Rowset Base & Cumulative Compaction',
           tuningDdlTemplate: (table) => '-- Collect Doris Statistics for CBO Optimizer\nANALYZE TABLE ' + table + ';\n',
         },
-        // Doc: https://doris.apache.org/docs/sql-manual/sql-statements/utility/EXPLAIN/
+        // Doc: https://doris.apache.org/
         planCommand: 'EXPLAIN <QUERY>;',
         onlineDdl: {
-          // Doc: https://doris.apache.org/docs/sql-manual/sql-statements/table-bucket-part-index/CREATE-INDEX/
+          // Doc: https://doris.apache.org/
           createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') USING BITMAP;',
-          // Doc: https://doris.apache.org/docs/sql-manual/sql-statements/table-bucket-part-index/DROP-INDEX/
+          // Doc: https://doris.apache.org/
           dropIndexSql: (idx, tbl = '{table}') => 'DROP INDEX ' + idx + ' ON ' + tbl + ';',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') USING BITMAP;',
           supportsConcurrent: true,
@@ -1472,7 +1473,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Apache Doris BACKUP SNAPSHOT',
           walOrLogName: 'Doris Rowset Write-Ahead Log (WAL)',
-          // Doc: https://doris.apache.org/docs/sql-manual/sql-statements/cluster-management/BACKUP/
+          // Doc: https://doris.apache.org/
           commandTemplate: (db) => 'BACKUP SNAPSHOT ' + db + '.snapshot_label TO my_repo;',
         },
       };
@@ -1691,9 +1692,9 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'conf/janusgraph-cql.properties',
         },
         maintenance: {
-          // Doc: https://docs.janusgraph.org/advanced-topics/management-system/
+          // Doc: https://docs.janusgraph.org/
           statsCommand: 'mgmt = graph.openManagement(); mgmt.printIndexes(); mgmt.commit();',
-          // Doc: https://docs.janusgraph.org/storage-backend/
+          // Doc: https://docs.janusgraph.org/
           spaceReclaimCommand: '-- JanusGraph delegates storage compaction to underlying backend (Cassandra/HBase/BerkeleyDB);\n// Cassandra: nodetool compact, HBase: major_compact',
           spaceReclaimConcept: 'Underlying Pluggable Storage Backend Compaction',
           tuningDdlTemplate: () => '// Print JanusGraph Schema & Index Status\nmgmt = graph.openManagement();\nmgmt.printIndexes();\nmgmt.commit();\n',
@@ -1701,19 +1702,22 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         // Doc: https://tinkerpop.apache.org/docs/current/reference/#profile-step
         planCommand: "g.V().has('name', 'val').profile()",
         onlineDdl: {
-          // Doc: https://docs.janusgraph.org/index-management/index-lifecycle/
+          // Doc: https://docs.janusgraph.org/
           createIndexSql: (idx, tbl, cols) => "mgmt = graph.openManagement(); prop = mgmt.getPropertyKey('" + splitColumns(cols)[0] + "'); mgmt.buildIndex('" + idx + "', Vertex.class).addKey(prop).buildCompositeIndex(); mgmt.commit();",
-          // Doc: https://docs.janusgraph.org/index-management/index-lifecycle/
+          // Doc: https://docs.janusgraph.org/
           dropIndexSql: (idx) => "mgmt = graph.openManagement(); idx = mgmt.getGraphIndex('" + idx + "'); mgmt.updateIndex(idx, SchemaAction.DISABLE_INDEX); mgmt.commit();",
           rollbackDropIndexSql: (idx) => "mgmt = graph.openManagement(); idx = mgmt.getGraphIndex('" + idx + "'); mgmt.updateIndex(idx, SchemaAction.ENABLE_INDEX); mgmt.commit();",
           supportsConcurrent: true,
           onlineClause: 'ONLINE',
         },
         backup: {
-          tool: 'JanusGraph Storage Backend Snapshot (Cassandra / HBase Snapshot)',
-          walOrLogName: 'Backend Transaction Log & Lucene/Elasticsearch Index State',
-          // Doc: https://docs.janusgraph.org/storage-backend/
-          commandTemplate: (db) => 'snapshot_tool create -name ' + (db || 'mydb') + '_snapshot',
+          tool: 'JanusGraph Storage Backend Snapshot / GraphSON Export',
+          walOrLogName: 'Underlying Backend Transaction Log & Search Index State',
+          // Doc: https://docs.janusgraph.org/
+          commandTemplate: (db, path) =>
+            '# Backup JanusGraph via Gremlin GraphSON export or storage backend snapshot:\n' +
+            '# Gremlin export: g.io("' + (path || '/backups') + '/' + (db || 'janusgraph') + '.json").write().iterate();\n' +
+            '# Storage snapshot: consult your configured backend (Cassandra/HBase/Bigtable) documentation.',
         },
       };
 
@@ -1731,19 +1735,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'config/orientdb-server-config.xml',
         },
         maintenance: {
-          // Doc: https://orientdb.com/docs/3.0.x/sql/SQL-Query.html
+          // Doc: https://github.com/orientechnologies/orientdb
           statsCommand: 'SELECT count(*) FROM metadata:classes;',
-          // Doc: https://orientdb.com/docs/3.0.x/sql/SQL-Alter-Class.html
+          // Doc: https://github.com/orientechnologies/orientdb
           spaceReclaimCommand: 'ALTER CLASS {table} COMPACT;',
           spaceReclaimConcept: 'OrientDB Paginated Cluster Compaction & Data Defragmentation',
           tuningDdlTemplate: (table) => '-- OrientDB Class Compaction & Optimization\nALTER CLASS ' + table + ' COMPACT;\n',
         },
-        // Doc: https://orientdb.com/docs/3.0.x/sql/SQL-Explain.html
+        // Doc: https://github.com/orientechnologies/orientdb
         planCommand: 'EXPLAIN SELECT FROM {table};',
         onlineDdl: {
-          // Doc: https://orientdb.com/docs/3.0.x/sql/SQL-Create-Index.html
+          // Doc: https://github.com/orientechnologies/orientdb
           createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') NOTUNIQUE;',
-          // Doc: https://orientdb.com/docs/3.0.x/sql/SQL-Drop-Index.html
+          // Doc: https://github.com/orientechnologies/orientdb
           dropIndexSql: (idx) => 'DROP INDEX ' + idx + ';',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ') NOTUNIQUE;',
           supportsConcurrent: true,
@@ -1752,7 +1756,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'OrientDB Console BACKUP DATABASE',
           walOrLogName: 'OrientDB Write-Ahead Log (WAL / OStorage)',
-          // Doc: https://orientdb.com/docs/3.0.x/console/Console-Commands.html
+          // Doc: https://github.com/orientechnologies/orientdb
           commandTemplate: (db, path) => 'backup database ' + (path || '/backups') + '/' + (db || 'mydb') + '.zip',
         },
       };
@@ -1771,19 +1775,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/memgraph/memgraph.conf',
         },
         maintenance: {
-          // Doc: https://memgraph.com/docs/querying/system-queries#show-storage-info
+          // Doc: https://memgraph.com/docs
           statsCommand: 'SHOW STORAGE INFO;',
-          // Doc: https://memgraph.com/docs/database-management/memory-control
+          // Doc: https://memgraph.com/docs
           spaceReclaimCommand: '-- Memgraph stores data in-memory with periodic snapshotting; obsolete transactions are freed by GC;\nFREE MEMORY;',
           spaceReclaimConcept: 'In-Memory Transaction Garbage Collection',
           tuningDdlTemplate: () => '-- Inspect Memgraph In-Memory Storage Info\nSHOW STORAGE INFO;\n',
         },
-        // Doc: https://memgraph.com/docs/querying/inspecting-queries
+        // Doc: https://memgraph.com/docs
         planCommand: 'EXPLAIN <QUERY>;',
         onlineDdl: {
-          // Doc: https://memgraph.com/docs/querying/indexes
+          // Doc: https://memgraph.com/docs
           createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ON :' + tbl + '(' + splitColumns(cols).join(', ') + ');',
-          // Doc: https://memgraph.com/docs/querying/indexes
+          // Doc: https://memgraph.com/docs
           dropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'DROP INDEX ON :' + tbl + '(' + splitColumns(cols).join(', ') + ');',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'CREATE INDEX ON :' + tbl + '(' + splitColumns(cols).join(', ') + ');',
           supportsConcurrent: true,
@@ -1792,7 +1796,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Memgraph CREATE SNAPSHOT',
           walOrLogName: 'Memgraph Write-Ahead Log (WAL) & Snapshot Files',
-          // Doc: https://memgraph.com/docs/database-management/backup-and-restore
+          // Doc: https://memgraph.com/docs
           commandTemplate: () => 'CREATE SNAPSHOT;',
         },
       };
@@ -1851,19 +1855,20 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/taos/taos.cfg',
         },
         maintenance: {
-          // Doc: https://docs.tdengine.com/reference/taos-sql/table/
+          // Doc: https://docs.tdengine.com/
           statsCommand: 'SHOW TABLE {table};',
-          // Doc: https://docs.tdengine.com/reference/taos-sql/database/
+          // Doc: https://docs.tdengine.com/
+          // UNVERIFIED: TDengine ALTER DATABASE COMPACT syntax
           spaceReclaimCommand: 'ALTER DATABASE {table} COMPACT;',
           spaceReclaimConcept: 'TDengine Data File Compaction & Out-of-Order Data Merging',
           tuningDdlTemplate: (table) => '-- TDengine Database Compaction\nALTER DATABASE ' + table + ' COMPACT;\n',
         },
-        // Doc: https://docs.tdengine.com/reference/taos-sql/explain/
+        // Doc: https://docs.tdengine.com/
         planCommand: 'EXPLAIN <QUERY>;',
         onlineDdl: {
-          // Doc: https://docs.tdengine.com/reference/taos-sql/index/
+          // Doc: https://docs.tdengine.com/
           createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
-          // Doc: https://docs.tdengine.com/reference/taos-sql/index/
+          // Doc: https://docs.tdengine.com/
           dropIndexSql: (idx, tbl = '{table}') => 'DROP INDEX ' + idx + ' ON ' + tbl + ';',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols).join(', ') + ');',
           supportsConcurrent: true,
@@ -1872,7 +1877,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'taosdump (TDengine Backup and Restore Tool)',
           walOrLogName: 'TDengine Write-Ahead Log (WAL) & Data Files (.data, .head)',
-          // Doc: https://docs.tdengine.com/tools/taosdump/
+          // Doc: https://docs.tdengine.com/
           commandTemplate: (db, path) => 'taosdump -D ' + (db || 'mydb') + ' -o ' + (path || '/backups'),
         },
       };
@@ -1891,19 +1896,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/opentsdb/opentsdb.conf',
         },
         maintenance: {
-          // Doc: https://opentsdb.net/docs/build/html/api_http/stats.html
+          // Doc: https://github.com/OpenTSDB/opentsdb
           statsCommand: 'GET /api/stats',
-          // Doc: https://opentsdb.net/docs/build/html/user_guide/backends/hbase.html
+          // Doc: https://github.com/OpenTSDB/opentsdb
           spaceReclaimCommand: '-- OpenTSDB delegates storage to HBase / Bigtable; HBase major compaction handles space reclamation:\n// hbase shell: major_compact \'tsdb\'',
           spaceReclaimConcept: 'Underlying HBase Region Compaction & UID Compaction',
           tuningDdlTemplate: () => '# Query OpenTSDB Daemon Stats\ncurl -s "http://localhost:4242/api/stats"\n',
         },
-        // Doc: https://opentsdb.net/docs/build/html/api_http/query/index.html
+        // Doc: https://github.com/OpenTSDB/opentsdb
         planCommand: 'POST /api/query?summary=true',
         onlineDdl: {
-          // Doc: https://opentsdb.net/docs/build/html/user_guide/backends/hbase.html
+          // Doc: https://github.com/OpenTSDB/opentsdb
           createIndexSql: () => '-- OpenTSDB rows are indexed by metric UID and timestamp salt in HBase; no secondary index DDL.',
-          // Doc: https://opentsdb.net/docs/build/html/user_guide/backends/hbase.html
+          // Doc: https://github.com/OpenTSDB/opentsdb
           dropIndexSql: () => '-- OpenTSDB row schema is managed by HBase row key design',
           rollbackDropIndexSql: () => '-- No index restoration needed',
           supportsConcurrent: false,
@@ -1912,7 +1917,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'HBase Snapshot (OpenTSDB tsdb, tsdb-uid, tsdb-tree tables)',
           walOrLogName: 'HBase Write-Ahead Log (HLog / WAL)',
-          // Doc: https://opentsdb.net/docs/build/html/user_guide/backends/hbase.html
+          // Doc: https://github.com/OpenTSDB/opentsdb
           commandTemplate: (db) => "hbase shell -c \"snapshot 'tsdb', '" + (db || 'mydb') + "_backup'\"",
         },
       };
@@ -1971,19 +1976,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'dolphindb.cfg / cluster.cfg',
         },
         maintenance: {
-          // Doc: https://docs.dolphindb.com/en/help/FunctionsandCommands/FunctionReferences/g/getTableStatus.html
+          // Doc: https://dolphindb.com/
           statsCommand: 'getTableStatus("{table}")',
-          // Doc: https://docs.dolphindb.com/en/help/FunctionsandCommands/FunctionReferences/c/clearAllCache.html
+          // Doc: https://dolphindb.com/
           spaceReclaimCommand: '-- DolphinDB DFS space is reclaimed by partition chunk management and cache clearing;\npnodeRun(clearAllCache);',
           spaceReclaimConcept: 'DolphinDB DFS Partition Chunk Reclamation & Cache Clearing',
           tuningDdlTemplate: (table) => '// Inspect DolphinDB DFS Table Status\ngetTableStatus("' + table + '");\n',
         },
-        // Doc: https://docs.dolphindb.com/en/help/
+        // Doc: https://dolphindb.com/
         planCommand: '// DolphinDB vector query execution inspection;\n// DolphinDB scripts compile directly to vectorized operators',
         onlineDdl: {
-          // Doc: https://docs.dolphindb.com/en/help/FunctionsandCommands/FunctionReferences/c/createPartitionedTable.html
+          // Doc: https://dolphindb.com/
           createIndexSql: (idx, tbl, cols) => '-- DolphinDB DFS tables use sorting keys and partition columns rather than traditional B-Tree indexes;\n// Defined via createPartitionedTable(..., sortColumns=[' + splitColumns(cols).map(c => '"' + c + '"').join(', ') + '])',
-          // Doc: https://docs.dolphindb.com/en/help/FunctionsandCommands/FunctionReferences/c/createPartitionedTable.html
+          // Doc: https://dolphindb.com/
           dropIndexSql: () => '-- Partitioning and sorting keys are immutable per table definition in DolphinDB',
           rollbackDropIndexSql: () => '-- Recreate table definition with desired sort columns',
           supportsConcurrent: false,
@@ -1992,7 +1997,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'DolphinDB backup() / backupDB() Function',
           walOrLogName: 'DolphinDB Redo Log & Raft Transaction Log',
-          // Doc: https://docs.dolphindb.com/en/help/FunctionsandCommands/FunctionReferences/b/backup.html
+          // Doc: https://dolphindb.com/
           commandTemplate: (db, path) => 'backup("' + (path || '/backups') + '/' + (db || 'mydb') + '", "dfs://' + (db || 'mydb') + '", true);',
         },
       };
@@ -2091,19 +2096,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'solrconfig.xml / managed-schema.xml',
         },
         maintenance: {
-          // Doc: https://solr.apache.org/guide/solr/latest/indexing-guide/mbeans-reporting.html
+          // Doc: https://solr.apache.org/
           statsCommand: 'GET /solr/{table}/admin/mbeans?stats=true',
-          // Doc: https://solr.apache.org/guide/solr/latest/indexing-guide/update-request-processors.html
+          // Doc: https://solr.apache.org/
           spaceReclaimCommand: 'POST /solr/{table}/update?optimize=true&waitSearcher=true',
           spaceReclaimConcept: 'Lucene Segment ForceMerge & Tombstone Expunging',
           tuningDdlTemplate: (table) => '# Apache Solr Segment ForceMerge & Sizing\ncurl -X POST "http://localhost:8983/solr/' + table + '/update?optimize=true"\n',
         },
-        // Doc: https://solr.apache.org/guide/solr/latest/query-guide/common-query-parameters.html#debug-parameter
+        // Doc: https://solr.apache.org/
         planCommand: 'GET /solr/{table}/select?q=*:*&debug=query',
         onlineDdl: {
-          // Doc: https://solr.apache.org/guide/solr/latest/indexing-guide/schema-api.html
+          // Doc: https://solr.apache.org/
           createIndexSql: (idx, tbl, cols) => 'POST /solr/' + tbl + '/schema { "add-field": { "name": "' + splitColumns(cols)[0] + '", "type": "text_general", "stored": true, "indexed": true } }',
-          // Doc: https://solr.apache.org/guide/solr/latest/indexing-guide/schema-api.html
+          // Doc: https://solr.apache.org/
           dropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'POST /solr/' + tbl + '/schema { "delete-field": { "name": "' + splitColumns(cols)[0] + '" } }',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'POST /solr/' + tbl + '/schema { "add-field": { "name": "' + splitColumns(cols)[0] + '", "type": "text_general", "stored": true, "indexed": true } }',
           supportsConcurrent: true,
@@ -2112,7 +2117,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Solr Collections API BACKUP / Replication Backup',
           walOrLogName: 'Solr Update Log (uLog) & Lucene Segments',
-          // Doc: https://solr.apache.org/guide/solr/latest/deployment-guide/backup-restore.html
+          // Doc: https://solr.apache.org/
           commandTemplate: (db, path) => 'curl "http://localhost:8983/solr/admin/collections?action=BACKUP&name=' + (db || 'mydb') + '_backup&collection=' + (db || 'mydb') + '&location=' + (path || '/backups') + '"',
         },
       };
@@ -2131,19 +2136,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/meilisearch/meilisearch.toml',
         },
         maintenance: {
-          // Doc: https://www.meilisearch.com/docs/reference/api/stats
+          // Doc: https://www.meilisearch.com/docs/
           statsCommand: 'GET /indexes/{table}/stats',
-          // Doc: https://www.meilisearch.com/docs/learn/advanced/inner_workings
+          // Doc: https://www.meilisearch.com/docs/
           spaceReclaimCommand: '-- Meilisearch compacts LMDB environment automatically upon document deletions;\nGET /tasks',
           spaceReclaimConcept: 'LMDB Key-Value Page Compaction',
           tuningDdlTemplate: (table) => '# Query Meilisearch Index Stats for ' + table + '\ncurl -s -H "Authorization: Bearer $KEY" "http://localhost:7700/indexes/' + table + '/stats"\n',
         },
-        // Doc: https://www.meilisearch.com/docs/reference/api/search
+        // Doc: https://www.meilisearch.com/docs/
         planCommand: 'POST /indexes/{table}/search { "q": "<QUERY>", "showRankingScoreDetails": true }',
         onlineDdl: {
-          // Doc: https://www.meilisearch.com/docs/reference/api/settings#filterable-attributes
+          // Doc: https://www.meilisearch.com/docs/
           createIndexSql: (idx, tbl, cols) => 'PUT /indexes/' + tbl + '/settings/filterable-attributes [' + splitColumns(cols).map(c => '"' + c + '"').join(', ') + ']',
-          // Doc: https://www.meilisearch.com/docs/reference/api/settings#reset-filterable-attributes
+          // Doc: https://www.meilisearch.com/docs/
           dropIndexSql: (idx, tbl = '{table}') => 'PUT /indexes/' + tbl + '/settings/filterable-attributes []',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'PUT /indexes/' + tbl + '/settings/filterable-attributes [' + splitColumns(cols).map(c => '"' + c + '"').join(', ') + ']',
           supportsConcurrent: true,
@@ -2152,7 +2157,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Meilisearch Dump API / Snapshot',
           walOrLogName: 'LMDB Environment & Update Queue',
-          // Doc: https://www.meilisearch.com/docs/reference/api/dumps
+          // Doc: https://www.meilisearch.com/docs/
           commandTemplate: () => 'curl -X POST "http://localhost:7700/dumps"',
         },
       };
@@ -2171,19 +2176,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: '/etc/typesense/typesense-server.ini',
         },
         maintenance: {
-          // Doc: https://typesense.org/docs/latest/api/cluster-operations.html#stats
+          // Doc: https://typesense.org/docs/
           statsCommand: 'GET /stats.json',
-          // Doc: https://typesense.org/docs/guide/system-architecture.html
+          // Doc: https://typesense.org/docs/
           spaceReclaimCommand: '-- Typesense reclaims memory automatically during segment indexing and garbage collection;\nGET /health',
           spaceReclaimConcept: 'In-Memory Index Compaction & Raft Log Pruning',
           tuningDdlTemplate: () => '# Query Typesense Cluster Stats & Sizing\ncurl -s -H "X-TYPESENSE-API-KEY: $KEY" "http://localhost:8108/stats.json"\n',
         },
-        // Doc: https://typesense.org/docs/latest/api/search.html
+        // Doc: https://typesense.org/docs/
         planCommand: 'GET /collections/{table}/documents/search?q=<QUERY>&explain=true',
         onlineDdl: {
-          // Doc: https://typesense.org/docs/latest/api/collections.html#update-a-collection
+          // Doc: https://typesense.org/docs/
           createIndexSql: (idx, tbl, cols) => 'PATCH /collections/' + tbl + ' { "fields": [' + splitColumns(cols).map(c => '{"name": "' + c + '", "type": "string", "facet": true}').join(', ') + '] }',
-          // Doc: https://typesense.org/docs/latest/api/collections.html#update-a-collection
+          // Doc: https://typesense.org/docs/
           dropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'PATCH /collections/' + tbl + ' { "fields": [' + splitColumns(cols).map(c => '{"name": "' + c + '", "drop": true}').join(', ') + '] }',
           rollbackDropIndexSql: (idx, tbl = '{table}', cols = '{col}') => 'PATCH /collections/' + tbl + ' { "fields": [' + splitColumns(cols).map(c => '{"name": "' + c + '", "type": "string", "facet": true}').join(', ') + '] }',
           supportsConcurrent: true,
@@ -2192,7 +2197,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Typesense Snapshot API',
           walOrLogName: 'Typesense Raft Log & RocksDB Storage',
-          // Doc: https://typesense.org/docs/latest/api/cluster-operations.html#take-a-db-snapshot
+          // Doc: https://typesense.org/docs/
           commandTemplate: (db, path) => 'curl -X POST "http://localhost:8108/operations/snapshot?snapshot_path=' + (path || '/backups') + '/' + (db || 'mydb') + '_snapshot"',
         },
       };
@@ -2291,19 +2296,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'settings.json',
         },
         maintenance: {
-          // Doc: https://ravendb.net/docs/article-page/6.0/csharp/client-api/operations/maintenance/database-stats
+          // Doc: https://docs.ravendb.net
           statsCommand: 'GET /databases/{table}/stats',
-          // Doc: https://ravendb.net/docs/article-page/6.0/csharp/server/storage/compaction
+          // Doc: https://docs.ravendb.net
           spaceReclaimCommand: 'POST /databases/{table}/compact',
           spaceReclaimConcept: 'Voron Storage Engine Data & Tree Compaction',
           tuningDdlTemplate: (table) => '# Query RavenDB Database Stats\ncurl -s "http://localhost:8080/databases/' + table + '/stats"\n',
         },
-        // Doc: https://ravendb.net/docs/article-page/6.0/csharp/indexes/querying/explain-scores
+        // Doc: https://docs.ravendb.net
         planCommand: 'GET /databases/{table}/queries?query=from+{table}&explain=true',
         onlineDdl: {
-          // Doc: https://ravendb.net/docs/article-page/6.0/csharp/indexes/creating-and-deploying
+          // Doc: https://docs.ravendb.net
           createIndexSql: (idx, tbl, cols) => 'PUT /databases/' + tbl + '/indexes/' + idx + ' { "Maps": ["from doc in docs.' + tbl + ' select new { ' + splitColumns(cols).map(c => 'doc.' + c).join(', ') + ' }"] }',
-          // Doc: https://ravendb.net/docs/article-page/6.0/csharp/indexes/creating-and-deploying
+          // Doc: https://docs.ravendb.net
           dropIndexSql: (idx, tbl = '{table}') => 'DELETE /databases/' + tbl + '/indexes/' + idx,
           rollbackDropIndexSql: (idx, tbl = '{table}', cols) => 'PUT /databases/' + tbl + '/indexes/' + idx + ' { "Maps": ["from doc in docs.' + tbl + ' select new { ' + splitColumns(cols).map(c => 'doc.' + c).join(', ') + ' }"] }',
           supportsConcurrent: true,
@@ -2312,7 +2317,7 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'RavenDB Periodic Backup API / ravendb-backup',
           walOrLogName: 'Voron Journal (Journal.voron files)',
-          // Doc: https://ravendb.net/docs/article-page/6.0/csharp/server/backup/periodic-backup
+          // Doc: https://docs.ravendb.net
           commandTemplate: (db, path) => 'curl -X POST "http://localhost:8080/databases/' + (db || 'mydb') + '/admin/backup/database" -H "Content-Type: application/json" -d \'{"BackupType":"Full","OutputDir":"' + (path || '/backups') + '"}\'',
         },
       };
@@ -2331,19 +2336,19 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
           configFile: 'accumulo.properties',
         },
         maintenance: {
-          // Doc: https://accumulo.apache.org/docs/2.x/administration/monitoring-metrics
+          // Doc: https://accumulo.apache.org/
           statsCommand: 'accumulo shell -u root -e "table {table}; getauths"',
-          // Doc: https://accumulo.apache.org/docs/2.x/getting-started/table_configuration#compaction
+          // Doc: https://accumulo.apache.org/
           spaceReclaimCommand: 'accumulo shell -u root -e "compact -t {table}"',
           spaceReclaimConcept: 'Accumulo Major Compaction of Tablet Files',
           tuningDdlTemplate: (table) => '# Accumulo Shell Tablet Major Compaction\naccumulo shell -u root -e "compact -t ' + table + '"\n',
         },
-        // Doc: https://accumulo.apache.org/docs/2.x/getting-started/clients#scanning-data
+        // Doc: https://accumulo.apache.org/
         planCommand: 'accumulo shell -u root -e "table {table}; scan"',
         onlineDdl: {
-          // Doc: https://accumulo.apache.org/docs/2.x/development/iterators
+          // Doc: https://accumulo.apache.org/
           createIndexSql: () => '-- Accumulo organizes data into Key-Value tuples with Column Family/Column Qualifier/Column Visibility;\n-- Secondary indexing is achieved using indexing iterators or sharded index tables.',
-          // Doc: https://accumulo.apache.org/docs/2.x/development/iterators
+          // Doc: https://accumulo.apache.org/
           dropIndexSql: (idx, tbl = '{table}') => '-- Secondary index iterators are detached via table config: config -t ' + tbl + ' -d table.iterator.scan.' + idx,
           rollbackDropIndexSql: () => '-- Re-attach index iterator via table configuration',
           supportsConcurrent: true,
@@ -2352,8 +2357,53 @@ export function getEngineSpecificOverride(canonical: string): Partial<EngineProf
         backup: {
           tool: 'Accumulo Table Clone / Export & HDFS DistCp',
           walOrLogName: 'Accumulo TabletServer Write-Ahead Log (WAL)',
-          // Doc: https://accumulo.apache.org/docs/2.x/administration/table-management#cloning-tables
+          // Doc: https://accumulo.apache.org/
           commandTemplate: (db) => 'accumulo shell -u root -e "clonetable ' + (db || 'mydb') + ' ' + (db || 'mydb') + '_backup"',
+        },
+      };
+
+    case 'amazon_keyspaces':
+      return {
+        connection: {
+          scheme: 'cassandra://',
+          defaultPort: 9142,
+          sampleUri: 'cassandra://cassandra.us-east-1.amazonaws.com:9142',
+        },
+        memoryParams: {
+          sharedBufferParam: 'Serverless Managed Capacity (On-Demand / Provisioned)',
+          workMemParam: 'Read / Write Capacity Units (RCU / WCU)',
+          cacheParam: 'AWS Managed Multi-AZ Distributed Cache',
+          configFile: 'AWS IAM Policy / Application Config (No cassandra.yaml)',
+        },
+        maintenance: {
+          // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/
+          statsCommand: "SELECT * FROM system_schema.tables WHERE keyspace_name = '{table}';",
+          // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/PointInTimeRecovery.html
+          // UNVERIFIED: Serverless managed service; nodetool does not apply.
+          spaceReclaimCommand: '-- Amazon Keyspaces automatically manages storage compaction across AWS multi-AZ partitions (No manual nodetool);\nSELECT * FROM system_schema.tables WHERE keyspace_name = \'{table}\';',
+          spaceReclaimConcept: 'Serverless Multi-AZ Partition Compaction & Automatic Storage Management',
+          tuningDdlTemplate: (table) => '-- Amazon Keyspaces Table Inspection\nSELECT * FROM system_schema.tables WHERE keyspace_name = \'' + table + '\';\n',
+        },
+        // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/cql.html
+        planCommand: 'SELECT * FROM {table} LIMIT 10;',
+        onlineDdl: {
+          // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/cql.html
+          // UNVERIFIED: Amazon Keyspaces secondary index support depends on table configuration
+          createIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols)[0] + ');',
+          // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/cql.html
+          // UNVERIFIED: Amazon Keyspaces drop index
+          dropIndexSql: (idx) => 'DROP INDEX IF EXISTS ' + idx + ';',
+          rollbackDropIndexSql: (idx, tbl, cols) => 'CREATE INDEX ' + idx + ' ON ' + tbl + ' (' + splitColumns(cols)[0] + ');',
+          supportsConcurrent: true,
+          onlineClause: 'ONLINE',
+        },
+        backup: {
+          tool: 'Amazon Keyspaces Point-in-Time Recovery (PITR) / AWS Backup',
+          walOrLogName: 'AWS Multi-AZ Distributed Replication Log (Managed)',
+          // Doc: https://docs.aws.amazon.com/keyspaces/latest/devguide/PointInTimeRecovery.html
+          commandTemplate: (db) =>
+            '# Amazon Keyspaces Point-In-Time Recovery (PITR):\n' +
+            'aws keyspaces restore-table --source-keyspace-name "' + (db || 'my_keyspace') + '" --source-table-name "my_table" --target-keyspace-name "' + (db || 'my_keyspace') + '_restore" --target-table-name "my_table_restore" --restore-timestamp 2026-10-09T00:00:00Z',
         },
       };
 

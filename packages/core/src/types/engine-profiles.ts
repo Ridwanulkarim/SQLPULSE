@@ -1520,22 +1520,22 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'milvus.yaml / Pinecone Pod Config',
   },
   maintenance: {
-    // Doc: https://milvus.io/docs/manage_collections.md
+    // Doc: https://milvus.io/docs/manage_collections
     statsCommand: 'collection.describe();',
-    // Doc: https://milvus.io/docs/compact_data.md
+    // Doc: https://milvus.io/docs/compact_data
     spaceReclaimCommand: 'collection.compact();',
     spaceReclaimConcept: 'Vector Segment Merge & Compaction',
     tuningDdlTemplate: (table) =>
       `// Milvus / Vector Collection Segment Compaction\n` +
       `pymilvus.utility.compact("${table}");`,
   },
-  // Doc: https://milvus.io/docs/manage_collections.md
+  // Doc: https://milvus.io/docs/manage_collections
   planCommand: 'Vector ANN Query Profiling / Query node latency breakdown',
   onlineDdl: {
-    // Doc: https://milvus.io/docs/build_index.md
+    // Doc: https://milvus.io/docs/build_index
     createIndexSql: (idx, tbl, cols) =>
       `collection.create_index(field_name="${splitColumns(cols)[0] || 'vector'}", index_params={"metric_type": "COSINE", "index_type": "HNSW", "params": {"M": 16, "efConstruction": 64}});`,
-    // Doc: https://milvus.io/docs/drop_index.md
+    // Doc: https://milvus.io/docs/drop_index
     dropIndexSql: (idx, tbl = '{table}') => `collection.drop_index(index_name="${idx}");`,
     rollbackDropIndexSql: (idx, tbl, cols) =>
       `collection.create_index(field_name="${splitColumns(cols)[0] || 'vector'}", index_params={"metric_type": "COSINE", "index_type": "HNSW"});`,
@@ -1550,7 +1550,7 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   backup: {
     tool: 'milvus-backup / Milvus MinIO Snapshot',
     walOrLogName: 'Milvus Log Broker (Kafka / Pulsar WAL)',
-    // Doc: https://milvus.io/docs/milvus_backup_cli.md
+    // Doc: https://milvus.io/docs/milvus_backup_cli
     commandTemplate: (db, path) =>
       `# Note: Backup destination storage is configured in backup.yaml (MinIO/S3 bucket);\n` +
       `milvus-backup create -n "${db}_backup" -c "${db}"`,
@@ -2216,7 +2216,6 @@ export function getEngineProfile(engineId?: string): EngineProfile {
       'scylladb',
       'datastax_enterprise',
       'elassandra',
-      'amazon_keyspaces',
     ]),
     document: new Set([
       'mongodb',

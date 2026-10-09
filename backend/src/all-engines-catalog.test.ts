@@ -643,6 +643,7 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
       trino: 8080,
       presto: 8080,
       apache_hive: 10000,
+      amazon_keyspaces: 9142,
     };
 
     for (const [engine, port] of Object.entries(expectedPorts)) {
@@ -685,7 +686,7 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
       { pattern: /milvus-backup/i, allowed: new Set(['milvus', 'zilliz']) },
       { pattern: /mongodump/i, allowed: new Set(['mongodb', 'amazon_documentdb', 'percona_server_for_mongodb']) },
       { pattern: /PUT\s+\/_snapshot/i, allowed: new Set(['elasticsearch', 'opensearch']) },
-      { pattern: /nodetool/i, allowed: new Set(['apache_cassandra', 'scylladb', 'datastax_enterprise', 'elassandra', 'amazon_keyspaces']) },
+      { pattern: /nodetool/i, allowed: new Set(['apache_cassandra', 'scylladb', 'datastax_enterprise', 'elassandra']) },
     ];
 
     for (const item of DATABASE_CATALOG) {
