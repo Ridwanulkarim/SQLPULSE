@@ -111,6 +111,13 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
   const bloatPct = simulatePostVacuum ? 2 : (result?.averageBloatPercentage || deadTuplePercentage);
   const liveDataPct = 100 - bloatPct;
 
+  const isPgFamily = selectedEngine.toLowerCase().includes('postgres') ||
+    selectedEngine.toLowerCase().includes('cockroach') ||
+    selectedEngine.toLowerCase().includes('timescale') ||
+    selectedEngine.toLowerCase().includes('yugabyte') ||
+    selectedEngine.toLowerCase().includes('neon');
+  const reclaimNoun = isPgFamily ? 'Vacuum' : 'Reclamation & Compaction';
+
   return (
     <div className="space-y-6 font-sans">
       {/* Hero Header */}
@@ -118,7 +125,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
         <div className="relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-amber-500/30 text-amber-200 border border-amber-400/40 flex items-center gap-1">
-              <Trash2 className="w-3.5 h-3.5 text-amber-300" /> Storage Hygiene &amp; Vacuum Optimization
+              <Trash2 className="w-3.5 h-3.5 text-amber-300" /> Storage Hygiene &amp; {isPgFamily ? 'Vacuum Optimization' : 'Space Reclamation'}
             </span>
             <span className="text-xs text-amber-300 font-medium">
               447 Database Models • Segment Force-Merge • Compaction • MVCC Dead Tuples • Zero-Downtime Repack
@@ -126,10 +133,10 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
             <Trash2 className="w-6 h-6 text-amber-400" />
-            Table Bloat &amp; Vacuum Diagnostic Studio
+            Table Bloat &amp; {isPgFamily ? 'Vacuum' : 'Storage Reclamation'} Diagnostic Studio
           </h2>
           <p className="text-xs sm:text-sm text-amber-100/90 mt-1 max-w-3xl">
-            Diagnose dead row versions, empty page fragments, unmerged SSTable segments, and uncompacted storage below High Water Marks for <span className="text-amber-300 font-bold">{engineMeta.name}</span>. Calculate exact vacuum runtimes, reclaimable disk space, and autovacuum schedule tuning across all {DATABASE_CATALOG.length} database models.
+            Diagnose dead row versions, empty page fragments, unmerged SSTable segments, and uncompacted storage below High Water Marks for <span className="text-amber-300 font-bold">{engineMeta.name}</span>. Calculate exact {isPgFamily ? 'vacuum' : 'reclaim/compaction'} runtimes, reclaimable disk space, and maintenance schedule tuning across all {DATABASE_CATALOG.length} database models.
           </p>
 
           {/* Category Filter & Quick Engine Pills */}
@@ -292,7 +299,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             }`}
           >
             <Sparkles className={`w-3.5 h-3.5 ${simulatePostVacuum ? 'text-amber-200 animate-spin' : 'text-amber-600'}`} />
-            <span>{simulatePostVacuum ? 'Vacuum Simulation: ACTIVE (Post-Vacuum State)' : 'Simulate Vacuum & Repack Run'}</span>
+            <span>{simulatePostVacuum ? `${reclaimNoun} Simulation: ACTIVE (Post-Reclaim State)` : `Simulate ${isPgFamily ? 'Vacuum & Repack' : 'Compaction & Reclaim'} Run`}</span>
           </button>
 
           <button
@@ -301,7 +308,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
             className="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-md shadow-amber-500/20 transition flex items-center gap-2 active:scale-95 disabled:opacity-50"
           >
             {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
-            <span>{isLoading ? 'Calculating...' : 'Run Storage Bloat & Vacuum Check ➔'}</span>
+            <span>{isLoading ? 'Calculating...' : `Run Storage Bloat & ${reclaimNoun} Check ➔`}</span>
           </button>
         </div>
       </div>
@@ -346,7 +353,7 @@ export const BloatAnalyzerTab: React.FC<BloatAnalyzerTabProps> = ({
 
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-emerald-200 shadow-2xs space-y-1">
               <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
-                Post-Vacuum Clean Size
+                Post-{isPgFamily ? 'Vacuum' : 'Reclaim'} Clean Size
               </span>
               <div className="text-2xl sm:text-3xl font-black text-emerald-700 font-mono">
                 {result.vacuumMetrics?.postVacuumTableSizeGb || (totalTableSizeGb * 0.62).toFixed(1)} GB

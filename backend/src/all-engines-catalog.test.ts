@@ -445,6 +445,13 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
     expect(bq.backup.walOrLogName).not.toContain('WAL');
   });
 
+  it('ClickHouse and Columnar OLAP have authentic MergeTree immutable parts without invented commit logs', () => {
+    const ch = getEngineProfile('clickhouse');
+    expect(ch.backup.walOrLogName).toContain('Immutable Columnar Data Parts (MergeTree)');
+    expect(ch.backup.walOrLogName).not.toContain('Commit Log');
+    expect(ch.backup.walOrLogName).not.toContain('Append Parts');
+  });
+
   it('every vendor profile command has an official doc-URL comment or an UNVERIFIED marker', () => {
     const fs = require('fs');
     const path = require('path');

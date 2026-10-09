@@ -97,6 +97,10 @@ export class DisasterRecoveryCalculator {
         theoreticalRpo = '< 5 seconds';
         rpoClass = 'Near Real-Time (<1m)';
         rpoExplanation = 'MongoDB replica set continuous Oplog replication captures mutations in real time to secondary storage.';
+      } else if (profile.family === 'columnar_olap' || profile.engineId.includes('clickhouse')) {
+        theoreticalRpo = '< 1 second';
+        rpoClass = 'Near Real-Time (<1m)';
+        rpoExplanation = 'ClickHouse ReplicatedMergeTree synchronizes immutable columnar parts via ClickHouse Keeper with near-instantaneous replica replication.';
       } else {
         theoreticalRpo = '< 1 minute';
         rpoClass = 'Near Real-Time (<1m)';

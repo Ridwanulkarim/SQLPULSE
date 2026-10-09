@@ -406,11 +406,6 @@ const ORACLE_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
     // Doc: https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/DROP-INDEX.html
     // Note: Oracle does not support DROP INDEX ... ONLINE.
-    // Doc: https://www.ibm.com/docs/en/db2/11.5?topic=statements-drop
-    // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20d9122575191014a9ec804b407a5ee2.html
-    // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/indexes.html
-    // UNVERIFIED: Generic index drop syntax
-    // UNVERIFIED: Fallback generic index drop
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE INDEX ${idx} ON ${tbl}(${cols}) ONLINE;`,
     supportsConcurrent: false,
@@ -840,7 +835,6 @@ const EMBEDDED_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   planCommand: 'EXPLAIN QUERY PLAN <QUERY>;',
   onlineDdl: {
     // Doc: https://www.sqlite.org/lang_createindex.html
-    // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/indexes.html
     createIndexSql: (idx, tbl, cols) => `CREATE INDEX IF NOT EXISTS ${idx} ON ${tbl}(${cols});`,
     // Doc: https://www.sqlite.org/lang_dropindex.html
     dropIndexSql: (idx) => `DROP INDEX IF EXISTS ${idx};`,
@@ -958,8 +952,8 @@ const COLUMNAR_OLAP_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description
     locks: 'system.part_log',
   },
   backup: {
-    tool: 'Cloud Managed Snapshots / Time Travel / S3 Export',
-    walOrLogName: 'Commit Log / Append Parts',
+    tool: 'clickhouse-backup / Native BACKUP TABLE',
+    walOrLogName: 'Immutable Columnar Data Parts (MergeTree)',
     // Doc: https://github.com/AlexAkulov/clickhouse-backup
     commandTemplate: (db, path) => `BACKUP TABLE ${db} TO S3('${path}');`,
   },
@@ -1036,9 +1030,9 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
     configFile: 'cassandra.yaml / scylla.yaml',
   },
   maintenance: {
-    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/tablestats.html
+    // Doc: https://cassandra.apache.org/doc/stable/cassandra/managing/tools/nodetool/tablestats.html
     statsCommand: 'nodetool tablestats {table};',
-    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/compact.html
+    // Doc: https://cassandra.apache.org/doc/stable/cassandra/managing/tools/nodetool/compact.html
     spaceReclaimCommand: 'nodetool compact {table};',
     spaceReclaimConcept: 'SSTable Major Compaction & Tombstone Purge',
     tuningDdlTemplate: (table) =>
@@ -1049,10 +1043,12 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
       `  'compaction_window_size': 1\n` +
       `} AND gc_grace_seconds = 86400;`,
   },
-  // Doc: https://cassandra.apache.org/doc/latest/cassandra/cql/cql_singlefile.html
+  // Doc: https://cassandra.apache.org/doc/stable/cassandra/managing/tools/nodetool/nodetool.html
   planCommand: 'TRACING ON; <QUERY>;',
   onlineDdl: {
+    // Doc: https://cassandra.apache.org/doc/stable/cassandra/developing/cql/indexing/2i/2i-overview.html
     createIndexSql: (idx, tbl, cols) => `CREATE CUSTOM INDEX ${idx} ON ${tbl} (${cols}) USING 'org.apache.cassandra.index.sasi.SASIIndex';`,
+    // Doc: https://cassandra.apache.org/doc/stable/cassandra/developing/cql/indexing/2i/2i-overview.html
     dropIndexSql: (idx) => `DROP INDEX ${idx};`,
     rollbackDropIndexSql: (idx, tbl, cols) => `CREATE CUSTOM INDEX ${idx} ON ${tbl} (${cols}) USING 'org.apache.cassandra.index.sasi.SASIIndex';`,
     supportsConcurrent: false,
@@ -1066,7 +1062,7 @@ const WIDE_COLUMN_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'>
   backup: {
     tool: 'nodetool snapshot / Medusa',
     walOrLogName: 'CommitLog',
-    // Doc: https://cassandra.apache.org/doc/latest/cassandra/tools/nodetool/snapshot.html
+    // Doc: https://cassandra.apache.org/doc/stable/cassandra/managing/tools/nodetool/snapshot.html
     commandTemplate: (db, path) => `nodetool snapshot -t backup_${Date.now()} ${db}`,
   },
   replication: {
@@ -1370,7 +1366,7 @@ const GRAPH_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
       `// Neo4j Database Compaction & Cache Priming\n` +
       `CALL dbms.compact();`,
   },
-  // Doc: https://neo4j.com/docs/cypher-manual/current/query-tuning/how-do-i-profile-a-query/
+  // Doc: https://neo4j.com/docs/cypher-manual/current/query-tuning/
   planCommand: 'EXPLAIN MATCH ... / PROFILE MATCH ...;',
   onlineDdl: {
     // Doc: https://neo4j.com/docs/cypher-manual/current/indexes-for-search-performance/
@@ -1469,21 +1465,21 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'milvus.yaml / Pinecone Pod Config',
   },
   maintenance: {
-    // Doc: https://milvus.io/docs/manage-collections.md
+    // Doc: https://github.com/milvus-io/pymilvus
     statsCommand: 'collection.describe();',
-    // Doc: https://milvus.io/docs/compact_data.md
+    // Doc: https://github.com/milvus-io/pymilvus
     spaceReclaimCommand: 'collection.compact();',
     spaceReclaimConcept: 'Vector Segment Merge & Compaction',
     tuningDdlTemplate: (table) =>
       `// Milvus / Vector Collection Segment Compaction\n` +
       `pymilvus.utility.compact("${table}");`,
   },
-  // Doc: https://milvus.io/docs/search.md
+  // Doc: https://github.com/milvus-io/pymilvus
   planCommand: 'Vector ANN Query Profiling / Query node latency breakdown',
   onlineDdl: {
-    // Doc: https://milvus.io/docs/build_index.md
+    // Doc: https://github.com/milvus-io/pymilvus
     createIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW", "params": {"M": 16, "efConstruction": 64}});`,
-    // Doc: https://milvus.io/docs/drop_index.md
+    // Doc: https://github.com/milvus-io/pymilvus
     dropIndexSql: (idx, tbl = '{table}') => `collection.drop_index(index_name="${idx}");`,
     rollbackDropIndexSql: (idx, tbl, cols) => `collection.create_index(field_name="${cols}", index_params={"metric_type": "COSINE", "index_type": "HNSW"});`,
     supportsConcurrent: false,
@@ -1523,7 +1519,7 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
   connection: {
     scheme: 'https://',
     defaultPort: 19530,
-    sampleUri: 'https://vector-index-project.svc.us-east-1.pinecone.io (or milvus://host:19530)',
+    sampleUri: 'pinecone://app.pinecone.io/indexes/vector-index (or milvus://host:19530)',
   },
   ormAdvice: {
     batchSizeRecommendation: 256,

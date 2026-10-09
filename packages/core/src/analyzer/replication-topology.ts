@@ -249,7 +249,7 @@ DGMGRL> ENABLE FAST_START FAILOVER;`;
           port = 1433;
           readPort = 1433;
           syncProtocol = 'Synchronous Commit (Always On AG)';
-          asyncProtocol = 'Asynchronous Commit Log Block Transfer';
+          asyncProtocol = 'Asynchronous-Commit Mode (Log Block Streaming)';
           failoverMechanism = 'Always On Availability Groups (WSFC / Pacemaker)';
           rpo = '0 ms (Synchronous Commit Mode)';
           rto = '< 10 Seconds Automatic Failover';
