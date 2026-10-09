@@ -650,5 +650,99 @@ describe('All 447 Engines Catalog x 25 Studios Verification', () => {
       expect(prof.connection.defaultPort).toBe(port);
     }
   });
+
+  it('guarantees no spaceReclaimCommand across all 447 engines performs destructive data deletion', () => {
+    const dangerousRegex = /flush_all|TRUNCATE|clear_objects|clean eventdata|delete_all|DROP\s+(?:TABLE|DATABASE)|DELETE\s+FROM/i;
+    const violations: { engine: string; command: string }[] = [];
+    for (const item of DATABASE_CATALOG) {
+      const prof = getEngineProfile(item.id);
+      const cmd = prof.maintenance?.spaceReclaimCommand || '';
+      if (dangerousRegex.test(cmd)) {
+        violations.push({ engine: item.id, command: cmd });
+      }
+    }
+    expect(violations).toHaveLength(0);
+  });
+
+  it('ensures generic fallback engines do not receive runnable backup_tool or MySQL table commands', () => {
+    for (const item of DATABASE_CATALOG) {
+      const prof = getEngineProfile(item.id);
+      if (prof.family === 'generic') {
+        const backupCmd = prof.backup.commandTemplate(item.id, '/bk');
+        expect(backupCmd).not.toContain('backup_tool --database=');
+        expect(prof.maintenance.statsCommand).not.toBe('ANALYZE TABLE {table};');
+        expect(prof.maintenance.spaceReclaimCommand).not.toBe('OPTIMIZE TABLE {table};');
+      }
+    }
+  });
+
+  it('verifies that lead-engine backup commands are strictly isolated to lead and compatible engines', () => {
+    const leadPatterns = [
+      { pattern: /clickhouse-backup/i, allowed: new Set(['clickhouse', 'altinity_clickhouse']) },
+      { pattern: /\bBGSAVE\b/i, allowed: new Set(['redis', 'valkey', 'keydb', 'dragonfly']) },
+      { pattern: /neo4j-admin/i, allowed: new Set(['neo4j']) },
+      { pattern: /influx\s+backup/i, allowed: new Set(['influxdb']) },
+      { pattern: /milvus-backup/i, allowed: new Set(['milvus', 'zilliz']) },
+      { pattern: /mongodump/i, allowed: new Set(['mongodb', 'amazon_documentdb', 'percona_server_for_mongodb']) },
+      { pattern: /PUT\s+\/_snapshot/i, allowed: new Set(['elasticsearch', 'opensearch']) },
+      { pattern: /nodetool/i, allowed: new Set(['apache_cassandra', 'scylladb', 'datastax_enterprise', 'elassandra', 'amazon_keyspaces']) },
+    ];
+
+    for (const item of DATABASE_CATALOG) {
+      const prof = getEngineProfile(item.id);
+      const backupTool = prof.backup.tool;
+      const backupCmd = prof.backup.commandTemplate(item.id, '/bk');
+      const text = `${backupTool} ${backupCmd}`;
+
+      for (const { pattern, allowed } of leadPatterns) {
+        if (pattern.test(text) && !allowed.has(item.id)) {
+          throw new Error(`Engine ${item.id} received forbidden lead backup tool/command matching ${pattern}: "${text}"`);
+        }
+      }
+    }
+  });
+
+  it('verifies accurate configurations and ports for the 29 newly overridden non-SQL engines', () => {
+    const newlyOverriddenExpected: Record<string, { port: number; backupTool: string }> = {
+      teradata: { port: 1025, backupTool: 'Teradata DSA' },
+      vertica: { port: 5433, backupTool: 'Vertica vbr' },
+      apache_impala: { port: 21050, backupTool: 'DistCp' },
+      apache_druid: { port: 8888, backupTool: 'Druid Deep Storage' },
+      starrocks: { port: 9030, backupTool: 'StarRocks BACKUP SNAPSHOT' },
+      apache_pinot: { port: 8099, backupTool: 'Pinot Deep Storage' },
+      apache_doris: { port: 9030, backupTool: 'Apache Doris BACKUP SNAPSHOT' },
+      aerospike: { port: 3000, backupTool: 'asbackup' },
+      hazelcast: { port: 5701, backupTool: 'Hazelcast Hot Restart' },
+      rocksdb: { port: 0, backupTool: 'RocksDB BackupEngine' },
+      leveldb: { port: 0, backupTool: 'LevelDB File Copy' },
+      riak_kv: { port: 8087, backupTool: 'riak-admin backup' },
+      janusgraph: { port: 8182, backupTool: 'JanusGraph Storage Backend' },
+      orientdb: { port: 2424, backupTool: 'OrientDB Console BACKUP' },
+      memgraph: { port: 7687, backupTool: 'Memgraph CREATE SNAPSHOT' },
+      apache_jena_tdb: { port: 3030, backupTool: 'tdb2.tdbbackup' },
+      tdengine: { port: 6030, backupTool: 'taosdump' },
+      opentsdb: { port: 4242, backupTool: 'HBase Snapshot' },
+      rrdtool: { port: 0, backupTool: 'rrdtool dump' },
+      dolphindb: { port: 8848, backupTool: 'DolphinDB backup' },
+      vespa: { port: 8080, backupTool: 'vespa-visit' },
+      vald: { port: 8080, backupTool: 'Vald Agent PVC Snapshot' },
+      apache_solr: { port: 8983, backupTool: 'Solr Collections API' },
+      meilisearch: { port: 7700, backupTool: 'Meilisearch Dump API' },
+      typesense: { port: 8108, backupTool: 'Typesense Snapshot API' },
+      couchdb: { port: 5984, backupTool: 'CouchDB Continuous Replication' },
+      rethinkdb: { port: 28015, backupTool: 'rethinkdb dump' },
+      ravendb: { port: 8080, backupTool: 'RavenDB Periodic Backup API' },
+      apache_accumulo: { port: 9995, backupTool: 'Accumulo Table Clone' },
+    };
+
+    for (const [engine, expected] of Object.entries(newlyOverriddenExpected)) {
+      const prof = getEngineProfile(engine);
+      expect(prof.connection.defaultPort).toBe(expected.port);
+      expect(prof.backup.tool).toContain(expected.backupTool);
+      expect(prof.maintenance.statsCommand).toBeDefined();
+      expect(prof.maintenance.spaceReclaimCommand).toBeDefined();
+    }
+  });
 });
+
 

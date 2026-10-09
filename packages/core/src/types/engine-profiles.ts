@@ -726,7 +726,8 @@ const SAP_HANA_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = 
   },
   maintenance: {
     // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b10651d9434e484f/20c7d2c375191014a4c6e9447432cb11.html
-    statsCommand: 'CREATE STATISTICS ON {table}; REFRESH STATISTICS ON {table};',
+    // UNVERIFIED: REFRESH STATISTICS ON "{table}";
+    statsCommand: 'REFRESH STATISTICS ON "{table}";',
     // Doc: https://help.sap.com/docs/SAP_HANA_PLATFORM/4fe29514e1b04f80b37205a03a661715/20d8f3ec7519101490238d97fb18c0c4.html
     spaceReclaimCommand: 'MERGE DELTA OF "{table}";',
     spaceReclaimConcept: 'Column Store In-Memory Delta Merge & Optimization',
@@ -1550,8 +1551,9 @@ const VECTOR_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     tool: 'milvus-backup / Milvus MinIO Snapshot',
     walOrLogName: 'Milvus Log Broker (Kafka / Pulsar WAL)',
     // Doc: https://milvus.io/docs/milvus_backup_cli.md
-    commandTemplate: (target, coll = 'default_collection') =>
-      `milvus-backup create -n "${target}" -c "${coll}"`,
+    commandTemplate: (db, path) =>
+      `# Note: Backup destination storage is configured in backup.yaml (MinIO/S3 bucket);\n` +
+      `milvus-backup create -n "${db}_backup" -c "${db}"`,
   },
   replication: {
     mechanism: 'QueryNode / DataNode Raft-based sharding and multi-AZ replication',
@@ -1741,27 +1743,24 @@ const TIMESERIES_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> 
   maintenance: {
     // Doc: https://docs.influxdata.com/influxdb/v1/query_language/explore-schema/
     statsCommand: 'SHOW STATS',
-    // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#drop-series
-    spaceReclaimCommand: 'ALTER TABLE {table} DROP PARTITION ...',
-    spaceReclaimConcept: 'Retention Policy Shard Dropping & TSM Compaction',
+    // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#alter-retention-policies
+    spaceReclaimCommand: '-- InfluxDB disk space is reclaimed automatically by retention policy shard group expiration:\nALTER RETENTION POLICY "autogen" ON "{table}" DURATION 30d REPLICATION 1 SHARD DURATION 7d;',
+    spaceReclaimConcept: 'Retention Policy Shard Group Compaction (TSM)',
     tuningDdlTemplate: (table) =>
       `-- Time-Series Retention Policy Maintenance\n` +
-      `ALTER RETENTION POLICY "autogen" ON "db" DURATION 30d REPLICATION 1 DEFAULT;`,
+      `ALTER RETENTION POLICY "autogen" ON "${table}" DURATION 30d REPLICATION 1 SHARD DURATION 7d;`,
   },
   // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#explain
   planCommand: 'EXPLAIN <QUERY>;',
   onlineDdl: {
     // Doc: https://docs.influxdata.com/influxdb/v1/concepts/key_concepts/
-    createIndexSql: (idx, tbl, cols) => {
-      const colsList = splitColumns(cols).map((c) => c.split(/\s+/)[0]);
-      return `-- Time-series engines index tags/symbols automatically:\n` +
-        colsList.map((c) => `ALTER TABLE ${tbl} ALTER COLUMN ${c} ADD INDEX;`).join('\n');
-    },
+    createIndexSql: () =>
+      `-- InfluxDB automatically indexes tag keys and tag values upon ingestion (TSI engine).\n-- No explicit CREATE INDEX statement required for tag fields.`,
     // Doc: https://docs.influxdata.com/influxdb/v1/query_language/manage-database/#drop-series
     dropIndexSql: (idx) =>
       `// CAUTION: In InfluxDB, DROP SERIES permanently deletes underlying time-series data points matching the series key!\n` +
       `DROP SERIES FROM ${idx}`,
-    rollbackDropIndexSql: (idx) => `-- Re-add index on tag`,
+    rollbackDropIndexSql: (idx) => `-- Tags are re-indexed automatically when new points with tag are written`,
     supportsConcurrent: false,
     onlineClause: 'ONLINE',
   },
@@ -1851,15 +1850,14 @@ const GENERIC_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     configFile: 'database.conf',
   },
   maintenance: {
-    // UNVERIFIED: Fallback ANSI SQL statistics
-    statsCommand: 'ANALYZE TABLE {table};',
-    // UNVERIFIED: Fallback generic space reclaim
-    spaceReclaimCommand: 'OPTIMIZE TABLE {table};',
+    // UNVERIFIED: Fallback neutral table statistics guidance
+    statsCommand: '-- Check official documentation for native statistics collection;\n-- e.g., ANALYZE TABLE {table} or DBMS_STATS or equivalent for this engine.',
+    // UNVERIFIED: Fallback neutral space reclaim guidance
+    spaceReclaimCommand: '-- Storage compaction varies by engine;\n-- Consult engine documentation for vacuum, defragment, or table rebuild commands.',
     spaceReclaimConcept: 'Engine Storage Compaction & Space Reclamation',
     tuningDdlTemplate: (table) =>
-      `-- Generic Database Engine Space Reclamation & Statistics\n` +
-      `/* Check your database documentation for native vacuum or rebuild commands */\n` +
-      `ANALYZE TABLE ${table};`,
+      `-- Space Reclamation & Statistics Guidance for ${table}\n` +
+      `-- Consult the official engine documentation for native maintenance commands;\n`,
   },
   // UNVERIFIED: Fallback generic explain query plan
   planCommand: 'EXPLAIN <QUERY>;',
@@ -1878,10 +1876,12 @@ const GENERIC_BASE: Omit<EngineProfile, 'engineId' | 'name' | 'description'> = {
     locks: 'database_locks',
   },
   backup: {
-    tool: 'Native Database Backup Utility or Storage Volume Snapshot',
+    tool: 'Vendor Native Backup Utility or Storage Volume Snapshot',
     walOrLogName: 'Transaction / Redo / Journal Log',
-    // UNVERIFIED: Fallback generic backup tool
-    commandTemplate: (db, path) => `backup_tool --database=${db} --target=${path}`,
+    // UNVERIFIED: Fallback placeholder guidance (vendor backup tool required)
+    commandTemplate: (db, path) =>
+      `# Use the vendor's backup utility for ${db}:\n` +
+      `# Example: <vendor_cli> backup --db="${db}" --out="${path}" (Consult official documentation)`,
   },
   replication: {
     mechanism: 'Primary-Secondary Replication / Distributed Consensus',
@@ -2200,6 +2200,81 @@ export function getEngineProfile(engineId?: string): EngineProfile {
   } else if (metadata?.category === 'streaming_ledger') {
     capabilities['partition-plan'] = 'unsupported';
     unsupportedReason['partition-plan'] = `${metadata?.name || canonical} partitions event log streams and topics rather than relational tables.`;
+  }
+
+  // -------------------------------------------------------------
+  // Base Profile Shield for Shared Non-SQL Families:
+  // If an engine belongs to one of the 8 shared non-SQL families, but is neither
+  // the lead engine nor a recognized wire-compatible implementation, shield its
+  // base defaults so it NEVER leaks the lead engine's proprietary CLI backup tools,
+  // lead-specific ports, or lead-specific index/maintenance statements.
+  // -------------------------------------------------------------
+  const SHARED_FAMILY_LEAD_ENGINES: Record<string, Set<string>> = {
+    columnar_olap: new Set(['clickhouse']),
+    wide_column: new Set([
+      'apache_cassandra',
+      'scylladb',
+      'datastax_enterprise',
+      'elassandra',
+      'amazon_keyspaces',
+    ]),
+    document: new Set([
+      'mongodb',
+      'amazon_documentdb',
+      'percona_server_for_mongodb',
+    ]),
+    keyvalue: new Set([
+      'redis',
+      'valkey',
+      'keydb',
+      'dragonfly',
+    ]),
+    graph: new Set(['neo4j']),
+    vector: new Set(['milvus']),
+    search: new Set(['elasticsearch', 'opensearch']),
+    timeseries: new Set(['influxdb']),
+  };
+
+  const isSharedFamily = SHARED_FAMILY_LEAD_ENGINES[family] !== undefined;
+  const isLeadOrCompatible = isSharedFamily && SHARED_FAMILY_LEAD_ENGINES[family].has(canonical);
+
+  if (isSharedFamily && !isLeadOrCompatible) {
+    const engineDisplayName = metadata?.name || canonical;
+    base = {
+      ...base,
+      connection: {
+        scheme: `${canonical}://`,
+        defaultPort: 0,
+        sampleUri: `${canonical}://app_user:password@host.internal:0/${canonical}_db`,
+      },
+      backup: {
+        tool: `Vendor Native Backup Utility or Storage Volume Snapshot (${engineDisplayName})`,
+        walOrLogName: `${engineDisplayName} Transaction / Storage Journal`,
+        commandTemplate: (db: string, path: string) =>
+          `# Use the vendor's backup utility for ${engineDisplayName}:\n` +
+          `# Example: <vendor_cli> backup --db="${db}" --out="${path}" (Consult official documentation)`,
+      },
+      onlineDdl: {
+        createIndexSql: (idx: string, tbl: string, cols: string) =>
+          `-- Index creation syntax for ${engineDisplayName} depends on its engine architecture;\n` +
+          `-- Consult ${engineDisplayName} documentation for native indexing or schema definition.`,
+        dropIndexSql: (idx: string, tbl = '{table}') =>
+          `-- Drop index syntax for ${engineDisplayName};\n` +
+          `-- Consult ${engineDisplayName} documentation for index removal.`,
+        rollbackDropIndexSql: (idx: string, tbl = '{table}', cols: string) =>
+          `-- Consult ${engineDisplayName} documentation to re-create index.`,
+        supportsConcurrent: false,
+        onlineClause: 'NONE',
+      },
+      maintenance: {
+        statsCommand: `-- Check official documentation for ${engineDisplayName} statistics collection.`,
+        spaceReclaimCommand: `-- Compaction and space reclamation in ${engineDisplayName} varies by engine architecture;\n-- Consult ${engineDisplayName} documentation.`,
+        spaceReclaimConcept: `${engineDisplayName} Storage Compaction & Space Reclamation`,
+        tuningDdlTemplate: (table: string) =>
+          `-- Space Reclamation & Statistics Guidance for ${table} in ${engineDisplayName}\n` +
+          `-- Consult the official engine documentation for native maintenance commands;\n`,
+      },
+    };
   }
 
   const specificOverride = getEngineSpecificOverride(canonical);
